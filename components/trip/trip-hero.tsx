@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { ReactNode } from "react";
 
 export interface TripHeroProps {
@@ -62,10 +63,13 @@ export default function TripHero({
     <div className="relative h-[280px] w-full overflow-hidden rounded-3xl sm:h-[300px]">
       {/* Background image */}
       {imageUrl ? (
-        <img
+        <Image
           src={imageUrl}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover"
+          fill
+          className="object-cover"
+          sizes="(max-width: 1024px) 100vw, 1024px"
+          unoptimized
         />
       ) : (
         <div className="absolute inset-0 bg-neutral-300" />

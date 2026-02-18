@@ -24,6 +24,7 @@ type Trip = {
   start_date: string | null;
   end_date: string | null;
   cover_image_url: string | null;
+  cover_image_path: string | null;
   created_at: string | null;
 };
 
@@ -98,6 +99,10 @@ export default function TripPage() {
   const [shareSuccess, setShareSuccess] = useState(false);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverError, setCoverError] = useState<string | null>(null);
 
   const isOwner = Boolean(trip && user && trip.user_id === user.id);
 
@@ -225,6 +230,60 @@ export default function TripPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [menuOpen]);
 
+  // Signed URL for private cover image (1 hour expiry)
+  useEffect(() => {
+    if (!trip?.cover_image_path) {
+      setCoverImageUrl(null);
+      return;
+    }
+    let cancelled = false;
+    supabase.storage
+      .from("trip-covers")
+      .createSignedUrl(trip.cover_image_path, 3600)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error("Cover signed URL:", error);
+          setCoverImageUrl(null);
+        } else if (data?.signedUrl) {
+          setCoverImageUrl(data.signedUrl);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trip?.cover_image_path]);
+
+  const coverFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !trip?.id) return;
+    e.target.value = "";
+    setCoverError(null);
+    setCoverUploading(true);
+    const path = `${trip.id}/cover.jpg`;
+    const { error: uploadError } = await supabase.storage
+      .from("trip-covers")
+      .upload(path, file, { upsert: true, contentType: file.type });
+    if (uploadError) {
+      setCoverError(uploadError.message);
+      setCoverUploading(false);
+      return;
+    }
+    const { error: updateError } = await supabase
+      .from("trips")
+      .update({ cover_image_path: path })
+      .eq("id", trip.id);
+    if (updateError) {
+      setCoverError(updateError.message);
+      setCoverUploading(false);
+      return;
+    }
+    setTrip((prev) => (prev ? { ...prev, cover_image_path: path } : prev));
+    setCoverUploading(false);
+  };
+
   function saveTitle() {
     if (!trip) return;
 
@@ -313,7 +372,7 @@ export default function TripPage() {
               <TripHero
                 title={trip.title}
                 dates={formatDates(trip.start_date, trip.end_date)}
-                imageUrl={trip.cover_image_url ?? undefined}
+                imageUrl={coverImageUrl ?? trip.cover_image_url ?? undefined}
                 onBack={() => router.push("/dashboard")}
                 topRight={
                   <div className="relative flex items-center gap-2" ref={menuRef}>
@@ -343,6 +402,26 @@ export default function TripPage() {
                     </button>
                     {menuOpen && (
                       <div className="absolute right-0 top-full z-10 mt-1 min-w-[140px] rounded-lg border border-[#D4C5BA] bg-white py-1 shadow-lg">
+                        <input
+                          ref={coverFileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          aria-hidden
+                          onChange={handleCoverUpload}
+                          disabled={coverUploading}
+                        />
+                        <button
+                          type="button"
+                          className="w-full px-4 py-2 text-left text-sm text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            coverFileInputRef.current?.click();
+                          }}
+                          disabled={coverUploading}
+                        >
+                          {coverUploading ? "Uploading…" : "Change cover"}
+                        </button>
                         <button
                           type="button"
                           className="w-full px-4 py-2 text-left text-sm text-[#4A4A4A] hover:bg-[#F5F3F0]"
@@ -408,6 +487,11 @@ export default function TripPage() {
               />
               {titleSuccess && (
                 <p className="mt-2 text-sm text-[#E07A5F]">Title saved.</p>
+              )}
+              {isOwner && coverError && (
+                <p className="mt-2 text-sm text-red-600" role="alert">
+                  {coverError}
+                </p>
               )}
             </div>
 
