@@ -1,7 +1,8 @@
 "use client";
 
-import {
+import React, {
   createContext,
+  forwardRef,
   useContext,
   useEffect,
   useRef,
@@ -63,9 +64,8 @@ export function DialogContent({ children }: DialogContentProps) {
     if (open) {
       document.body.style.overflow = "hidden";
       requestAnimationFrame(() => {
-        const firstFocusable = innerContentRef.current?.querySelector<HTMLElement>(
-          FOCUSABLE_SELECTOR
-        );
+        const firstFocusable =
+          innerContentRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
         if (firstFocusable) {
           firstFocusable.focus();
         } else {
@@ -93,7 +93,7 @@ export function DialogContent({ children }: DialogContentProps) {
     >
       <div
         ref={innerContentRef}
-        className="relative max-w-lg w-full rounded-[24px] border border-[#D4C5BA] bg-white p-6 pr-12 shadow-[0_2px_16px_rgba(0,0,0,0.06)]"
+        className="relative w-full max-w-lg rounded-[24px] border border-[#D4C5BA] bg-white p-6 pr-12 shadow-[0_2px_16px_rgba(0,0,0,0.06)]"
       >
         <button
           type="button"
@@ -119,13 +119,21 @@ export function DialogHeader({ children }: DialogHeaderProps) {
   return <div className="mb-4">{children}</div>;
 }
 
-export interface DialogTitleProps {
-  children?: ReactNode;
-}
+export type DialogTitleProps = React.ComponentPropsWithoutRef<"div">;
 
-export function DialogTitle({ children }: DialogTitleProps) {
-  return <div className="text-lg font-semibold">{children}</div>;
-}
+export const DialogTitle = forwardRef<HTMLDivElement, DialogTitleProps>(
+  ({ className, ...props }, ref) => {
+    return (
+      <div
+        ref={ref}
+        className={className ?? "text-lg font-semibold"}
+        {...props}
+      />
+    );
+  }
+);
+
+DialogTitle.displayName = "DialogTitle";
 
 export interface DialogDescriptionProps {
   children?: ReactNode;
