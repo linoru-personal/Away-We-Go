@@ -6,6 +6,7 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
 import TripHero from "@/components/trip/trip-hero";
 import { TasksSummaryCard } from "@/components/tasks/tasks-summary-card";
+import TripFormModal from "@/components/trips/trip-form-modal";
 import {
   Dialog,
   DialogContent,
@@ -80,16 +81,12 @@ export default function TripPage() {
 
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const [title, setTitle] = useState("");
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
-  const [titleSuccess, setTitleSuccess] = useState(false);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
   const [members, setMembers] = useState<{ user_id: string; email: string | null }[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -101,8 +98,6 @@ export default function TripPage() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
 
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
-  const [coverUploading, setCoverUploading] = useState(false);
-  const [coverError, setCoverError] = useState<string | null>(null);
 
   const isOwner = Boolean(trip && user && trip.user_id === user.id);
 
@@ -141,7 +136,6 @@ export default function TripPage() {
         setTrip(null);
       } else {
         setTrip(data as Trip);
-        setTitle((data as Trip).title);
       }
       setLoading(false);
     };
@@ -254,72 +248,15 @@ export default function TripPage() {
     };
   }, [trip?.cover_image_path]);
 
-  const coverFileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !trip?.id) return;
-    e.target.value = "";
-    setCoverError(null);
-    setCoverUploading(true);
-    const path = `${trip.id}/cover.jpg`;
-    const { error: uploadError } = await supabase.storage
-      .from("trip-covers")
-      .upload(path, file, { upsert: true, contentType: file.type });
-    if (uploadError) {
-      setCoverError(uploadError.message);
-      setCoverUploading(false);
-      return;
-    }
-    const { error: updateError } = await supabase
+  const refetchTrip = async () => {
+    if (!id) return;
+    const { data, error } = await supabase
       .from("trips")
-      .update({ cover_image_path: path })
-      .eq("id", trip.id);
-    if (updateError) {
-      setCoverError(updateError.message);
-      setCoverUploading(false);
-      return;
-    }
-    setTrip((prev) => (prev ? { ...prev, cover_image_path: path } : prev));
-    setCoverUploading(false);
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (!error && data) setTrip(data as Trip);
   };
-
-  function saveTitle() {
-    if (!trip) return;
-
-    const next = title.trim();
-    if (!next) {
-      setTitleError("Title cannot be empty.");
-      return;
-    }
-
-    setTitleError(null);
-    setTitleSuccess(false);
-    setIsSaving(true);
-
-    supabase
-      .from("trips")
-      .update({ title: next })
-      .eq("id", trip.id)
-      .then(({ error: updateError }) => {
-        if (updateError) {
-          setTitleError(updateError.message);
-          setIsSaving(false);
-          return;
-        }
-        setTrip((prev) => (prev ? { ...prev, title: next } : prev));
-        setTitleSuccess(true);
-        setIsEditingTitle(false);
-        setIsSaving(false);
-        setTimeout(() => setTitleSuccess(false), 2000);
-      });
-  }
-
-  function cancelEditTitle() {
-    setTitle(trip?.title ?? "");
-    setTitleError(null);
-    setIsEditingTitle(false);
-  }
 
   function deleteTrip() {
     if (!trip) return;
@@ -402,36 +339,18 @@ export default function TripPage() {
                     </button>
                     {menuOpen && (
                       <div className="absolute right-0 top-full z-10 mt-1 min-w-[140px] rounded-lg border border-[#D4C5BA] bg-white py-1 shadow-lg">
-                        <input
-                          ref={coverFileInputRef}
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          aria-hidden
-                          onChange={handleCoverUpload}
-                          disabled={coverUploading}
-                        />
-                        <button
-                          type="button"
-                          className="w-full px-4 py-2 text-left text-sm text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
-                          onClick={() => {
-                            setMenuOpen(false);
-                            coverFileInputRef.current?.click();
-                          }}
-                          disabled={coverUploading}
-                        >
-                          {coverUploading ? "Uploading…" : "Change cover"}
-                        </button>
-                        <button
-                          type="button"
-                          className="w-full px-4 py-2 text-left text-sm text-[#4A4A4A] hover:bg-[#F5F3F0]"
-                          onClick={() => {
-                            setMenuOpen(false);
-                            setIsEditingTitle(true);
-                          }}
-                        >
-                          Edit title
-                        </button>
+                        {isOwner && (
+                          <button
+                            type="button"
+                            className="w-full px-4 py-2 text-left text-sm text-[#4A4A4A] hover:bg-[#F5F3F0]"
+                            onClick={() => {
+                              setMenuOpen(false);
+                              setEditModalOpen(true);
+                            }}
+                          >
+                            Edit trip
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
@@ -446,53 +365,7 @@ export default function TripPage() {
                     )}
                   </div>
                 }
-                titleContent={
-                  isEditingTitle ? (
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <input
-                          type="text"
-                          value={title}
-                          onChange={(e) => setTitle(e.target.value)}
-                          className="max-w-full rounded-lg border border-white/50 bg-white/20 px-3 py-2 text-lg font-bold text-white placeholder:text-white/70 backdrop-blur-sm sm:text-xl"
-                          placeholder="Trip title"
-                          disabled={isSaving}
-                        />
-                        <button
-                          type="button"
-                          className="rounded-lg bg-white/30 px-3 py-2 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/40 disabled:opacity-50"
-                          onClick={saveTitle}
-                          disabled={isSaving || !title.trim()}
-                        >
-                          {isSaving ? "Saving..." : "Save"}
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-lg bg-white/20 px-3 py-2 text-sm font-medium text-white backdrop-blur-sm hover:bg-white/30"
-                          onClick={cancelEditTitle}
-                          disabled={isSaving}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                      {titleError && (
-                        <p className="text-sm text-red-200">{titleError}</p>
-                      )}
-                    </div>
-                  ) : undefined
-                }
-                onEditTitle={
-                  !isEditingTitle ? () => setIsEditingTitle(true) : undefined
-                }
               />
-              {titleSuccess && (
-                <p className="mt-2 text-sm text-[#E07A5F]">Title saved.</p>
-              )}
-              {isOwner && coverError && (
-                <p className="mt-2 text-sm text-red-600" role="alert">
-                  {coverError}
-                </p>
-              )}
             </div>
 
             <div className="mt-8 space-y-5">
@@ -581,6 +454,14 @@ export default function TripPage() {
           </>
         )}
       </div>
+
+      <TripFormModal
+        mode="edit"
+        trip={trip}
+        open={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        onSuccess={refetchTrip}
+      />
 
       <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
         <DialogContent>

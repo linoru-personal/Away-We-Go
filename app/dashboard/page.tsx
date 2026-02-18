@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabaseClient";
 import { useSession } from "../lib/useSession";
 import { TripCard } from "@/components/trips/trip-card";
 import CreateFirstTripCard from "@/components/trips/create-first-trip-card";
-import CreateTripDialog from "@/components/trips/create-trip-dialog";
+import TripFormModal from "@/components/trips/trip-form-modal";
 
 type Trip = {
   id: string;
@@ -16,6 +16,7 @@ type Trip = {
   start_date: string | null;
   end_date: string | null;
   cover_image_url: string | null;
+  cover_image_path: string | null;
   created_at: string | null;
 };
 
@@ -41,17 +42,10 @@ export default function DashboardPage() {
 
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loadingTrips, setLoadingTrips] = useState(true);
+  const [coverSignedUrls, setCoverSignedUrls] = useState<Record<string, string>>({});
 
   const [activeTab, setActiveTab] = useState<"all" | "upcoming" | "past">("upcoming");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-
-  const [title, setTitle] = useState("");
-  const [destination, setDestination] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (!sessionLoading && !user) {
@@ -83,6 +77,29 @@ export default function DashboardPage() {
     load();
   }, [user]);
 
+  useEffect(() => {
+    const withPath = trips.filter((t) => t.cover_image_path);
+    if (withPath.length === 0) {
+      setCoverSignedUrls({});
+      return;
+    }
+    Promise.all(
+      withPath.map(async (t) => {
+        const { data, error } = await supabase.storage
+          .from("trip-covers")
+          .createSignedUrl(t.cover_image_path!, 3600);
+        if (error || !data?.signedUrl) return { id: t.id, url: null };
+        return { id: t.id, url: data.signedUrl };
+      })
+    ).then((results) => {
+      const next: Record<string, string> = {};
+      results.forEach((r) => {
+        if (r.url) next[r.id] = r.url;
+      });
+      setCoverSignedUrls(next);
+    });
+  }, [trips]);
+
   const today = useMemo(
     () => new Date().toISOString().slice(0, 10),
     []
@@ -103,55 +120,13 @@ export default function DashboardPage() {
     router.replace("/");
   };
 
-  const createTrip = async () => {
-    console.log("ADD clicked - createTrip()");
+  const refetchTrips = async () => {
     if (!user) return;
-
-    setCreateError(null);
-    setCreating(true);
-
-    const trimmedTitle = title.trim();
-    const trimmedDestination = destination.trim();
-
-    if (!trimmedTitle) {
-      setCreateError("Please enter a title.");
-      setCreating(false);
-      return;
-    }
-
-    if (startDate && endDate && endDate < startDate) {
-      setCreateError("End date must be on or after start date.");
-      setCreating(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from("trips")
-        .insert({
-          title: trimmedTitle,
-          destination: trimmedDestination || null,
-          start_date: startDate || null,
-          end_date: endDate || null,
-        })
-        .select("*")
-        .single();
-
-      if (error) {
-        console.error(error);
-        setCreateError(error.message);
-        return;
-      }
-
-      setTrips((prev) => [data as Trip, ...prev]);
-      setIsCreateOpen(false);
-      setTitle("");
-      setDestination("");
-      setStartDate("");
-      setEndDate("");
-    } finally {
-      setCreating(false);
-    }
+    const { data, error } = await supabase
+      .from("trips")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (!error && data) setTrips(data as Trip[]);
   };
 
   if (sessionLoading) {
@@ -231,7 +206,7 @@ export default function DashboardPage() {
                   title={t.title}
                   startDate={t.start_date ?? "—"}
                   endDate={t.end_date ?? "—"}
-                  coverImageUrl={t.cover_image_url ?? undefined}
+                  coverImageUrl={coverSignedUrls[t.id] ?? t.cover_image_url ?? undefined}
                   onClick={() => router.push(`/dashboard/trip/${t.id}`)}
                 />
               ))}
@@ -278,52 +253,12 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {/* CreateTripDialog (no visible trigger, opened by create cards) */}
-        <CreateTripDialog
+        <TripFormModal
+          mode="create"
           open={isCreateOpen}
-          onOpenChange={setIsCreateOpen}
-          showTrigger={false}
-        >
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <input
-                className="border rounded px-3 py-2"
-                placeholder="Trip title (required)"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-              <input
-                className="border rounded px-3 py-2"
-                placeholder="Destination (optional)"
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-              />
-              <input
-                className="border rounded px-3 py-2"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-              <input
-                className="border rounded px-3 py-2"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-            <button
-              type="button"
-              className="bg-black text-white rounded px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={createTrip}
-              disabled={creating}
-            >
-              {creating ? "Adding..." : "Add Trip"}
-            </button>
-            {createError && (
-              <p className="text-sm text-red-600">{createError}</p>
-            )}
-          </div>
-        </CreateTripDialog>
+          onClose={() => setIsCreateOpen(false)}
+          onSuccess={refetchTrips}
+        />
       </div>
     </main>
   );
