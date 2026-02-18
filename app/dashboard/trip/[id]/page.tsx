@@ -6,6 +6,12 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
 import TripHero from "@/components/trip/trip-hero";
 import { TasksSummaryCard } from "@/components/tasks/tasks-summary-card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const CARD_CLASS =
   "bg-white rounded-[24px] p-6 shadow-[0_2px_16px_rgba(0,0,0,0.06)]";
@@ -42,6 +48,27 @@ function MoreIcon() {
   );
 }
 
+function Share2Icon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-4"
+    >
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="m8.59 13.51 6.83 3.98" />
+      <path d="M15.41 6.51l-6.82 3.98" />
+    </svg>
+  );
+}
+
 export default function TripPage() {
   const router = useRouter();
   const params = useParams();
@@ -62,6 +89,17 @@ export default function TripPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [members, setMembers] = useState<{ user_id: string; email: string | null }[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [shareEmail, setShareEmail] = useState("");
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [shareSuccess, setShareSuccess] = useState(false);
+  const [removingUserId, setRemovingUserId] = useState<string | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+
+  const isOwner = Boolean(trip && user && trip.user_id === user.id);
 
   useEffect(() => {
     if (!sessionLoading && !user) {
@@ -108,6 +146,74 @@ export default function TripPage() {
       cancelled = true;
     };
   }, [id, user]);
+
+  useEffect(() => {
+    if (shareModalOpen && trip?.id && isOwner) {
+      let cancelled = false;
+      setMembersLoading(true);
+      supabase
+        .rpc("get_trip_members", { p_trip_id: trip.id })
+        .then(({ data, error }) => {
+          if (cancelled) return;
+          if (error) {
+            console.error(error);
+            setMembers([]);
+          } else {
+            setMembers((data ?? []) as { user_id: string; email: string | null }[]);
+          }
+          setMembersLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (!shareModalOpen) setMembers([]);
+  }, [shareModalOpen, trip?.id, isOwner]);
+
+  const handleShare = async () => {
+    if (!id || !trip || !shareEmail.trim()) return;
+    setShareError(null);
+    setShareLoading(true);
+    const { data, error } = await supabase.rpc('share_trip', {
+      p_trip_id: trip.id,
+      p_email: shareEmail
+    });
+    setShareLoading(false);
+    const result = data as { ok?: boolean; message?: string } | null;
+    if (error) {
+      setShareError(error.message);
+      return;
+    }
+    if (result?.ok) {
+      setShareEmail("");
+      setShareSuccess(true);
+      if (trip) {
+        const { data: memberData } = await supabase.rpc("get_trip_members", {
+          p_trip_id: trip.id,
+        });
+        setMembers((memberData ?? []) as { user_id: string; email: string | null }[]);
+      }
+      setTimeout(() => setShareSuccess(false), 3000);
+    } else {
+      setShareError(result?.message ?? "Could not share.");
+    }
+  };
+
+  const handleUnshare = async (memberUserId: string) => {
+    if (!id) return;
+    setRemovingUserId(memberUserId);
+    const { data, error } = await supabase.rpc("unshare_trip", {
+      p_trip_id: id,
+      p_user_id: memberUserId,
+    });
+    setRemovingUserId(null);
+    const result = data as { ok?: boolean } | null;
+    if (error || !result?.ok) {
+      console.error(error ?? "Unshare failed");
+      return;
+    }
+    setMembers((prev) => prev.filter((m) => m.user_id !== memberUserId));
+  };
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -210,7 +316,23 @@ export default function TripPage() {
                 imageUrl={trip.cover_image_url ?? undefined}
                 onBack={() => router.push("/dashboard")}
                 topRight={
-                  <div className="relative" ref={menuRef}>
+                  <div className="relative flex items-center gap-2" ref={menuRef}>
+                    {isOwner && (
+                      <button
+                        type="button"
+                        title="Share"
+                        className="flex h-9 items-center gap-1.5 rounded-full bg-[#f6f2ed]/90 px-3 text-sm font-medium text-[#d97b5e] backdrop-blur-sm transition hover:bg-[#ebe5df] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 focus:ring-offset-transparent active:bg-[#e0d9d2]"
+                        aria-label="Share trip"
+                        onClick={() => {
+                          setShareModalOpen(true);
+                          setShareError(null);
+                          setShareSuccess(false);
+                        }}
+                      >
+                        <Share2Icon />
+                        Share
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="flex size-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30"
@@ -369,11 +491,136 @@ export default function TripPage() {
                     <div className="aspect-square rounded-lg bg-[#F5F3F0]" />
                   </div>
                 </article>
+
               </div>
             </div>
           </>
         )}
       </div>
+
+      <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
+        <DialogContent>
+          <div className="max-w-[420px] w-full">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold text-[#1f1f1f]">
+                Share this trip
+              </DialogTitle>
+              <p className="mt-1 text-[15px] leading-relaxed text-[#6b6b6b]">
+                Invite someone by email to collaborate on this trip.
+              </p>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <label
+                  htmlFor="share-email"
+                  className="block text-sm font-medium text-[#1f1f1f]"
+                >
+                  Email
+                </label>
+                <input
+                  id="share-email"
+                  type="email"
+                  placeholder="name@example.com"
+                  value={shareEmail}
+                  onChange={(e) => {
+                    setShareEmail(e.target.value);
+                    setShareError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (shareEmail.trim() && !shareLoading) handleShare();
+                    }
+                  }}
+                  disabled={shareLoading}
+                  aria-invalid={!!shareError}
+                  aria-describedby={shareError ? "share-error" : shareSuccess ? "share-success" : "share-helper"}
+                  className="mt-1.5 w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0 disabled:opacity-60 aria-[invalid=true]:focus:ring-red-400/40 aria-[invalid=true]:focus:border-red-400"
+                />
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className="flex h-[48px] min-w-[100px] items-center justify-center rounded-full bg-[#d97b5e] px-5 text-sm font-medium text-white shadow-[0_2px_8px_rgba(217,123,94,0.25)] transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 focus:ring-offset-white active:bg-[#b85a42] disabled:opacity-60 disabled:hover:bg-[#d97b5e]"
+                    onClick={handleShare}
+                    disabled={shareLoading || !shareEmail.trim()}
+                  >
+                    {shareLoading ? (
+                      <>
+                        <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" aria-hidden />
+                        Please wait…
+                      </>
+                    ) : (
+                      "Share"
+                    )}
+                  </button>
+                </div>
+                {shareError && (
+                  <p id="share-error" className="mt-1.5 text-sm text-red-600" role="alert">
+                    {shareError}
+                  </p>
+                )}
+                {shareSuccess && (
+                  <p id="share-success" className="mt-1.5 text-sm text-[#16a34a]" role="status">
+                    Added.
+                  </p>
+                )}
+                <p id="share-helper" className="mt-1.5 text-xs text-[#8a8a8a]">
+                  They&apos;ll be able to view and edit this trip.
+                </p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-[#1f1f1f]">
+                  People with access
+                </h3>
+                {membersLoading ? (
+                  <div className="mt-2 space-y-2">
+                    {[1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className="h-11 rounded-[20px] bg-[#f0ebe6] animate-pulse"
+                      />
+                    ))}
+                  </div>
+                ) : members.length === 0 ? (
+                  <p className="mt-2 text-sm text-[#8a8a8a]">
+                    No members yet.
+                  </p>
+                ) : (
+                  <ul className="mt-2 space-y-2" role="list">
+                    {members.map((m) => (
+                      <li
+                        key={m.user_id}
+                        className="flex items-center justify-between gap-2 rounded-[20px] bg-[#f6f2ed] px-3 py-2.5 text-sm shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
+                      >
+                        <span className="truncate text-[#1f1f1f]">
+                          {m.email ?? m.user_id}
+                        </span>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#d97b5e] transition hover:bg-[#d97b5e]/10 focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 disabled:opacity-50"
+                          onClick={() => handleUnshare(m.user_id)}
+                          disabled={removingUserId === m.user_id}
+                        >
+                          {removingUserId === m.user_id ? "Removing…" : "Remove"}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                className="rounded-full border border-[#e0d9d2] bg-transparent px-4 py-2 text-sm font-medium text-[#1f1f1f] transition hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-2"
+                onClick={() => setShareModalOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {showDeleteConfirm && (
         <div

@@ -86,18 +86,18 @@ export function DialogContent({ children }: DialogContentProps) {
       tabIndex={-1}
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onOpenChange(false);
       }}
     >
       <div
         ref={innerContentRef}
-        className="relative w-full max-w-lg rounded-[24px] border border-[#D4C5BA] bg-white p-6 pr-12 shadow-[0_2px_16px_rgba(0,0,0,0.06)]"
+        className="relative w-full max-w-[420px] rounded-[28px] border border-[#ebe5df] bg-white p-6 pr-12 shadow-[0_10px_30px_rgba(0,0,0,0.06)]"
       >
         <button
           type="button"
-          className="absolute right-4 top-4 text-[#9B7B6B] hover:text-[#4A4A4A]"
+          className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-full text-[#6b6b6b] transition hover:bg-[#f6f2ed] hover:text-[#1f1f1f] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-2"
           onClick={() => onOpenChange(false)}
           aria-label="Close"
         >
@@ -126,7 +126,7 @@ export const DialogTitle = forwardRef<HTMLDivElement, DialogTitleProps>(
     return (
       <div
         ref={ref}
-        className={className ?? "text-lg font-semibold"}
+        className={className ?? "text-lg font-semibold text-[#1f1f1f]"}
         {...props}
       />
     );
@@ -140,5 +140,5 @@ export interface DialogDescriptionProps {
 }
 
 export function DialogDescription({ children }: DialogDescriptionProps) {
-  return <div className="mt-1 text-sm text-neutral-500">{children}</div>;
+  return <div className="mt-1 text-sm leading-relaxed text-[#6b6b6b]">{children}</div>;
 }
