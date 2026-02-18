@@ -22,10 +22,10 @@ export function Progress({
       aria-valuemax={100}
     >
       <div
-        className={`h-2 rounded-full overflow-hidden bg-neutral-200 ${trackClassName}`.trim()}
+        className={`h-2 overflow-hidden rounded-full bg-[#F5F3F0] ${trackClassName}`.trim()}
       >
         <div
-          className={`h-2 rounded-full bg-orange-400 transition-all duration-300 ease-out ${fillClassName}`.trim()}
+          className={`h-full rounded-full bg-[#E07A5F] transition-all duration-500 ${fillClassName}`.trim()}
           style={{ width: `${clamped}%` }}
         />
       </div>

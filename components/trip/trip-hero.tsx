@@ -1,0 +1,131 @@
+"use client";
+
+import type { ReactNode } from "react";
+
+export interface TripHeroProps {
+  title?: string;
+  dates?: string;
+  imageUrl?: string;
+  onBack?: () => void;
+  /** Rendered in the top row (e.g. overflow menu) */
+  topRight?: ReactNode;
+  /** When set, replaces the default title + dates block */
+  titleContent?: ReactNode;
+  /** When set, shows an edit icon next to the title and calls this on click */
+  onEditTitle?: () => void;
+}
+
+function BackArrowIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-5"
+    >
+      <path d="M19 12H5M12 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+function EditPencilIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-4"
+    >
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    </svg>
+  );
+}
+
+export default function TripHero({
+  title = "Reykjavik, Iceland",
+  dates = "Apr 10 - 17, 2026",
+  imageUrl,
+  onBack,
+  topRight,
+  titleContent,
+  onEditTitle,
+}: TripHeroProps) {
+  return (
+    <div className="relative h-[280px] w-full overflow-hidden rounded-3xl sm:h-[300px]">
+      {/* Background image */}
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-neutral-300" />
+      )}
+
+      {/* Dark overlay gradient */}
+      <div
+        className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent"
+        aria-hidden
+      />
+
+      {/* Content */}
+      <div className="relative flex h-full flex-col justify-between p-5">
+        {/* Top row: back button + optional right slot */}
+        <div className="flex items-start justify-between">
+          <button
+            type="button"
+            className="flex size-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30"
+            aria-label="Back"
+            onClick={onBack}
+          >
+            <BackArrowIcon />
+          </button>
+          {topRight != null && <div className="shrink-0">{topRight}</div>}
+        </div>
+
+        {/* Bottom: title content or default title + dates + avatars */}
+        <div className="flex items-end justify-between">
+          <div className="flex flex-col gap-1">
+            {titleContent != null ? (
+              titleContent
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-3xl font-bold text-white drop-shadow-sm sm:text-4xl">
+                    {title}
+                  </h1>
+                  {onEditTitle != null && (
+                    <button
+                      type="button"
+                      className="flex size-8 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30"
+                      aria-label="Edit title"
+                      onClick={onEditTitle}
+                    >
+                      <EditPencilIcon />
+                    </button>
+                  )}
+                </div>
+                <p className="text-base text-white/90 sm:text-lg">{dates}</p>
+                {/* Overlapping avatar circles */}
+                <div className="mt-3 flex -space-x-2">
+                  <div className="size-9 rounded-full border-2 border-white bg-neutral-400" />
+                  <div className="size-9 rounded-full border-2 border-white bg-neutral-500" />
+                  <div className="size-9 rounded-full border-2 border-white bg-neutral-600" />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
