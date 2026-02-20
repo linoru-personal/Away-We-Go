@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 import { useSession } from "../lib/useSession";
 import { useProfile, getDisplayName } from "../lib/useProfile";
+import type { User } from "@supabase/supabase-js";
 import { TripCard } from "@/components/trips/trip-card";
 import CreateFirstTripCard from "@/components/trips/create-first-trip-card";
 import TripFormModal from "@/components/trips/trip-form-modal";
@@ -33,36 +34,55 @@ function getEmptyMessage(tab: "all" | "upcoming" | "past"): string {
   }
 }
 
+/**
+ * DashboardPage: useSession + redirect logic + early returns only.
+ * No useProfile here; it runs inside DashboardInner when user exists.
+ */
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: sessionLoading } = useSession();
+
+  useEffect(() => {
+    if (!sessionLoading && !user) {
+      router.replace("/");
+    }
+  }, [sessionLoading, user, router]);
+
+  if (sessionLoading) {
+    return (
+      <p className="flex min-h-screen items-center justify-center p-6 text-gray-600">
+        Loading...
+      </p>
+    );
+  }
+  if (!user) {
+    return null;
+  }
+  return <DashboardInner user={user} />;
+}
+
+/**
+ * DashboardInner: all trip UI and state. Only mounted when user exists.
+ * useProfile(user) runs here so it's only executed when user exists.
+ */
+function DashboardInner({ user }: { user: User }) {
+  const router = useRouter();
   const { profile, refetch: refetchProfile } = useProfile(user);
 
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loadingTrips, setLoadingTrips] = useState(true);
   const [coverSignedUrls, setCoverSignedUrls] = useState<Record<string, string>>({});
-
   const [activeTab, setActiveTab] = useState<"all" | "upcoming" | "past">("upcoming");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
 
   useEffect(() => {
-    if (!sessionLoading && !user) {
-      router.replace("/");
-      return;
-    }
-  }, [sessionLoading, user, router]);
-
-  useEffect(() => {
-    if (!user) return;
-
     const load = async () => {
       setLoadingTrips(true);
       const { data, error } = await supabase
         .from("trips")
         .select("*")
         .order("created_at", { ascending: false });
-
       if (error) {
         console.error(error);
         alert(error.message);
@@ -72,7 +92,6 @@ export default function DashboardPage() {
       setTrips((data ?? []) as Trip[]);
       setLoadingTrips(false);
     };
-
     load();
   }, [user]);
 
@@ -99,11 +118,7 @@ export default function DashboardPage() {
     });
   }, [trips]);
 
-  const today = useMemo(
-    () => new Date().toISOString().slice(0, 10),
-    []
-  );
-
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const filteredTrips = useMemo(() => {
     if (activeTab === "all") return trips;
     if (activeTab === "upcoming") {
@@ -113,6 +128,7 @@ export default function DashboardPage() {
   }, [trips, activeTab, today]);
 
   const hasAnyTrips = trips.length > 0;
+  const displayName = getDisplayName(user, profile);
 
   const logout = async () => {
     await supabase.auth.signOut();
@@ -120,27 +136,12 @@ export default function DashboardPage() {
   };
 
   const refetchTrips = async () => {
-    if (!user) return;
     const { data, error } = await supabase
       .from("trips")
       .select("*")
       .order("created_at", { ascending: false });
     if (!error && data) setTrips(data as Trip[]);
   };
-
-  if (sessionLoading) {
-    return (
-      <p className="flex min-h-screen items-center justify-center p-6 text-gray-600">
-        Loading...
-      </p>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
-
-  const displayName = getDisplayName(user, profile);
 
   return (
     <main className="min-h-screen bg-neutral-50">
