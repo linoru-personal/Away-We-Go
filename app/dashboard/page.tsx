@@ -4,9 +4,11 @@ import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 import { useSession } from "../lib/useSession";
+import { useProfile, getDisplayName } from "../lib/useProfile";
 import { TripCard } from "@/components/trips/trip-card";
 import CreateFirstTripCard from "@/components/trips/create-first-trip-card";
 import TripFormModal from "@/components/trips/trip-form-modal";
+import AccountSettingsModal from "@/components/account/account-settings-modal";
 
 type Trip = {
   id: string;
@@ -19,11 +21,6 @@ type Trip = {
   cover_image_path: string | null;
   created_at: string | null;
 };
-
-function getGreetingName(user: { email?: string | null; user_metadata?: { full_name?: string } }): string {
-  const name = user?.user_metadata?.full_name ?? user?.email?.split("@")[0];
-  return name && name.length > 0 ? name : "there";
-}
 
 function getEmptyMessage(tab: "all" | "upcoming" | "past"): string {
   switch (tab) {
@@ -39,6 +36,7 @@ function getEmptyMessage(tab: "all" | "upcoming" | "past"): string {
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: sessionLoading } = useSession();
+  const { profile, refetch: refetchProfile } = useProfile(user);
 
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loadingTrips, setLoadingTrips] = useState(true);
@@ -46,6 +44,7 @@ export default function DashboardPage() {
 
   const [activeTab, setActiveTab] = useState<"all" | "upcoming" | "past">("upcoming");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
 
   useEffect(() => {
     if (!sessionLoading && !user) {
@@ -141,12 +140,12 @@ export default function DashboardPage() {
     return null;
   }
 
-  const displayName = getGreetingName(user);
+  const displayName = getDisplayName(user, profile);
 
   return (
     <main className="min-h-screen bg-neutral-50">
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-        {/* Header: greeting + logout */}
+        {/* Header: greeting + profile icon + logout */}
         <div className="relative mb-8">
           <div className="pr-24">
             <h1 className="text-3xl font-bold text-neutral-900 sm:text-4xl">
@@ -156,14 +155,46 @@ export default function DashboardPage() {
               Where would you like to go next?
             </p>
           </div>
-          <button
-            type="button"
-            onClick={logout}
-            className="absolute top-0 right-0 rounded-full px-4 py-2 text-sm font-medium text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900"
-          >
-            Logout
-          </button>
+          <div className="absolute top-0 right-0 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsAccountOpen(true)}
+              className="flex size-10 items-center justify-center rounded-full border border-neutral-300 bg-neutral-100 text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2"
+              aria-label="Account settings"
+              title="Update profile"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="size-5"
+              >
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-full px-4 py-2 text-sm font-medium text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900"
+            >
+              Logout
+            </button>
+          </div>
         </div>
+
+        <AccountSettingsModal
+          open={isAccountOpen}
+          onOpenChange={setIsAccountOpen}
+          user={user}
+          profile={profile ?? null}
+          onProfileUpdated={refetchProfile}
+          onLogout={logout}
+        />
 
         {/* Segmented control: All, Upcoming, Past */}
         <div className="mb-8 flex gap-1 rounded-full bg-neutral-200 p-1 w-fit">
