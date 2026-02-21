@@ -14,6 +14,8 @@ export interface TripHeroProps {
   titleContent?: ReactNode;
   /** When set, shows an edit icon next to the title and calls this on click */
   onEditTitle?: () => void;
+  /** Optional participant avatars (signed URLs). Shown as overlapping circles; fallback to initial if null. */
+  participants?: { avatarUrl?: string | null }[];
 }
 
 function BackArrowIcon() {
@@ -58,6 +60,7 @@ export default function TripHero({
   topRight,
   titleContent,
   onEditTitle,
+  participants,
 }: TripHeroProps) {
   return (
     <div className="relative h-[280px] w-full overflow-hidden rounded-3xl sm:h-[300px]">
@@ -121,9 +124,30 @@ export default function TripHero({
                 <p className="text-base text-white/90 sm:text-lg">{dates}</p>
                 {/* Overlapping avatar circles */}
                 <div className="mt-3 flex -space-x-2">
-                  <div className="size-9 rounded-full border-2 border-white bg-neutral-400" />
-                  <div className="size-9 rounded-full border-2 border-white bg-neutral-500" />
-                  <div className="size-9 rounded-full border-2 border-white bg-neutral-600" />
+                  {participants && participants.length > 0 ? (
+                    participants.slice(0, 5).map((p, i) => (
+                      <div
+                        key={i}
+                        className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-neutral-500"
+                      >
+                        {p.avatarUrl ? (
+                          <img
+                            src={p.avatarUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-xs font-medium text-white/80">?</span>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <>
+                      <div className="size-9 rounded-full border-2 border-white bg-neutral-400" />
+                      <div className="size-9 rounded-full border-2 border-white bg-neutral-500" />
+                      <div className="size-9 rounded-full border-2 border-white bg-neutral-600" />
+                    </>
+                  )}
                 </div>
               </>
             )}

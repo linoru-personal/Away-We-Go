@@ -6,6 +6,8 @@ export interface TripCardProps {
   endDate: string;
   coverImageUrl?: string;
   onClick?: () => void;
+  /** Optional participant avatar URLs (signed). Shown as overlapping circles. */
+  participantAvatarUrls?: (string | null)[];
 }
 
 export function TripCard({
@@ -14,7 +16,9 @@ export function TripCard({
   endDate,
   coverImageUrl,
   onClick,
+  participantAvatarUrls,
 }: TripCardProps) {
+  const avatars = participantAvatarUrls ?? [];
   return (
     <Card
       className="cursor-pointer transition-shadow hover:shadow-md"
@@ -34,6 +38,22 @@ export function TripCard({
         <div className="text-sm text-neutral-500">
           {startDate} → {endDate}
         </div>
+        {avatars.length > 0 && (
+          <div className="mt-2 flex -space-x-2">
+            {avatars.slice(0, 5).map((url, i) => (
+              <div
+                key={i}
+                className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-neutral-300"
+              >
+                {url ? (
+                  <img src={url} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-[10px] font-medium text-neutral-500">?</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -72,6 +72,9 @@ function DashboardInner({ user }: { user: User }) {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loadingTrips, setLoadingTrips] = useState(true);
   const [coverSignedUrls, setCoverSignedUrls] = useState<Record<string, string>>({});
+  const [tripParticipantAvatars, setTripParticipantAvatars] = useState<
+    Record<string, (string | null)[]>
+  >({});
   const [activeTab, setActiveTab] = useState<"all" | "upcoming" | "past">("upcoming");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
@@ -116,6 +119,43 @@ function DashboardInner({ user }: { user: User }) {
       });
       setCoverSignedUrls(next);
     });
+  }, [trips]);
+
+  useEffect(() => {
+    if (trips.length === 0) {
+      setTripParticipantAvatars({});
+      return;
+    }
+    const tripIds = trips.map((t) => t.id);
+    (async () => {
+      const { data: rows, error } = await supabase
+        .from("trip_participants")
+        .select("trip_id, avatar_path, sort_order")
+        .in("trip_id", tripIds)
+        .order("sort_order", { ascending: true });
+      if (error) {
+        setTripParticipantAvatars({});
+        return;
+      }
+      const list = (rows ?? []) as {
+        trip_id: string;
+        avatar_path: string | null;
+        sort_order: number;
+      }[];
+      const map: Record<string, (string | null)[]> = {};
+      for (const t of trips) map[t.id] = [];
+      for (const row of list) {
+        if (!row.avatar_path) {
+          map[row.trip_id].push(null);
+          continue;
+        }
+        const { data: signed } = await supabase.storage
+          .from("avatars")
+          .createSignedUrl(row.avatar_path, 3600);
+        map[row.trip_id].push(signed?.signedUrl ?? null);
+      }
+      setTripParticipantAvatars(map);
+    })();
   }, [trips]);
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -240,6 +280,7 @@ function DashboardInner({ user }: { user: User }) {
                   endDate={t.end_date ?? "—"}
                   coverImageUrl={coverSignedUrls[t.id] ?? t.cover_image_url ?? undefined}
                   onClick={() => router.push(`/dashboard/trip/${t.id}`)}
+                  participantAvatarUrls={tripParticipantAvatars[t.id] ?? []}
                 />
               ))}
             </div>

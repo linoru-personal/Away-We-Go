@@ -32,6 +32,7 @@ export default function ManageTasksPage() {
   const { user, loading: sessionLoading } = useSession();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [tripLoading, setTripLoading] = useState(true);
+  const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
 
   useEffect(() => {
     if (!sessionLoading && !user) {
@@ -62,6 +63,41 @@ export default function ManageTasksPage() {
     };
   }, [id, user]);
 
+  useEffect(() => {
+    if (!id) {
+      setParticipantAvatarUrls([]);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from("trip_participants")
+      .select("avatar_path, sort_order")
+      .eq("trip_id", id)
+      .order("sort_order", { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) {
+          setParticipantAvatarUrls([]);
+          return;
+        }
+        const rows = (data ?? []) as { avatar_path: string | null }[];
+        Promise.all(
+          rows.map(async (r) => {
+            if (!r.avatar_path) return null;
+            const { data: signed } = await supabase.storage
+              .from("avatars")
+              .createSignedUrl(r.avatar_path, 3600);
+            return signed?.signedUrl ?? null;
+          })
+        ).then((urls) => {
+          if (!cancelled) setParticipantAvatarUrls(urls);
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
   if (!id) {
     return (
       <main className="min-h-screen bg-[#FAFAF8]">
@@ -84,6 +120,7 @@ export default function ManageTasksPage() {
               dates={formatDates(trip.start_date, trip.end_date)}
               imageUrl={trip.cover_image_url ?? undefined}
               onBack={() => router.push(`/dashboard/trip/${id}`)}
+              participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
             />
             <TasksSection tripId={id} />
           </>

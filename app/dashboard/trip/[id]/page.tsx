@@ -98,6 +98,7 @@ export default function TripPage() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
 
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
 
   const isOwner = Boolean(trip && user && trip.user_id === user.id);
 
@@ -248,6 +249,41 @@ export default function TripPage() {
     };
   }, [trip?.cover_image_path]);
 
+  useEffect(() => {
+    if (!trip?.id) {
+      setParticipantAvatarUrls([]);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from("trip_participants")
+      .select("avatar_path, sort_order")
+      .eq("trip_id", trip.id)
+      .order("sort_order", { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) {
+          setParticipantAvatarUrls([]);
+          return;
+        }
+        const rows = (data ?? []) as { avatar_path: string | null }[];
+        Promise.all(
+          rows.map(async (r) => {
+            if (!r.avatar_path) return null;
+            const { data: signed } = await supabase.storage
+              .from("avatars")
+              .createSignedUrl(r.avatar_path, 3600);
+            return signed?.signedUrl ?? null;
+          })
+        ).then((urls) => {
+          if (!cancelled) setParticipantAvatarUrls(urls);
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trip?.id]);
+
   const refetchTrip = async () => {
     if (!id) return;
     const { data, error } = await supabase
@@ -256,6 +292,30 @@ export default function TripPage() {
       .eq("id", id)
       .single();
     if (!error && data) setTrip(data as Trip);
+  };
+
+  const refetchParticipants = async () => {
+    if (!trip?.id) return;
+    const { data, error } = await supabase
+      .from("trip_participants")
+      .select("avatar_path, sort_order")
+      .eq("trip_id", trip.id)
+      .order("sort_order", { ascending: true });
+    if (error || !data) {
+      setParticipantAvatarUrls([]);
+      return;
+    }
+    const rows = (data ?? []) as { avatar_path: string | null }[];
+    const urls = await Promise.all(
+      rows.map(async (r) => {
+        if (!r.avatar_path) return null;
+        const { data: signed } = await supabase.storage
+          .from("avatars")
+          .createSignedUrl(r.avatar_path, 3600);
+        return signed?.signedUrl ?? null;
+      })
+    );
+    setParticipantAvatarUrls(urls);
   };
 
   function deleteTrip() {
@@ -311,6 +371,7 @@ export default function TripPage() {
                 dates={formatDates(trip.start_date, trip.end_date)}
                 imageUrl={coverImageUrl ?? trip.cover_image_url ?? undefined}
                 onBack={() => router.push("/dashboard")}
+                participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
                 topRight={
                   <div className="relative flex items-center gap-2" ref={menuRef}>
                     {isOwner && (
@@ -460,7 +521,10 @@ export default function TripPage() {
         trip={trip}
         open={editModalOpen}
         onClose={() => setEditModalOpen(false)}
-        onSuccess={refetchTrip}
+        onSuccess={() => {
+          refetchTrip();
+          refetchParticipants();
+        }}
       />
 
       <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
