@@ -20,6 +20,7 @@ export function useProfile(user: User | null) {
       return;
     }
     let cancelled = false;
+
     supabase
       .from("profiles")
       .select("id, username")
@@ -31,6 +32,7 @@ export function useProfile(user: User | null) {
         else setProfile(null);
         setLoading(false);
       });
+
     return () => {
       cancelled = true;
     };
@@ -54,7 +56,6 @@ export function useProfile(user: User | null) {
   return { profile, loading, refetch };
 }
 
-/** Display name: profile username, or email prefix for users without a profile */
 export function getDisplayName(
   user: { email?: string | null } | null,
   profile: { username: string } | null
