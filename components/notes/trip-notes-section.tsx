@@ -35,7 +35,7 @@ type ContentBlock =
   | { type: "text"; text?: string }
   | { type: "paragraph"; text?: string; content?: string }
   | { type: "list"; items?: string[] }
-  | { type: "image"; url?: string; src?: string }
+  | { type: "image"; url?: string; src?: string; path?: string; bucket?: string }
   | { type: "link"; url?: string; title?: string; href?: string };
 
 function isBlockArray(content: unknown): content is ContentBlock[] {
@@ -167,6 +167,44 @@ function LinkPreviewBlock({ href }: { href: string }) {
   );
 }
 
+function NoteImageBlock({
+  path,
+  bucket,
+}: {
+  path: string;
+  bucket: string;
+}) {
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase.storage
+      .from(bucket)
+      .createSignedUrl(path, 3600)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (!error && data?.signedUrl) setSrc(data.signedUrl);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bucket, path]);
+
+  if (!src) return null;
+  return (
+    <div className="overflow-hidden rounded-lg">
+      <a href={src} target="_blank" rel="noopener noreferrer" className="block">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt=""
+          className="max-h-64 w-full object-cover"
+        />
+      </a>
+    </div>
+  );
+}
+
 function NoteCardContent({ content }: { content: unknown }) {
   if (content == null) return null;
   if (typeof content === "string") {
@@ -190,7 +228,10 @@ function NoteCardContent({ content }: { content: unknown }) {
             const text = (b.text ?? b.content) as string | undefined;
             if (typeof text !== "string") return null;
             return (
-              <p key={i} className="text-start text-sm text-[#6B7280]">
+              <p
+                key={i}
+                className="whitespace-pre-line text-start text-sm text-[#6B7280]"
+              >
                 {text}
               </p>
             );
@@ -207,7 +248,18 @@ function NoteCardContent({ content }: { content: unknown }) {
             );
           }
           case "image": {
+            const path = (b as { path?: string }).path;
+            const bucket = (b as { bucket?: string }).bucket;
             const url = (b.url ?? b.src) as string | undefined;
+            if (path && bucket) {
+              return (
+                <NoteImageBlock
+                  key={i}
+                  path={path}
+                  bucket={bucket}
+                />
+              );
+            }
             if (!url) return null;
             return (
               <div key={i} className="overflow-hidden rounded-lg">
@@ -215,7 +267,7 @@ function NoteCardContent({ content }: { content: unknown }) {
                 <img
                   src={url}
                   alt=""
-                  className="max-h-48 w-full object-cover"
+                  className="max-h-64 w-full rounded-lg object-cover"
                 />
               </div>
             );
