@@ -71,12 +71,10 @@ export function AddTripNoteDialog({
     setError(null);
     setSaving(true);
     try {
-      const content =
-        blocks.length > 0 ? blocks.map((b) => ({ type: b.type })) : null;
       const { error: insertError } = await supabase.from("trip_notes").insert({
         trip_id: tripId,
         title: trimmedTitle,
-        content,
+        content: null,
         tags: tags.length > 0 ? tags : null,
       });
       if (insertError) throw insertError;
@@ -97,7 +95,7 @@ export function AddTripNoteDialog({
         <DialogHeader>
           <DialogTitle className="text-[#4A4A4A]">Add Trip Note</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-4 text-start">
           <div>
             <label className={LABEL_CLASS}>NOTE TITLE *</label>
             <input
@@ -146,7 +144,7 @@ export function AddTripNoteDialog({
               </button>
             </div>
             {blocks.length > 0 && (
-              <div className="space-y-2 rounded-lg border border-[#F5F3F0] bg-[#FAFAF8] p-3">
+              <div className="space-y-2 rounded-lg border border-[#F5F3F0] bg-[#FAFAF8] p-3 text-start">
                 {blocks.map((b, i) => (
                   <div
                     key={i}
@@ -188,7 +186,7 @@ export function AddTripNoteDialog({
                 {tags.map((tag, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center gap-1 rounded-full bg-[#F5F3F0] pl-2.5 pr-1.5 py-0.5 text-xs text-[#6B7280]"
+                    className="inline-flex items-center gap-1 rounded-full bg-[#F5F3F0] ps-2.5 pe-1.5 py-0.5 text-start text-xs text-[#6B7280]"
                   >
                     {tag}
                     <button
@@ -212,7 +210,7 @@ export function AddTripNoteDialog({
             </p>
           )}
 
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2 pt-2 text-start">
             <button
               type="button"
               className="rounded-lg border border-[#D4C5BA] px-4 py-2 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"

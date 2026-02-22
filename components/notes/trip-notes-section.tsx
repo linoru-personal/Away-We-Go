@@ -35,16 +35,16 @@ function isBlockArray(content: unknown): content is ContentBlock[] {
 function NoteCardContent({ content }: { content: unknown }) {
   if (content == null) return null;
   if (typeof content === "string") {
-    return <p className="text-sm text-[#6B7280]">{content.trim() || null}</p>;
+    return <p className="text-start text-sm text-[#6B7280]">{content.trim() || null}</p>;
   }
   if (!isBlockArray(content)) {
     const obj = content as Record<string, unknown>;
     const text = (obj.text ?? obj.value ?? obj.content) as string | undefined;
-    if (typeof text === "string") return <p className="text-sm text-[#6B7280]">{text}</p>;
+    if (typeof text === "string") return <p className="text-start text-sm text-[#6B7280]">{text}</p>;
     return null;
   }
   return (
-    <div className="mt-2 space-y-3">
+    <div className="mt-2 space-y-3 text-start">
       {content.map((block, i) => {
         if (!block || typeof block !== "object") return null;
         const b = block as ContentBlock & Record<string, unknown>;
@@ -54,7 +54,7 @@ function NoteCardContent({ content }: { content: unknown }) {
             const text = (b.text ?? b.content) as string | undefined;
             if (typeof text !== "string") return null;
             return (
-              <p key={i} className="text-sm text-[#6B7280]">
+              <p key={i} className="text-start text-sm text-[#6B7280]">
                 {text}
               </p>
             );
@@ -63,7 +63,7 @@ function NoteCardContent({ content }: { content: unknown }) {
             const items = (b.items ?? []) as string[];
             if (!Array.isArray(items) || items.length === 0) return null;
             return (
-              <ul key={i} className="list-disc space-y-1 pl-4 text-sm text-[#6B7280]">
+              <ul key={i} className="list-disc space-y-1 ps-4 text-start text-sm text-[#6B7280]">
                 {items.map((item, j) => (
                   <li key={j}>{typeof item === "string" ? item : String(item)}</li>
                 ))}
@@ -94,10 +94,10 @@ function NoteCardContent({ content }: { content: unknown }) {
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block rounded-lg border border-[#D4C5BA] bg-[#FAFAF8] p-3 text-sm text-[#4A4A4A] transition hover:bg-[#F5F3F0]"
+                className="block rounded-lg border border-[#D4C5BA] bg-[#FAFAF8] p-3 text-start text-sm text-[#4A4A4A] transition hover:bg-[#F5F3F0]"
               >
                 <span className="font-medium">{title || href}</span>
-                <span className="ml-1 text-[#6B7280]">{href}</span>
+                <span className="ms-1 text-[#6B7280]">{href}</span>
               </a>
             );
           }
@@ -111,7 +111,7 @@ function NoteCardContent({ content }: { content: unknown }) {
 
 function NoteCard({ note }: { note: TripNote }) {
   return (
-    <article className={CARD_CLASS}>
+    <article className={`${CARD_CLASS} text-start`}>
       <h3 className="text-base font-semibold text-[#4A4A4A]">{note.title}</h3>
       <NoteCardContent content={note.content} />
       {note.tags && note.tags.length > 0 && (
@@ -165,7 +165,7 @@ export function TripNotesSection({ tripId }: TripNotesSectionProps) {
   return (
     <>
       <div className="mt-8 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 text-start">
           <h2 className="text-2xl font-bold text-[#4A4A4A]">Trip Notes</h2>
           <p className="mt-0.5 text-sm text-[#9B7B6B]">
             Your travel knowledge base
@@ -189,9 +189,9 @@ export function TripNotesSection({ tripId }: TripNotesSectionProps) {
       />
 
       {loading ? (
-        <p className="mt-6 text-sm text-[#6B7280]">Loading…</p>
+        <p className="mt-6 text-start text-sm text-[#6B7280]">Loading…</p>
       ) : notes.length === 0 ? (
-        <div className="mt-6 rounded-xl border border-dashed border-[#D4C5BA] py-8 text-center text-sm text-[#6B7280]">
+        <div className="mt-6 rounded-xl border border-dashed border-[#D4C5BA] py-8 text-start text-sm text-[#6B7280]">
           No notes yet. Start adding tips and insights for this trip.
         </div>
       ) : (

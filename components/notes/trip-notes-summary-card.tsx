@@ -79,7 +79,7 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
   return (
     <article className={CARD_CLASS}>
       <div className="flex w-full flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 text-start">
           <h2 className="text-lg font-semibold text-[#4A4A4A]">Trip Notes</h2>
           <p className="mt-0.5 text-sm text-[#9B7B6B]">
             Your travel knowledge base
@@ -93,22 +93,22 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
       </div>
 
       {loading ? (
-        <p className="mt-4 text-sm text-[#6B7280]">Loading…</p>
+        <p className="mt-4 text-start text-sm text-[#6B7280]">Loading…</p>
       ) : latestNote ? (
         <>
-          <p className="mt-4 text-sm font-semibold text-[#4A4A4A]">
+          <p className="mt-4 text-start text-sm font-semibold text-[#4A4A4A]">
             {latestNote.title}
           </p>
-          <p className="mt-1 line-clamp-2 text-sm text-[#6B7280]">
+          <p className="mt-1 line-clamp-2 text-start text-sm text-[#6B7280]">
             {previewText || "No content"}
           </p>
         </>
       ) : (
-        <p className="mt-4 text-sm text-[#9B7B6B]">No notes yet.</p>
+        <p className="mt-4 text-start text-sm text-[#9B7B6B]">No notes yet.</p>
       )}
 
       {!loading && (
-        <div className="mt-5 text-center">
+        <div className="mt-5 text-start">
           <button
             type="button"
             className="text-sm font-medium text-[#E07A5F] transition hover:text-[#c46950]"
