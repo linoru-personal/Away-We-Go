@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,11 +12,29 @@ import { supabase } from "@/app/lib/supabaseClient";
 const TRIP_NOTES_BUCKET = "trip-notes";
 const ACCEPT_IMAGE = "image/png,image/jpeg,image/webp";
 
+export type TripNoteForModal = {
+  id: string;
+  trip_id: string;
+  title: string;
+  content: unknown;
+  tags: string[] | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
+function getBlocksFromContent(content: unknown): { type: string; text?: string; items?: string[]; url?: string; path?: string; bucket?: string }[] {
+  if (content == null || typeof content !== "object") return [];
+  const obj = content as { blocks?: unknown };
+  if (!obj.blocks || !Array.isArray(obj.blocks)) return [];
+  return obj.blocks as { type: string; text?: string; items?: string[]; url?: string; path?: string; bucket?: string }[];
+}
+
 export interface AddTripNoteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tripId: string;
   onSuccess?: () => void;
+  initialNote?: TripNoteForModal | null;
 }
 
 const INPUT_CLASS =
@@ -28,6 +46,7 @@ export function AddTripNoteDialog({
   onOpenChange,
   tripId,
   onSuccess,
+  initialNote = null,
 }: AddTripNoteDialogProps) {
   const [title, setTitle] = useState("");
   const [tagInput, setTagInput] = useState("");
@@ -38,6 +57,7 @@ export function AddTripNoteDialog({
   const [linkError, setLinkError] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [existingImagePath, setExistingImagePath] = useState<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [textContent, setTextContent] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
@@ -45,6 +65,43 @@ export function AddTripNoteDialog({
   const [showListInput, setShowListInput] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const isEditMode = !!initialNote;
+
+  useEffect(() => {
+    if (!open || !initialNote) return;
+    setTitle(initialNote.title);
+    setTags(initialNote.tags ?? []);
+    setTagInput("");
+    const contentBlocks = getBlocksFromContent(initialNote.content);
+    setLinkUrl("");
+    setShowLinkInput(false);
+    setExistingImagePath(null);
+    setImageFile(null);
+    setImagePreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setTextContent("");
+    setShowTextInput(false);
+    setListItems([]);
+    setShowListInput(false);
+    setError(null);
+    for (const b of contentBlocks) {
+      if (b.type === "text" && b.text != null) {
+        setTextContent(b.text);
+        setShowTextInput(true);
+      } else if (b.type === "list" && Array.isArray(b.items)) {
+        setListItems(b.items.length > 0 ? b.items : [""]);
+        setShowListInput(true);
+      } else if (b.type === "link" && b.url) {
+        setLinkUrl(b.url);
+        setShowLinkInput(true);
+      } else if (b.type === "image" && b.path) {
+        setExistingImagePath(b.path);
+      }
+    }
+  }, [open, initialNote?.id]);
 
   function isValidUrl(s: string): boolean {
     const t = s.trim();
@@ -63,6 +120,7 @@ export function AddTripNoteDialog({
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
       setImageFile(null);
       setImagePreviewUrl(null);
+      setExistingImagePath(null);
       setTextContent("");
       setShowTextInput(false);
       setListItems([]);
@@ -92,7 +150,7 @@ export function AddTripNoteDialog({
     if (type === "list") {
       if (showListInput) return;
       setShowListInput(true);
-      setListItems(["", "", ""]);
+      setListItems(listItems.length > 0 ? listItems : ["", "", ""]);
       return;
     }
     setBlocks((prev) => [...prev, { type }]);
@@ -135,6 +193,7 @@ export function AddTripNoteDialog({
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     setImageFile(null);
     setImagePreviewUrl(null);
+    setExistingImagePath(null);
   }
 
   function clearLink() {
@@ -174,7 +233,6 @@ export function AddTripNoteDialog({
     try {
       let imagePath: string | null = null;
       if (imageFile) {
-        const ext = imageFile.name.split(".").pop()?.toLowerCase() || "jpg";
         const safeName = `${Date.now()}-${imageFile.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
         const path = `${tripId}/${safeName}`;
         const { error: uploadError } = await supabase.storage
@@ -182,6 +240,8 @@ export function AddTripNoteDialog({
           .upload(path, imageFile, { contentType: imageFile.type, upsert: false });
         if (uploadError) throw uploadError;
         imagePath = path;
+      } else if (existingImagePath) {
+        imagePath = existingImagePath;
       }
       const blocks: (
         | { type: "text"; text: string }
@@ -206,13 +266,26 @@ export function AddTripNoteDialog({
         blocks.push({ type: "image", path: imagePath, bucket: TRIP_NOTES_BUCKET });
       }
       const content = blocks.length > 0 ? { blocks } : null;
-      const { error: insertError } = await supabase.from("trip_notes").insert({
-        trip_id: tripId,
-        title: trimmedTitle,
-        content,
-        tags: tags.length > 0 ? tags : null,
-      });
-      if (insertError) throw insertError;
+      if (initialNote) {
+        const { error: updateError } = await supabase
+          .from("trip_notes")
+          .update({
+            title: trimmedTitle,
+            content,
+            tags: tags.length > 0 ? tags : null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", initialNote.id);
+        if (updateError) throw updateError;
+      } else {
+        const { error: insertError } = await supabase.from("trip_notes").insert({
+          trip_id: tripId,
+          title: trimmedTitle,
+          content,
+          tags: tags.length > 0 ? tags : null,
+        });
+        if (insertError) throw insertError;
+      }
       handleOpenChange(false);
       onSuccess?.();
     } catch (e) {
@@ -229,7 +302,9 @@ export function AddTripNoteDialog({
       <DialogContent>
         <div className="shrink-0">
           <DialogHeader>
-            <DialogTitle className="text-[#4A4A4A]">Add Trip Note</DialogTitle>
+            <DialogTitle className="text-[#4A4A4A]">
+              {isEditMode ? "Edit Trip Note" : "Add Trip Note"}
+            </DialogTitle>
           </DialogHeader>
         </div>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto text-start">
@@ -353,6 +428,26 @@ export function AddTripNoteDialog({
                 >
                   Remove
                 </button>
+              </div>
+            )}
+            {(existingImagePath && !imageFile) && (
+              <div className="mt-2 flex items-center gap-3 rounded-lg border border-[#F5F3F0] bg-[#FAFAF8] p-3">
+                <img
+                  src={supabase.storage.from(TRIP_NOTES_BUCKET).getPublicUrl(existingImagePath).data.publicUrl}
+                  alt=""
+                  className="size-14 shrink-0 rounded-lg object-cover"
+                />
+                <div className="min-w-0 flex-1 text-start">
+                  <p className="text-sm text-[#4A4A4A]">Current image</p>
+                  <button
+                    type="button"
+                    className="mt-1 text-sm font-medium text-[#6B7280] hover:text-[#4A4A4A]"
+                    onClick={clearImage}
+                    disabled={saving}
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             )}
             {imagePreviewUrl && (
@@ -495,7 +590,13 @@ export function AddTripNoteDialog({
             aria-disabled={!canSubmit}
             onClick={handleSubmit}
           >
-            {saving ? "Adding…" : "Add Note"}
+            {isEditMode
+              ? saving
+                ? "Saving…"
+                : "Save Changes"
+              : saving
+                ? "Adding…"
+                : "Add Note"}
           </button>
         </div>
       </DialogContent>

@@ -31,6 +31,46 @@ export interface TripNotesSectionProps {
 const CARD_CLASS =
   "bg-white rounded-[24px] p-6 shadow-[0_2px_16px_rgba(0,0,0,0.06)]";
 
+function TrashIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-4"
+    >
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      <line x1="10" x2="10" y1="11" y2="17" />
+      <line x1="14" x2="14" y1="11" y2="17" />
+    </svg>
+  );
+}
+
+function MoreVerticalIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-4"
+    >
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="12" cy="5" r="1" />
+      <circle cx="12" cy="19" r="1" />
+    </svg>
+  );
+}
+
 type ContentBlock =
   | { type: "text"; text?: string }
   | { type: "paragraph"; text?: string; content?: string }
@@ -285,10 +325,79 @@ function NoteCardContent({ content }: { content: unknown }) {
   );
 }
 
-function NoteCard({ note }: { note: TripNote }) {
+function NoteCard({
+  note,
+  onEditRequest,
+  onDeleteRequest,
+  isDeleting,
+}: {
+  note: TripNote;
+  onEditRequest?: (note: TripNote) => void;
+  onDeleteRequest?: (noteId: string) => void;
+  isDeleting?: boolean;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
+
+  const showMenu = onEditRequest || onDeleteRequest;
+
   return (
-    <article className={`${CARD_CLASS} text-start`}>
-      <h3 className="text-base font-semibold text-[#4A4A4A]">{note.title}</h3>
+    <article className={`${CARD_CLASS} relative text-start`}>
+      {showMenu && (
+        <div className="absolute end-4 top-4" ref={menuRef}>
+          <button
+            type="button"
+            className="flex size-8 items-center justify-center rounded-full text-[#6B7280] transition hover:bg-[#F5F3F0] hover:text-[#4A4A4A] disabled:opacity-50"
+            onClick={() => setMenuOpen((o) => !o)}
+            disabled={isDeleting}
+            aria-label="Note options"
+            aria-expanded={menuOpen}
+          >
+            <MoreVerticalIcon />
+          </button>
+          {menuOpen && (
+            <div className="absolute end-0 top-full z-10 mt-1 min-w-[120px] rounded-lg border border-[#D4C5BA] bg-white py-1 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+              {onEditRequest && (
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-start text-sm text-[#4A4A4A] hover:bg-[#F5F3F0]"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onEditRequest(note);
+                  }}
+                >
+                  Edit
+                </button>
+              )}
+              {onDeleteRequest && (
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-start text-sm text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDeleteRequest(note.id);
+                  }}
+                  disabled={isDeleting}
+                >
+                  Delete
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      <h3 className="pe-10 text-base font-semibold text-[#4A4A4A]">{note.title}</h3>
       <NoteCardContent content={note.content} />
       {note.tags && note.tags.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
@@ -318,6 +427,10 @@ export function TripNotesSection({ tripId }: TripNotesSectionProps) {
   const [notes, setNotes] = useState<TripNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState<TripNote | null>(null);
+  const [confirmNoteId, setConfirmNoteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tripId) return;
@@ -338,6 +451,33 @@ export function TripNotesSection({ tripId }: TripNotesSectionProps) {
     if (!error) setNotes((data ?? []) as TripNote[]);
   }
 
+  function handleEditRequest(note: TripNote) {
+    setEditingNote(note);
+    setAddModalOpen(true);
+  }
+
+  function handleDeleteRequest(noteId: string) {
+    setDeleteError(null);
+    setConfirmNoteId(noteId);
+  }
+
+  async function handleDeleteConfirm() {
+    if (!confirmNoteId) return;
+    setDeletingId(confirmNoteId);
+    setDeleteError(null);
+    const { error } = await supabase
+      .from("trip_notes")
+      .delete()
+      .eq("id", confirmNoteId);
+    setDeletingId(null);
+    if (error) {
+      setDeleteError(error.message);
+      return;
+    }
+    setConfirmNoteId(null);
+    await refetchNotes();
+  }
+
   return (
     <>
       <div className="mt-8 flex flex-wrap items-start justify-between gap-4">
@@ -351,7 +491,10 @@ export function TripNotesSection({ tripId }: TripNotesSectionProps) {
           type="button"
           className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
           aria-label="Add note"
-          onClick={() => setAddModalOpen(true)}
+          onClick={() => {
+            setEditingNote(null);
+            setAddModalOpen(true);
+          }}
         >
           + Add Note
         </button>
@@ -359,9 +502,13 @@ export function TripNotesSection({ tripId }: TripNotesSectionProps) {
 
       <AddTripNoteDialog
         open={addModalOpen}
-        onOpenChange={setAddModalOpen}
+        onOpenChange={(open) => {
+          setAddModalOpen(open);
+          if (!open) setEditingNote(null);
+        }}
         tripId={tripId}
         onSuccess={refetchNotes}
+        initialNote={editingNote}
       />
 
       {loading ? (
@@ -371,13 +518,60 @@ export function TripNotesSection({ tripId }: TripNotesSectionProps) {
           No notes yet. Start adding tips and insights for this trip.
         </div>
       ) : (
-        <ul className="mt-6 space-y-5">
-          {notes.map((note) => (
-            <li key={note.id}>
-              <NoteCard note={note} />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="mt-6 space-y-5">
+            {notes.map((note) => (
+              <li key={note.id}>
+                <NoteCard
+                  note={note}
+                  onEditRequest={handleEditRequest}
+                  onDeleteRequest={handleDeleteRequest}
+                  isDeleting={deletingId === note.id}
+                />
+              </li>
+            ))}
+          </ul>
+
+          {confirmNoteId && (
+            <div
+              className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4"
+              aria-modal="true"
+              role="dialog"
+            >
+              <div className="w-full max-w-sm rounded-[24px] border border-[#D4C5BA] bg-white p-6 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+                <h3 className="text-lg font-semibold text-[#4A4A4A]">
+                  Delete this note?
+                </h3>
+                {deleteError && (
+                  <p className="mt-2 text-sm text-red-600" role="alert">
+                    {deleteError}
+                  </p>
+                )}
+                <div className="mt-6 flex gap-3">
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg border border-[#D4C5BA] px-4 py-2 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
+                    onClick={() => {
+                      setConfirmNoteId(null);
+                      setDeleteError(null);
+                    }}
+                    disabled={!!deletingId}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg bg-[#E07A5F] px-4 py-2 text-sm font-medium text-white hover:bg-[#c46950] disabled:opacity-50"
+                    onClick={handleDeleteConfirm}
+                    disabled={!!deletingId}
+                  >
+                    {deletingId ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </>
   );
