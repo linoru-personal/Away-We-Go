@@ -6,6 +6,7 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
 import TripHero from "@/components/trip/trip-hero";
 import { TasksSummaryCard } from "@/components/tasks/tasks-summary-card";
+import { TripNotesSummaryCard } from "@/components/notes/trip-notes-summary-card";
 import TripFormModal from "@/components/trips/trip-form-modal";
 import {
   Dialog,
@@ -443,6 +444,9 @@ export default function TripPage() {
 
                 {/* Tasks summary */}
                 <TasksSummaryCard tripId={trip.id} />
+
+                {/* Trip Notes */}
+                <TripNotesSummaryCard tripId={trip.id} />
 
                 {/* Packing */}
                 <article className={CARD_CLASS}>
