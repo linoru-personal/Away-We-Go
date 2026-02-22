@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
 import TripHero from "@/components/trip/trip-hero";
+import { TripNotesSection } from "@/components/notes/trip-notes-section";
 
 type Trip = {
   id: string;
@@ -32,6 +33,7 @@ export default function TripNotesPage() {
   const { user, loading: sessionLoading } = useSession();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [tripLoading, setTripLoading] = useState(true);
+  const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
 
   useEffect(() => {
     if (!sessionLoading && !user) {
@@ -60,6 +62,41 @@ export default function TripNotesPage() {
       cancelled = true;
     };
   }, [id, user]);
+
+  useEffect(() => {
+    if (!id) {
+      setParticipantAvatarUrls([]);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from("trip_participants")
+      .select("avatar_path, sort_order")
+      .eq("trip_id", id)
+      .order("sort_order", { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) {
+          setParticipantAvatarUrls([]);
+          return;
+        }
+        const rows = (data ?? []) as { avatar_path: string | null }[];
+        Promise.all(
+          rows.map(async (r) => {
+            if (!r.avatar_path) return null;
+            const { data: signed } = await supabase.storage
+              .from("avatars")
+              .createSignedUrl(r.avatar_path, 3600);
+            return signed?.signedUrl ?? null;
+          })
+        ).then((urls) => {
+          if (!cancelled) setParticipantAvatarUrls(urls);
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   if (sessionLoading) {
     return (
@@ -93,9 +130,9 @@ export default function TripNotesPage() {
               dates={formatDates(trip.start_date, trip.end_date)}
               imageUrl={trip.cover_image_url ?? undefined}
               onBack={() => router.push(`/dashboard/trip/${id}`)}
-              participants={[]}
+              participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
             />
-            <p className="mt-8 text-[#6B7280]">Trip Notes — placeholder.</p>
+            <TripNotesSection tripId={id} />
           </>
         ) : (
           <div className="space-y-2">
