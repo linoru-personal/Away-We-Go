@@ -93,7 +93,7 @@ export function DialogContent({ children }: DialogContentProps) {
     >
       <div
         ref={innerContentRef}
-        className="relative w-full max-w-[420px] rounded-[28px] border border-[#ebe5df] bg-white p-6 pr-12 shadow-[0_10px_30px_rgba(0,0,0,0.06)]"
+        className="relative flex max-h-[85vh] w-full max-w-[420px] flex-col overflow-hidden rounded-[28px] border border-[#ebe5df] bg-white p-6 pr-12 shadow-[0_10px_30px_rgba(0,0,0,0.06)]"
       >
         <button
           type="button"

@@ -41,6 +41,8 @@ export function AddTripNoteDialog({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [textContent, setTextContent] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
+  const [listItems, setListItems] = useState<string[]>([]);
+  const [showListInput, setShowListInput] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -63,6 +65,8 @@ export function AddTripNoteDialog({
       setImagePreviewUrl(null);
       setTextContent("");
       setShowTextInput(false);
+      setListItems([]);
+      setShowListInput(false);
       setError(null);
     }
     onOpenChange(next);
@@ -85,7 +89,32 @@ export function AddTripNoteDialog({
       setShowTextInput(true);
       return;
     }
+    if (type === "list") {
+      if (showListInput) return;
+      setShowListInput(true);
+      setListItems(["", "", ""]);
+      return;
+    }
     setBlocks((prev) => [...prev, { type }]);
+  }
+
+  function addListItem() {
+    setListItems((prev) => [...prev, ""]);
+  }
+
+  function setListItem(index: number, value: string) {
+    setListItems((prev) =>
+      prev.map((v, i) => (i === index ? value : v))
+    );
+  }
+
+  function removeListItem(index: number) {
+    setListItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function clearList() {
+    setListItems([]);
+    setShowListInput(false);
   }
 
   function clearText() {
@@ -156,12 +185,19 @@ export function AddTripNoteDialog({
       }
       const blocks: (
         | { type: "text"; text: string }
+        | { type: "list"; items: string[] }
         | { type: "link"; url: string }
         | { type: "image"; path: string; bucket: string }
       )[] = [];
       const trimmedText = textContent.trim();
       if (trimmedText) {
         blocks.push({ type: "text", text: trimmedText });
+      }
+      const listItemsFiltered = listItems
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      if (listItemsFiltered.length > 0) {
+        blocks.push({ type: "list", items: listItemsFiltered });
       }
       if (trimmedLink && isValidUrl(trimmedLink)) {
         blocks.push({ type: "link", url: trimmedLink });
@@ -191,10 +227,12 @@ export function AddTripNoteDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="text-[#4A4A4A]">Add Trip Note</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 text-start">
+        <div className="shrink-0">
+          <DialogHeader>
+            <DialogTitle className="text-[#4A4A4A]">Add Trip Note</DialogTitle>
+          </DialogHeader>
+        </div>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto text-start">
           <div>
             <label className={LABEL_CLASS}>NOTE TITLE *</label>
             <input
@@ -221,7 +259,7 @@ export function AddTripNoteDialog({
                 type="button"
                 className="rounded-lg border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
                 onClick={() => addBlock("list")}
-                disabled={saving}
+                disabled={saving || showListInput}
               >
                 Add List
               </button>
@@ -250,6 +288,52 @@ export function AddTripNoteDialog({
               onChange={onImageChange}
               aria-hidden
             />
+            {showListInput && (
+              <div className="mt-2 space-y-2">
+                <label className={LABEL_CLASS}>List</label>
+                <ul className="space-y-2">
+                  {listItems.map((item, index) => (
+                    <li key={index} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={item}
+                        onChange={(e) => setListItem(index, e.target.value)}
+                        placeholder={`Item ${index + 1}`}
+                        className={INPUT_CLASS}
+                        disabled={saving}
+                      />
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-lg border border-[#D4C5BA] bg-white px-2 py-2 text-sm text-[#6B7280] hover:bg-[#F5F3F0] disabled:opacity-50"
+                        onClick={() => removeListItem(index)}
+                        disabled={saving || listItems.length <= 1}
+                        aria-label="Remove item"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
+                    onClick={addListItem}
+                    disabled={saving}
+                  >
+                    Add item
+                  </button>
+                  <button
+                    type="button"
+                    className="text-sm font-medium text-[#6B7280] hover:text-[#4A4A4A]"
+                    onClick={clearList}
+                    disabled={saving}
+                  >
+                    Remove list
+                  </button>
+                </div>
+              </div>
+            )}
             {showTextInput && (
               <div className="mt-2 space-y-1">
                 <label className={LABEL_CLASS}>Text</label>
@@ -337,7 +421,6 @@ export function AddTripNoteDialog({
                     key={i}
                     className="text-sm text-[#6B7280]"
                   >
-                    {b.type === "list" && "List block"}
                     {b.type === "image" && "Image block"}
                   </div>
                 ))}
@@ -394,26 +477,26 @@ export function AddTripNoteDialog({
               {error}
             </p>
           )}
+        </div>
 
-          <div className="flex justify-end gap-2 pt-2 text-start">
-            <button
-              type="button"
-              className="rounded-lg border border-[#D4C5BA] px-4 py-2 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
-              onClick={() => handleOpenChange(false)}
-              disabled={saving}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="rounded-lg bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F] disabled:opacity-50"
-              disabled={!canSubmit}
-              aria-disabled={!canSubmit}
-              onClick={handleSubmit}
-            >
-              {saving ? "Adding…" : "Add Note"}
-            </button>
-          </div>
+        <div className="shrink-0 flex justify-end gap-2 pt-2 text-start">
+          <button
+            type="button"
+            className="rounded-lg border border-[#D4C5BA] px-4 py-2 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
+            onClick={() => handleOpenChange(false)}
+            disabled={saving}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="rounded-lg bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F] disabled:opacity-50"
+            disabled={!canSubmit}
+            aria-disabled={!canSubmit}
+            onClick={handleSubmit}
+          >
+            {saving ? "Adding…" : "Add Note"}
+          </button>
         </div>
       </DialogContent>
     </Dialog>
