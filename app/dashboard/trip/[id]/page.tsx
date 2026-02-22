@@ -7,6 +7,7 @@ import { useSession } from "@/app/lib/useSession";
 import TripHero from "@/components/trip/trip-hero";
 import { TasksSummaryCard } from "@/components/tasks/tasks-summary-card";
 import { TripNotesSummaryCard } from "@/components/notes/trip-notes-summary-card";
+import { PackingSummaryCard } from "@/components/packing/packing-summary-card";
 import TripFormModal from "@/components/trips/trip-form-modal";
 import {
   Dialog,
@@ -449,31 +450,7 @@ export default function TripPage() {
                 <TripNotesSummaryCard tripId={trip.id} />
 
                 {/* Packing */}
-                <article className={CARD_CLASS}>
-                  <h2 className="text-lg font-semibold text-[#4A4A4A]">
-                    Packing
-                  </h2>
-                  <p className="mt-0.5 text-sm text-[#9B7B6B]">
-                    List progress
-                  </p>
-                  <p className="mt-4 text-2xl font-semibold text-[#E07A5F]">
-                    0%
-                  </p>
-                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#F5F3F0]">
-                    <div
-                      className="h-full rounded-full bg-[#E07A5F] transition-all duration-500"
-                      style={{ width: "0%" }}
-                    />
-                  </div>
-                  <ul className="mt-4 space-y-3">
-                    {["Item one", "Item two"].map((label, i) => (
-                      <li key={i} className="flex items-center gap-3">
-                        <span className="flex size-4 shrink-0 items-center justify-center rounded-sm border-2 border-[#D4C5BA] bg-white" />
-                        <span className="text-sm text-[#6B7280]">{label}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </article>
+                <PackingSummaryCard tripId={trip.id} />
 
                 {/* Budget */}
                 <article className={CARD_CLASS}>
