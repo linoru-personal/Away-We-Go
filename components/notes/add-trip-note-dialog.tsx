@@ -30,8 +30,16 @@ export function AddTripNoteDialog({
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [blocks, setBlocks] = useState<{ type: string }[]>([]);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  function isValidUrl(s: string): boolean {
+    const t = s.trim();
+    return t.startsWith("http://") || t.startsWith("https://");
+  }
 
   function handleOpenChange(next: boolean) {
     if (!next) {
@@ -39,13 +47,28 @@ export function AddTripNoteDialog({
       setTagInput("");
       setTags([]);
       setBlocks([]);
+      setLinkUrl("");
+      setShowLinkInput(false);
+      setLinkError(null);
       setError(null);
     }
     onOpenChange(next);
   }
 
   function addBlock(type: "text" | "list" | "link" | "image") {
+    if (type === "link") {
+      if (linkUrl.trim()) return;
+      setShowLinkInput(true);
+      setLinkError(null);
+      return;
+    }
     setBlocks((prev) => [...prev, { type }]);
+  }
+
+  function clearLink() {
+    setLinkUrl("");
+    setShowLinkInput(false);
+    setLinkError(null);
   }
 
   function addTag() {
@@ -68,13 +91,23 @@ export function AddTripNoteDialog({
       setError("Title is required.");
       return;
     }
+    const trimmedLink = linkUrl.trim();
+    if (trimmedLink && !isValidUrl(trimmedLink)) {
+      setLinkError("URL must start with http:// or https://");
+      return;
+    }
     setError(null);
+    setLinkError(null);
     setSaving(true);
     try {
+      const content =
+        trimmedLink && isValidUrl(trimmedLink)
+          ? { blocks: [{ type: "link" as const, url: trimmedLink }] }
+          : null;
       const { error: insertError } = await supabase.from("trip_notes").insert({
         trip_id: tripId,
         title: trimmedTitle,
-        content: null,
+        content,
         tags: tags.length > 0 ? tags : null,
       });
       if (insertError) throw insertError;
@@ -130,7 +163,7 @@ export function AddTripNoteDialog({
                 type="button"
                 className="rounded-lg border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
                 onClick={() => addBlock("link")}
-                disabled={saving}
+                disabled={saving || !!linkUrl.trim()}
               >
                 Add Link
               </button>
@@ -143,6 +176,45 @@ export function AddTripNoteDialog({
                 Add Image
               </button>
             </div>
+            {(showLinkInput || linkUrl.trim()) && (
+              <div className="mt-2 space-y-1">
+                <label className={LABEL_CLASS}>URL</label>
+                {linkUrl.trim() ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-[#F5F3F0] bg-[#FAFAF8] p-3">
+                    <span className="min-w-0 flex-1 truncate text-sm text-[#4A4A4A]">
+                      {linkUrl.trim()}
+                    </span>
+                    <button
+                      type="button"
+                      className="shrink-0 text-sm font-medium text-[#6B7280] hover:text-[#4A4A4A]"
+                      onClick={clearLink}
+                      disabled={saving}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      type="url"
+                      value={linkUrl}
+                      onChange={(e) => {
+                        setLinkUrl(e.target.value);
+                        setLinkError(null);
+                      }}
+                      placeholder="https://..."
+                      className={INPUT_CLASS}
+                      disabled={saving}
+                    />
+                    {linkError && (
+                      <p className="text-sm text-red-600" role="alert">
+                        {linkError}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
             {blocks.length > 0 && (
               <div className="space-y-2 rounded-lg border border-[#F5F3F0] bg-[#FAFAF8] p-3 text-start">
                 {blocks.map((b, i) => (
@@ -152,7 +224,6 @@ export function AddTripNoteDialog({
                   >
                     {b.type === "text" && "Text block"}
                     {b.type === "list" && "List block"}
-                    {b.type === "link" && "Link block"}
                     {b.type === "image" && "Image block"}
                   </div>
                 ))}

@@ -1,8 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/app/lib/supabaseClient";
 import { AddTripNoteDialog } from "@/components/notes/add-trip-note-dialog";
+
+type LinkPreviewData = {
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  url: string;
+  domain: string;
+};
+
+const previewCache = new Map<string, LinkPreviewData | "error">();
 
 export type TripNote = {
   id: string;
@@ -32,12 +42,138 @@ function isBlockArray(content: unknown): content is ContentBlock[] {
   return Array.isArray(content) && content.every((x) => x && typeof x === "object" && "type" in x);
 }
 
+function getBlocks(content: unknown): ContentBlock[] | null {
+  if (content == null) return null;
+  if (isBlockArray(content)) return content;
+  const obj = content as { blocks?: unknown };
+  if (obj.blocks && Array.isArray(obj.blocks) && isBlockArray(obj.blocks))
+    return obj.blocks;
+  return null;
+}
+
+function getDomain(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
+function truncateUrl(url: string, maxLen: number): string {
+  if (url.length <= maxLen) return url;
+  return url.slice(0, maxLen - 1) + "…";
+}
+
+function LinkPreviewBlock({ href }: { href: string }) {
+  const [preview, setPreview] = useState<LinkPreviewData | null>(null);
+  const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
+  const fetched = useRef(false);
+
+  useEffect(() => {
+    if (!href || fetched.current) return;
+    const cached = previewCache.get(href);
+    if (cached === "error") {
+      setStatus("error");
+      fetched.current = true;
+      return;
+    }
+    if (cached) {
+      setPreview(cached);
+      setStatus("done");
+      fetched.current = true;
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/link-preview?url=${encodeURIComponent(href)}`)
+      .then((res) => {
+        if (cancelled) return;
+        if (!res.ok) throw new Error(res.statusText);
+        return res.json();
+      })
+      .then((data: LinkPreviewData) => {
+        if (cancelled) return;
+        previewCache.set(href, data);
+        setPreview(data);
+        setStatus("done");
+      })
+      .catch(() => {
+        if (!cancelled) {
+          previewCache.set(href, "error");
+          setStatus("error");
+        }
+      })
+      .finally(() => {
+        fetched.current = true;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [href]);
+
+  const domain = getDomain(href);
+  const displayUrl = truncateUrl(href, 50);
+  const fallback = (
+    <>
+      <span className="font-medium text-[#4A4A4A]">{domain}</span>
+      <span className="mt-1 block truncate text-[#6B7280]">{displayUrl}</span>
+    </>
+  );
+
+  if (status === "error" || status === "loading" || !preview) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block rounded-lg border border-[#D4C5BA] bg-[#FAFAF8] p-3 text-start text-sm transition hover:bg-[#F5F3F0]"
+      >
+        {fallback}
+      </a>
+    );
+  }
+
+  const faviconUrl = `https://www.google.com/s2/favicons?domain=${preview.domain}&sz=48`;
+  const thumb = preview.image ? (
+    <img
+      src={preview.image}
+      alt=""
+      className="size-12 shrink-0 rounded-lg object-cover"
+    />
+  ) : (
+    <img
+      src={faviconUrl}
+      alt=""
+      className="size-12 shrink-0 rounded-lg bg-[#F5F3F0] object-contain"
+    />
+  );
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex gap-3 rounded-lg border border-[#D4C5BA] bg-[#FAFAF8] p-3 text-start text-sm transition hover:bg-[#F5F3F0]"
+    >
+      {thumb}
+      <div className="min-w-0 flex-1">
+        <span className="block truncate font-medium text-[#4A4A4A]">
+          {preview.title || preview.domain}
+        </span>
+        <span className="mt-0.5 block text-xs text-[#6B7280]">
+          {preview.domain}
+        </span>
+      </div>
+    </a>
+  );
+}
+
 function NoteCardContent({ content }: { content: unknown }) {
   if (content == null) return null;
   if (typeof content === "string") {
     return <p className="text-start text-sm text-[#6B7280]">{content.trim() || null}</p>;
   }
-  if (!isBlockArray(content)) {
+  const blocks = getBlocks(content);
+  if (!blocks || blocks.length === 0) {
     const obj = content as Record<string, unknown>;
     const text = (obj.text ?? obj.value ?? obj.content) as string | undefined;
     if (typeof text === "string") return <p className="text-start text-sm text-[#6B7280]">{text}</p>;
@@ -45,7 +181,7 @@ function NoteCardContent({ content }: { content: unknown }) {
   }
   return (
     <div className="mt-2 space-y-3 text-start">
-      {content.map((block, i) => {
+      {blocks.map((block, i) => {
         if (!block || typeof block !== "object") return null;
         const b = block as ContentBlock & Record<string, unknown>;
         switch (b.type) {
@@ -86,20 +222,8 @@ function NoteCardContent({ content }: { content: unknown }) {
           }
           case "link": {
             const href = (b.url ?? b.href) as string | undefined;
-            const title = (b.title ?? href) as string | undefined;
             if (!href) return null;
-            return (
-              <a
-                key={i}
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block rounded-lg border border-[#D4C5BA] bg-[#FAFAF8] p-3 text-start text-sm text-[#4A4A4A] transition hover:bg-[#F5F3F0]"
-              >
-                <span className="font-medium">{title || href}</span>
-                <span className="ms-1 text-[#6B7280]">{href}</span>
-              </a>
-            );
+            return <LinkPreviewBlock key={i} href={href} />;
           }
           default:
             return null;
