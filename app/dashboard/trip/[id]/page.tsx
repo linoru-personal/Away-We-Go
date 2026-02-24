@@ -8,6 +8,7 @@ import TripHero from "@/components/trip/trip-hero";
 import { TasksSummaryCard } from "@/components/tasks/tasks-summary-card";
 import { TripNotesSummaryCard } from "@/components/notes/trip-notes-summary-card";
 import { PackingSummaryCard } from "@/components/packing/packing-summary-card";
+import { BudgetSummaryCard } from "@/components/budget/budget-summary-card";
 import TripFormModal from "@/components/trips/trip-form-modal";
 import {
   Dialog,
@@ -453,31 +454,7 @@ export default function TripPage() {
                 <PackingSummaryCard tripId={trip.id} />
 
                 {/* Budget */}
-                <article className={CARD_CLASS}>
-                  <h2 className="text-lg font-semibold text-[#4A4A4A]">
-                    Budget
-                  </h2>
-                  <p className="mt-0.5 text-sm text-[#9B7B6B]">
-                    Planned vs spent
-                  </p>
-                  <div className="mt-4 flex justify-between text-sm">
-                    <span className="text-[#6B7280]">Planned</span>
-                    <span className="font-medium text-[#4A4A4A]">$0</span>
-                  </div>
-                  <div className="mt-1 flex justify-between text-sm">
-                    <span className="text-[#6B7280]">Spent</span>
-                    <span className="font-medium text-[#4A4A4A]">$0</span>
-                  </div>
-                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#F5F3F0]">
-                    <div
-                      className="h-full rounded-full bg-[#E07A5F] transition-all duration-500"
-                      style={{ width: "0%" }}
-                    />
-                  </div>
-                  <p className="mt-2 text-sm text-[#9B7B6B]">
-                    Remaining: $0
-                  </p>
-                </article>
+                <BudgetSummaryCard tripId={trip.id} />
 
                 {/* Photos */}
                 <article className={`${CARD_CLASS} md:col-span-2`}>

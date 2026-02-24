@@ -308,24 +308,6 @@ function DashboardInner({ user }: { user: User }) {
           </section>
         )}
 
-        {/* 3) Sample Trip section (bottom) */}
-        <section className="space-y-4">
-          <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
-            Sample Trip
-          </p>
-          <TripCard
-            title="Reykjavik, Iceland"
-            startDate="Apr 10"
-            endDate="Apr 17"
-            onClick={() => {}}
-          />
-          <div className="flex -space-x-2">
-            <div className="size-8 rounded-full border-2 border-white bg-neutral-300" />
-            <div className="size-8 rounded-full border-2 border-white bg-neutral-400" />
-            <div className="size-8 rounded-full border-2 border-white bg-neutral-500" />
-          </div>
-        </section>
-
         <TripFormModal
           mode="create"
           open={isCreateOpen}
