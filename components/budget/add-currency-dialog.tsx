@@ -13,7 +13,8 @@ import {
   upsertTripExchangeRate,
   fetchLiveRateToUSD,
 } from "@/components/budget/budget-queries";
-import { ADDABLE_CURRENCIES, DEFAULT_CURRENCIES } from "@/components/budget/budget-money";
+import { DEFAULT_CURRENCIES } from "@/components/budget/budget-money";
+import { CURRENCY_OPTIONS } from "@/components/budget/currency-catalog";
 
 const inputClass =
   "w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0";
@@ -48,10 +49,14 @@ export function AddCurrencyDialog({
   );
 
   const filteredList = useMemo(() => {
-    const q = search.trim().toUpperCase();
-    return ADDABLE_CURRENCIES.filter((c) => {
-      if (existingSet.has(c)) return false;
-      return !q || c.includes(q);
+    const q = search.trim().toLowerCase();
+    return CURRENCY_OPTIONS.filter((option) => {
+      if (existingSet.has(option.code)) return false;
+      if (!q) return true;
+      return (
+        option.code.toLowerCase().includes(q) ||
+        option.name.toLowerCase().includes(q)
+      );
     });
   }, [search, existingSet]);
 
@@ -213,20 +218,30 @@ export function AddCurrencyDialog({
                 <ul className="rounded-[20px] border border-[#ebe5df] bg-[#faf8f6] divide-y divide-[#ebe5df] overflow-hidden">
                   {filteredList.length === 0 ? (
                     <li className="px-4 py-3 text-sm text-[#6B7280]">
-                      {existingSet.size >= ADDABLE_CURRENCIES.length
+                      {existingSet.size >= CURRENCY_OPTIONS.length
                         ? "All addable currencies are already on this trip."
                         : "No matching currencies."}
                     </li>
                   ) : (
-                    filteredList.map((c) => (
-                      <li key={c}>
+                    filteredList.map((option) => (
+                      <li key={option.code}>
                         <button
                           type="button"
-                          className="w-full px-4 py-3 text-left text-sm font-medium text-[#1f1f1f] hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-inset disabled:opacity-50"
-                          onClick={() => handleSelectCurrency(c)}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-inset disabled:opacity-50"
+                          onClick={() => handleSelectCurrency(option.code)}
                           disabled={submitting}
                         >
-                          {c}
+                          <div className="h-9 w-9 flex-shrink-0 rounded-full overflow-hidden border border-[#ebe5df] shadow-sm bg-white">
+                            <img
+                              src={`https://flagcdn.com/w40/${option.flagCountry}.png`}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1 text-left">
+                            <span className="font-semibold text-[#1f1f1f]">{option.code}</span>
+                            <p className="text-sm text-[#6B7280] truncate">{option.name}</p>
+                          </div>
                         </button>
                       </li>
                     ))
