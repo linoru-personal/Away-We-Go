@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   createBudgetItem,
   updateBudgetItem,
+  createBudgetCategory,
   type BudgetCategorySummary,
   type BudgetItemRow,
 } from "@/components/budget/budget-queries";
@@ -14,8 +15,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DISPLAY_CURRENCIES, DEFAULT_CURRENCIES } from "@/components/budget/budget-money";
+import { EmojiIconPicker } from "@/components/ui/emoji-icon-picker";
+import { CATEGORY_ICON_CHOICES } from "@/components/ui/category-icon-choices";
+import { normalizeBudgetIcon } from "@/components/budget/budget-utils";
 
 const CURRENCIES = [...DEFAULT_CURRENCIES];
+const DEFAULT_CATEGORY_COLOR = "#E07A5F";
 
 const inputClass =
   "w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0";
@@ -61,6 +66,7 @@ export function AddBudgetItemDialog({
   const currencies =
     tripCurrencies && tripCurrencies.length > 0 ? tripCurrencies : [...DEFAULT_CURRENCIES];
 
+  const [mode, setMode] = useState<"add-item" | "create-category">("add-item");
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("USD");
@@ -69,10 +75,18 @@ export function AddBudgetItemDialog({
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createCategoryName, setCreateCategoryName] = useState("");
+  const [createCategoryIcon, setCreateCategoryIcon] = useState<string | null>(CATEGORY_ICON_CHOICES[0]);
+  const [createCategorySaving, setCreateCategorySaving] = useState(false);
+  const [createCategoryError, setCreateCategoryError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setError(null);
+    setMode("add-item");
+    setCreateCategoryError(null);
+    setCreateCategoryName("");
+    setCreateCategoryIcon(CATEGORY_ICON_CHOICES[0]);
     if (existingItem) {
       setName(existingItem.name);
       setAmount(String(existingItem.amount));
@@ -141,17 +155,105 @@ export function AddBudgetItemDialog({
     }
   };
 
+  async function handleCreateCategory() {
+    const nameTrimmed = createCategoryName.trim();
+    if (!nameTrimmed) {
+      setCreateCategoryError("Category name is required.");
+      return;
+    }
+    setCreateCategoryError(null);
+    setCreateCategorySaving(true);
+    try {
+      const created = await createBudgetCategory(tripId, {
+        name: nameTrimmed,
+        color: DEFAULT_CATEGORY_COLOR,
+        icon: createCategoryIcon ?? CATEGORY_ICON_CHOICES[0],
+      });
+      setCategoryId(created.id);
+      setCreateCategoryName("");
+      setCreateCategoryIcon(CATEGORY_ICON_CHOICES[0]);
+      setMode("add-item");
+      onSuccess();
+    } catch (err) {
+      setCreateCategoryError(err instanceof Error ? err.message : "Failed to create category.");
+    } finally {
+      setCreateCategorySaving(false);
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold text-[#1f1f1f]">
-            {isEdit ? "Edit Budget Item" : "Add Item"}
+            {mode === "create-category"
+              ? "Create category"
+              : isEdit
+                ? "Edit Budget Item"
+                : "Add Item"}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="min-h-0 overflow-y-auto max-h-[calc(85vh-7rem)] -mx-1 px-1">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div className="min-h-0 max-h-[calc(85vh-7rem)] -mx-1 overflow-y-auto px-1">
+          {mode === "create-category" ? (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start gap-3">
+                <div className="shrink-0">
+                  <label className={labelClass}>Icon</label>
+                  <div className="mt-1.5">
+                    <EmojiIconPicker
+                      value={createCategoryIcon}
+                      onChange={setCreateCategoryIcon}
+                    />
+                  </div>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <label htmlFor="create-category-name" className={labelClass}>
+                    Category name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="create-category-name"
+                    type="text"
+                    value={createCategoryName}
+                    onChange={(e) => setCreateCategoryName(e.target.value)}
+                    placeholder="e.g. Transport"
+                    className={`mt-1.5 ${inputClass}`}
+                    disabled={createCategorySaving}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+              {createCategoryError && (
+                <p className="text-sm text-red-600" role="alert">
+                  {createCategoryError}
+                </p>
+              )}
+              <div className="mt-2 flex justify-end gap-3">
+                <button
+                  type="button"
+                  className="rounded-full border border-[#e0d9d2] bg-transparent px-4 py-2 text-sm font-medium text-[#1f1f1f] transition hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-2 disabled:opacity-50"
+                  onClick={() => {
+                    setCreateCategoryName("");
+                    setCreateCategoryIcon(CATEGORY_ICON_CHOICES[0]);
+                    setCreateCategoryError(null);
+                    setMode("add-item");
+                  }}
+                  disabled={createCategorySaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full bg-[#d97b5e] px-4 py-2 text-sm font-medium text-white shadow-[0_2px_8px_rgba(217,123,94,0.25)] transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 disabled:opacity-50"
+                  onClick={handleCreateCategory}
+                  disabled={createCategorySaving}
+                >
+                  {createCategorySaving ? "Creating…" : "Create"}
+                </button>
+              </div>
+            </div>
+          ) : (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* Item Name* */}
           <div>
             <label htmlFor="budget-item-name" className={labelClass}>
@@ -215,16 +317,24 @@ export function AddBudgetItemDialog({
             <select
               id="budget-item-category"
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "__create_new__") {
+                  setMode("create-category");
+                } else {
+                  setCategoryId(v);
+                }
+              }}
               className={`mt-1.5 ${inputClass}`}
               disabled={submitting}
             >
               <option value="">No category</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
+                  {normalizeBudgetIcon(c.icon) ?? "•"} {c.name}
                 </option>
               ))}
+              <option value="__create_new__">+ Create new category</option>
             </select>
           </div>
 
@@ -284,6 +394,7 @@ export function AddBudgetItemDialog({
             </button>
           </div>
         </form>
+        )}
         </div>
       </DialogContent>
     </Dialog>
