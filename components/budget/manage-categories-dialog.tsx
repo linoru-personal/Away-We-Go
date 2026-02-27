@@ -8,6 +8,7 @@ import {
   type BudgetCategorySummary,
   type BudgetData,
 } from "@/components/budget/budget-queries";
+import { normalizeBudgetIcon } from "@/components/budget/budget-utils";
 import {
   Dialog,
   DialogContent,
@@ -198,13 +199,9 @@ export function ManageCategoriesDialog({
                       className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-lg text-[#1f1f1f]"
                       style={{ backgroundColor: cat.color || "#F5F3F0" }}
                     >
-                      {cat.icon ? (
-                        <span role="img" aria-hidden>
-                          {cat.icon}
-                        </span>
-                      ) : (
-                        <span aria-hidden>•</span>
-                      )}
+                      <span role="img" aria-hidden>
+                        {normalizeBudgetIcon(cat.icon) ?? "•"}
+                      </span>
                     </div>
                     <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#1f1f1f]">
                       {cat.name}

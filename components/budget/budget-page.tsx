@@ -21,6 +21,7 @@ import {
 import { AddBudgetItemDialog } from "@/components/budget/add-budget-item-dialog";
 import { AddCurrencyDialog } from "@/components/budget/add-currency-dialog";
 import { ManageCategoriesDialog } from "@/components/budget/manage-categories-dialog";
+import { normalizeBudgetIcon } from "@/components/budget/budget-utils";
 import {
   Dialog,
   DialogContent,
@@ -279,13 +280,9 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
                     className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl text-lg"
                     style={{ backgroundColor: group.category.color || "#F5F3F0" }}
                   >
-                    {group.category.icon ? (
-                      <span role="img" aria-hidden>
-                        {group.category.icon}
-                      </span>
-                    ) : (
-                      "•"
-                    )}
+                    <span role="img" aria-hidden>
+                      {normalizeBudgetIcon(group.category.icon) ?? "•"}
+                    </span>
                   </div>
                   <span className="flex-1 font-semibold text-[#4A4A4A]">
                     {group.category.name}
