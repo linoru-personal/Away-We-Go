@@ -1,20 +1,150 @@
+'use client';
+
 import { supabase } from "@/app/lib/supabaseClient";
 
 /** Budget feature is EXPENSES ONLY. All items are stored in trip_budget_items; totals use amount_base. No "planned" tables/fields. */
 const BASE_CURRENCY = "USD";
-/** Static rates to USD (MVP). Must match components/budget/budget-money.ts RATES_TO_USD for display. */
-const FX_RATES: Record<string, number> = {
+/** Fallback rates to USD only when live API fails (ILS, EUR). Used only on 502/network error. */
+const STATIC_FALLBACK_RATES_TO_USD: Record<string, number> = {
   USD: 1,
   ILS: 0.27,
   EUR: 1.09,
 };
 
-function getFxRate(currency: string): number {
-  const rate = FX_RATES[currency.toUpperCase()];
-  if (rate == null) {
-    throw new Error(`Unsupported currency: ${currency}. MVP supports ILS, USD, EUR.`);
+const DEFAULT_TRIP_CURRENCIES = ["ILS", "USD", "EUR"];
+
+/** Fetches live rate from our FX API. Returns rate or error info. Exported for Add Currency flow. */
+export async function fetchLiveRateToUSD(
+  currency: string
+): Promise<{ rate: number } | { error: string; status: number }> {
+  const from = currency.trim().toUpperCase();
+  if (from === "USD") return { rate: 1 };
+  try {
+    const res = await fetch(
+      `/api/fx?from=${encodeURIComponent(from)}&to=USD`
+    );
+    const data = (await res.json()) as { rate?: number; error?: string };
+    if (!res.ok) {
+      const msg = typeof data?.error === "string" ? data.error : res.statusText || "Request failed";
+      return { error: msg, status: res.status };
+    }
+    const rate = data?.rate;
+    if (typeof rate !== "number" || rate <= 0) {
+      return { error: "Invalid rate from exchange rate service", status: 502 };
+    }
+    return { rate };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Exchange rate service unavailable";
+    return { error: msg, status: 502 };
   }
-  return rate;
+}
+
+/**
+ * Resolve rate to USD at save time: live FX from /api/fx, with static fallback only on provider failure.
+ * - USD -> 1.
+ * - 422 (unsupported currency) -> throws user-friendly message.
+ * - 502/network -> uses STATIC_FALLBACK for ILS/EUR only; otherwise throws.
+ */
+async function getRateToUSD(_tripId: string, currency: string): Promise<number> {
+  const upper = currency.toUpperCase();
+  if (upper === "USD") return 1;
+
+  const result = await fetchLiveRateToUSD(currency);
+  if ("rate" in result) return result.rate;
+
+  if (result.status === 422) {
+    throw new Error(
+      result.error || "This currency is not supported by the exchange rate service. Add a manual rate in trip settings (Add currency) if needed."
+    );
+  }
+
+  const fallback = STATIC_FALLBACK_RATES_TO_USD[upper];
+  if (fallback != null) return fallback;
+
+  throw new Error(
+    "Exchange rate unavailable. Please try again or add a manual rate in trip settings (Add currency)."
+  );
+}
+
+export async function fetchTripCurrencies(tripId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("trip_currencies")
+    .select("currency")
+    .eq("trip_id", tripId)
+    .order("currency", { ascending: true });
+  if (error) throw new Error(error.message);
+  const list = (data ?? []).map((r: { currency: string }) => r.currency);
+  return list.length > 0 ? list : [...DEFAULT_TRIP_CURRENCIES];
+}
+
+export async function addTripCurrency(tripId: string, currency: string): Promise<void> {
+  const row = {
+    trip_id: tripId,
+    currency: currency.trim().toUpperCase(),
+  };
+  const { error } = await supabase.from("trip_currencies").upsert(row, {
+    onConflict: "trip_id,currency",
+    ignoreDuplicates: true,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Removes a currency from the trip. Does not allow removing defaults (ILS, USD, EUR). */
+export async function removeTripCurrency(tripId: string, currency: string): Promise<void> {
+  const upper = currency.trim().toUpperCase();
+  if (DEFAULT_TRIP_CURRENCIES.includes(upper)) {
+    throw new Error(`Cannot remove default currency ${currency}.`);
+  }
+  const { error } = await supabase
+    .from("trip_currencies")
+    .delete()
+    .eq("trip_id", tripId)
+    .eq("currency", upper);
+  if (error) throw new Error(error.message);
+}
+
+/** Returns map from from_currency to rate (to USD). Assumes to_currency = USD. */
+export async function fetchTripExchangeRates(
+  tripId: string
+): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from("trip_exchange_rates")
+    .select("from_currency, rate")
+    .eq("trip_id", tripId)
+    .eq("to_currency", "USD");
+  if (error) throw new Error(error.message);
+  const map: Record<string, number> = {};
+  for (const row of data ?? []) {
+    const r = row as { from_currency: string; rate: number };
+    map[r.from_currency.toUpperCase()] = Number(r.rate);
+  }
+  return map;
+}
+
+export async function upsertTripExchangeRate(
+  tripId: string,
+  fromCurrency: string,
+  rateToUSD: number
+): Promise<void> {
+  const from = fromCurrency.trim().toUpperCase();
+  const { error } = await supabase.from("trip_exchange_rates").upsert(
+    {
+      trip_id: tripId,
+      from_currency: from,
+      to_currency: "USD",
+      rate: rateToUSD,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "trip_id,from_currency,to_currency" }
+  );
+  if (error) throw new Error(error.message);
+}
+
+function toAmountBaseSync(
+  amount: number,
+  rateToUSD: number
+): { amount_base: number; fx_rate: number } {
+  return { amount_base: amount * rateToUSD, fx_rate: rateToUSD };
 }
 
 export type BudgetCategorySummary = {
@@ -154,18 +284,13 @@ export async function fetchBudgetData(tripId: string): Promise<BudgetData> {
   };
 }
 
-function toAmountBase(amount: number, currency: string): { amount_base: number; fx_rate: number } {
-  const fx_rate = getFxRate(currency);
-  const amount_base = amount * fx_rate;
-  return { amount_base, fx_rate };
-}
-
 /** Inserts one expense item into trip_budget_items only. No planned tables. */
 export async function createBudgetItem(
   tripId: string,
   payload: CreateBudgetItemPayload
 ): Promise<BudgetItemRow> {
-  const { amount_base, fx_rate } = toAmountBase(payload.amount, payload.currency);
+  const rateToUSD = await getRateToUSD(tripId, payload.currency);
+  const { amount_base, fx_rate } = toAmountBaseSync(payload.amount, rateToUSD);
 
   const { data, error } = await supabase
     .from("trip_budget_items")
@@ -192,6 +317,7 @@ export async function createBudgetItem(
 
 /** Updates one expense item in trip_budget_items only. No planned tables. */
 export async function updateBudgetItem(
+  tripId: string,
   itemId: string,
   payload: UpdateBudgetItemPayload
 ): Promise<BudgetItemRow> {
@@ -203,7 +329,8 @@ export async function updateBudgetItem(
   if (payload.notes !== undefined) updates.notes = payload.notes ?? null;
 
   if (payload.amount !== undefined && payload.currency !== undefined) {
-    const { amount_base, fx_rate } = toAmountBase(payload.amount, payload.currency);
+    const rateToUSD = await getRateToUSD(tripId, payload.currency);
+    const { amount_base, fx_rate } = toAmountBaseSync(payload.amount, rateToUSD);
     updates.amount = payload.amount;
     updates.currency = payload.currency;
     updates.amount_base = amount_base;
@@ -218,7 +345,8 @@ export async function updateBudgetItem(
     if (existing) {
       const amount = payload.amount ?? (existing as { amount: number }).amount;
       const currency = payload.currency ?? (existing as { currency: string }).currency;
-      const { amount_base, fx_rate } = toAmountBase(amount, currency);
+      const rateToUSD = await getRateToUSD(tripId, currency);
+      const { amount_base, fx_rate } = toAmountBaseSync(amount, rateToUSD);
       updates.amount = amount;
       updates.currency = currency;
       updates.amount_base = amount_base;

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import {
   fetchBudgetData,
+  fetchTripCurrencies,
+  fetchTripExchangeRates,
   type BudgetData,
   type BudgetCategorySummary,
   type BudgetItemRow,
@@ -10,11 +12,14 @@ import {
 import {
   formatMoney,
   usdToDisplay,
-  convert,
+  convertViaUSD,
+  RATES_TO_USD,
+  DEFAULT_CURRENCIES,
   DISPLAY_CURRENCIES,
   type DisplayCurrency,
 } from "@/components/budget/budget-money";
 import { AddBudgetItemDialog } from "@/components/budget/add-budget-item-dialog";
+import { AddCurrencyDialog } from "@/components/budget/add-currency-dialog";
 import { ManageCategoriesDialog } from "@/components/budget/manage-categories-dialog";
 import {
   Dialog,
@@ -25,19 +30,37 @@ import {
 
 const BUDGET_DISPLAY_CURRENCY_KEY = "budget_display_currency";
 
+/** Display currency list: ILS, USD, EUR first, then trip-added currencies (unique). */
+function mergeDisplayCurrencies(tripCurrencies: string[]): string[] {
+  const out = [...DEFAULT_CURRENCIES];
+  const defaultSet = new Set(DEFAULT_CURRENCIES.map((c) => c.toUpperCase()));
+  for (const c of tripCurrencies) {
+    const u = c.toUpperCase();
+    if (!defaultSet.has(u)) out.push(u);
+  }
+  return out;
+}
+
 export interface BudgetPageProps {
   tripId: string;
 }
 
-function getStoredDisplayCurrency(tripId: string): DisplayCurrency {
-  if (typeof window === "undefined") return "USD";
+function getStoredDisplayCurrency(tripId: string, displayCurrencies: string[]): string {
+  if (typeof window === "undefined") return "ILS";
   const stored = window.localStorage.getItem(`${BUDGET_DISPLAY_CURRENCY_KEY}:${tripId}`);
-  if (stored && DISPLAY_CURRENCIES.includes(stored as DisplayCurrency))
-    return stored as DisplayCurrency;
-  return "USD";
+  const upper = stored?.toUpperCase();
+  if (upper && displayCurrencies.some((c) => c.toUpperCase() === upper)) return upper;
+  return "ILS";
 }
 
-function setStoredDisplayCurrency(tripId: string, currency: DisplayCurrency) {
+/** Merged rates: static RATES_TO_USD + trip-specific (trip overrides). */
+function mergeRatesToUSD(
+  tripRates: Record<string, number> | null
+): Record<string, number> {
+  return { ...RATES_TO_USD, ...(tripRates ?? {}) };
+}
+
+function setStoredDisplayCurrency(tripId: string, currency: string) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(`${BUDGET_DISPLAY_CURRENCY_KEY}:${tripId}`, currency);
 }
@@ -92,26 +115,42 @@ function TrashIcon() {
 
 export function BudgetPage({ tripId }: BudgetPageProps) {
   const [data, setData] = useState<BudgetData | null>(null);
+  const [tripCurrencies, setTripCurrencies] = useState<string[]>([]);
+  const [ratesToUSDMap, setRatesToUSDMap] = useState<Record<string, number>>(RATES_TO_USD);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [addItemOpen, setAddItemOpen] = useState(false);
+  const [addCurrencyOpen, setAddCurrencyOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<BudgetItemRow | null>(null);
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
-  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>("USD");
+  const [displayCurrency, setDisplayCurrency] = useState<string>("ILS");
+
+  const displayCurrencies = mergeDisplayCurrencies(tripCurrencies);
 
   useEffect(() => {
     if (!tripId) return;
-    setDisplayCurrency(getStoredDisplayCurrency(tripId));
-  }, [tripId]);
+    setDisplayCurrency((prev) => {
+      const stored = getStoredDisplayCurrency(tripId, displayCurrencies);
+      return displayCurrencies.length > 0 ? stored : prev;
+    });
+  }, [tripId, displayCurrencies]);
 
-  const handleDisplayCurrencyChange = (currency: DisplayCurrency) => {
-    setDisplayCurrency(currency);
-    setStoredDisplayCurrency(tripId, currency);
+  const handleDisplayCurrencyChange = (value: string) => {
+    if (value === "__add_currency__") {
+      setAddCurrencyOpen(true);
+      return;
+    }
+    setDisplayCurrency(value);
+    setStoredDisplayCurrency(tripId, value);
   };
 
   const refetchBudget = () => {
     if (!tripId) return;
     fetchBudgetData(tripId).then(setData).catch(() => {});
+    fetchTripExchangeRates(tripId).then((tripRates) =>
+      setRatesToUSDMap(mergeRatesToUSD(tripRates))
+    );
+    fetchTripCurrencies(tripId).then(setTripCurrencies).catch(() => {});
   };
 
   const handleAddItemClose = (open: boolean) => {
@@ -123,8 +162,16 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
     if (!tripId) return;
     setLoading(true);
     setError(null);
-    fetchBudgetData(tripId)
-      .then(setData)
+    Promise.all([
+      fetchBudgetData(tripId),
+      fetchTripExchangeRates(tripId),
+      fetchTripCurrencies(tripId),
+    ])
+      .then(([budgetData, tripRates, currencies]) => {
+        setData(budgetData);
+        setRatesToUSDMap(mergeRatesToUSD(tripRates));
+        setTripCurrencies(currencies);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load budget"))
       .finally(() => setLoading(false));
   }, [tripId]);
@@ -175,7 +222,7 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
             <p className="text-sm font-medium opacity-90">Total Budget</p>
             <p className="mt-1 text-3xl font-bold tracking-tight">
               {formatMoney(
-                usdToDisplay(budget.total_base, displayCurrency),
+                usdToDisplay(budget.total_base, displayCurrency, ratesToUSDMap),
                 displayCurrency
               )}
             </p>
@@ -186,9 +233,7 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
           <div className="flex items-center gap-2">
             <select
               value={displayCurrency}
-              onChange={(e) =>
-                handleDisplayCurrencyChange(e.target.value as DisplayCurrency)
-              }
+              onChange={(e) => handleDisplayCurrencyChange(e.target.value)}
               className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium backdrop-blur-sm appearance-none cursor-pointer border-0 pr-8 focus:outline-none focus:ring-2 focus:ring-white/50"
               style={{
                 backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
@@ -198,11 +243,14 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
               }}
               aria-label="Display currency"
             >
-              {DISPLAY_CURRENCIES.map((c) => (
+              {displayCurrencies.map((c) => (
                 <option key={c} value={c} className="text-[#1f1f1f]">
                   {c}
                 </option>
               ))}
+              <option value="__add_currency__" className="text-[#1f1f1f]">
+                Add currency…
+              </option>
             </select>
           </div>
         </div>
@@ -238,7 +286,7 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
                   </span>
                   <span className="text-right font-medium text-[#4A4A4A]">
                     {formatMoney(
-                      usdToDisplay(group.category.total_base, displayCurrency),
+                      usdToDisplay(group.category.total_base, displayCurrency, ratesToUSDMap),
                       displayCurrency
                     )}
                   </span>
@@ -253,7 +301,8 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
                     {formatMoney(
                       usdToDisplay(
                         group.items.reduce((s, i) => s + Number(i.amount_base), 0),
-                        displayCurrency
+                        displayCurrency,
+                        ratesToUSDMap
                       ),
                       displayCurrency
                     )}
@@ -273,6 +322,7 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
                       key={item.id}
                       item={item}
                       displayCurrency={displayCurrency}
+                      ratesToUSDMap={ratesToUSDMap}
                       onEdit={() => {
                         setEditingItem(item);
                         setAddItemOpen(true);
@@ -293,6 +343,15 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
         categories={budget.categories}
         existingItem={editingItem}
         defaultCurrency={displayCurrency}
+        tripCurrencies={displayCurrencies}
+        onSuccess={refetchBudget}
+      />
+
+      <AddCurrencyDialog
+        open={addCurrencyOpen}
+        onOpenChange={setAddCurrencyOpen}
+        tripId={tripId}
+        existingCurrencies={displayCurrencies}
         onSuccess={refetchBudget}
       />
 
@@ -310,19 +369,26 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
 function BudgetItemRow({
   item,
   displayCurrency,
+  ratesToUSDMap,
   onEdit,
 }: {
   item: BudgetItemRow;
-  displayCurrency: DisplayCurrency;
+  displayCurrency: string;
+  ratesToUSDMap: Record<string, number>;
   onEdit: () => void;
 }) {
   const itemCurrency = item.currency.toUpperCase();
   const amountDisplay = formatMoney(item.amount, item.currency);
+  const rateFrom = ratesToUSDMap[itemCurrency];
+  const rateTo = ratesToUSDMap[displayCurrency];
   const showConverted =
     itemCurrency !== displayCurrency &&
-    (itemCurrency === "USD" || itemCurrency === "EUR" || itemCurrency === "ILS");
+    rateFrom != null &&
+    rateTo != null &&
+    rateFrom > 0 &&
+    rateTo > 0;
   const convertedAmount = showConverted
-    ? convert(item.currency, displayCurrency, item.amount)
+    ? convertViaUSD(item.amount, item.currency, displayCurrency, ratesToUSDMap)
     : 0;
   const dateStr = formatDate(item.date);
 

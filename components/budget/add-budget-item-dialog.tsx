@@ -13,9 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { DISPLAY_CURRENCIES } from "@/components/budget/budget-money";
+import { DISPLAY_CURRENCIES, DEFAULT_CURRENCIES } from "@/components/budget/budget-money";
 
-const CURRENCIES = DISPLAY_CURRENCIES;
+const CURRENCIES = [...DEFAULT_CURRENCIES];
 
 const inputClass =
   "w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0";
@@ -29,6 +29,8 @@ export interface AddBudgetItemDialogProps {
   existingItem?: BudgetItemRow | null;
   /** When opening Add (not Edit), currency dropdown defaults to this (display currency). */
   defaultCurrency?: string;
+  /** Trip currencies for the currency dropdown; falls back to DISPLAY_CURRENCIES when not set. */
+  tripCurrencies?: string[];
   onSuccess: () => void;
 }
 
@@ -51,10 +53,13 @@ export function AddBudgetItemDialog({
   tripId,
   categories,
   existingItem,
-  defaultCurrency = "USD",
+  defaultCurrency = "ILS",
+  tripCurrencies,
   onSuccess,
 }: AddBudgetItemDialogProps) {
   const isEdit = Boolean(existingItem);
+  const currencies =
+    tripCurrencies && tripCurrencies.length > 0 ? tripCurrencies : [...DEFAULT_CURRENCIES];
 
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
@@ -79,15 +84,13 @@ export function AddBudgetItemDialog({
       setName("");
       setAmount("");
       setCurrency(
-        DISPLAY_CURRENCIES.includes(defaultCurrency as "ILS" | "USD" | "EUR")
-          ? defaultCurrency
-          : "USD"
+        currencies.includes(defaultCurrency) ? defaultCurrency : currencies[0] ?? "USD"
       );
       setCategoryId("");
       setDate("");
       setNotes("");
     }
-  }, [open, existingItem, defaultCurrency]);
+  }, [open, existingItem, defaultCurrency, currencies]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +114,7 @@ export function AddBudgetItemDialog({
     setSubmitting(true);
     try {
       if (isEdit && existingItem) {
-        await updateBudgetItem(existingItem.id, {
+        await updateBudgetItem(tripId, existingItem.id, {
           name: nameTrimmed,
           amount: amountNum,
           currency,
@@ -195,7 +198,7 @@ export function AddBudgetItemDialog({
                 className={`mt-1.5 ${inputClass}`}
                 disabled={submitting}
               >
-                {CURRENCIES.map((c) => (
+                {currencies.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
