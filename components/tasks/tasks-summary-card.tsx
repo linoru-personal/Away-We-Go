@@ -121,7 +121,9 @@ export function TasksSummaryCard({ tripId }: TasksSummaryCardProps) {
                       {t.title}
                     </p>
                     <p className="text-xs text-[#9B7B6B]">
-                      {t.assignee || "Unassigned"}
+                      {!t.assignee?.trim() || t.assignee === "Unassigned"
+                        ? "Everyone"
+                        : t.assignee}
                     </p>
                   </div>
                 </li>

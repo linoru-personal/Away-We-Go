@@ -26,7 +26,7 @@ export function AddTaskDialog({
   onAdd,
 }: AddTaskDialogProps) {
   const [title, setTitle] = useState("");
-  const [assignee, setAssignee] = useState("Unassigned");
+  const [assignee, setAssignee] = useState("Everyone");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -42,11 +42,11 @@ export function AddTaskDialog({
     try {
       await onAdd({
         title: trimmedTitle,
-        assignee: assignee.trim() || "Unassigned",
+        assignee: assignee.trim() || "Everyone",
         description: description.trim() || null,
       });
       setTitle("");
-      setAssignee("Unassigned");
+      setAssignee("Everyone");
       setDescription("");
       onOpenChange(false);
     } catch (e) {
@@ -59,7 +59,7 @@ export function AddTaskDialog({
   function handleOpenChange(next: boolean) {
     if (!next) {
       setTitle("");
-      setAssignee("Unassigned");
+      setAssignee("Everyone");
       setDescription("");
       setError(null);
     }

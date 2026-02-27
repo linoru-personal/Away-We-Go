@@ -7,6 +7,13 @@ import {
   type BudgetCategorySummary,
   type BudgetItemRow,
 } from "@/components/budget/budget-queries";
+import {
+  formatMoney,
+  usdToDisplay,
+  convert,
+  DISPLAY_CURRENCIES,
+  type DisplayCurrency,
+} from "@/components/budget/budget-money";
 import { AddBudgetItemDialog } from "@/components/budget/add-budget-item-dialog";
 import { ManageCategoriesDialog } from "@/components/budget/manage-categories-dialog";
 import {
@@ -16,27 +23,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+const BUDGET_DISPLAY_CURRENCY_KEY = "budget_display_currency";
+
 export interface BudgetPageProps {
   tripId: string;
 }
 
-const CURRENCY_PREFIX: Record<string, string> = {
-  USD: "$",
-  ISK: "kr",
-};
-
-function formatUsd(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+function getStoredDisplayCurrency(tripId: string): DisplayCurrency {
+  if (typeof window === "undefined") return "USD";
+  const stored = window.localStorage.getItem(`${BUDGET_DISPLAY_CURRENCY_KEY}:${tripId}`);
+  if (stored && DISPLAY_CURRENCIES.includes(stored as DisplayCurrency))
+    return stored as DisplayCurrency;
+  return "USD";
 }
 
-function formatItemAmount(amount: number, currency: string): string {
-  const prefix = CURRENCY_PREFIX[currency.toUpperCase()] ?? currency + " ";
-  return prefix + new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(amount);
+function setStoredDisplayCurrency(tripId: string, currency: DisplayCurrency) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(`${BUDGET_DISPLAY_CURRENCY_KEY}:${tripId}`, currency);
 }
 
 function formatDate(dateStr: string | null): string {
@@ -94,6 +97,17 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<BudgetItemRow | null>(null);
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
+  const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>("USD");
+
+  useEffect(() => {
+    if (!tripId) return;
+    setDisplayCurrency(getStoredDisplayCurrency(tripId));
+  }, [tripId]);
+
+  const handleDisplayCurrencyChange = (currency: DisplayCurrency) => {
+    setDisplayCurrency(currency);
+    setStoredDisplayCurrency(tripId, currency);
+  };
 
   const refetchBudget = () => {
     if (!tripId) return;
@@ -160,16 +174,36 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
           <div>
             <p className="text-sm font-medium opacity-90">Total Budget</p>
             <p className="mt-1 text-3xl font-bold tracking-tight">
-              {formatUsd(budget.total_base)}
+              {formatMoney(
+                usdToDisplay(budget.total_base, displayCurrency),
+                displayCurrency
+              )}
             </p>
             <p className="mt-2 text-xs opacity-90">
               {budget.items_count} items • {budget.categories_count} categories
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium backdrop-blur-sm">
-              USD
-            </span>
+            <select
+              value={displayCurrency}
+              onChange={(e) =>
+                handleDisplayCurrencyChange(e.target.value as DisplayCurrency)
+              }
+              className="rounded-full bg-white/20 px-3 py-1.5 text-sm font-medium backdrop-blur-sm appearance-none cursor-pointer border-0 pr-8 focus:outline-none focus:ring-2 focus:ring-white/50"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 0.25rem center",
+                backgroundSize: "1.25rem",
+              }}
+              aria-label="Display currency"
+            >
+              {DISPLAY_CURRENCIES.map((c) => (
+                <option key={c} value={c} className="text-[#1f1f1f]">
+                  {c}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
@@ -203,7 +237,10 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
                     {group.category.name}
                   </span>
                   <span className="text-right font-medium text-[#4A4A4A]">
-                    {formatUsd(group.category.total_base)}
+                    {formatMoney(
+                      usdToDisplay(group.category.total_base, displayCurrency),
+                      displayCurrency
+                    )}
                   </span>
                 </>
               ) : (
@@ -213,8 +250,12 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
                   </div>
                   <span className="flex-1 font-semibold text-[#4A4A4A]">Uncategorized</span>
                   <span className="text-right font-medium text-[#4A4A4A]">
-                    {formatUsd(
-                      group.items.reduce((s, i) => s + Number(i.amount_base), 0)
+                    {formatMoney(
+                      usdToDisplay(
+                        group.items.reduce((s, i) => s + Number(i.amount_base), 0),
+                        displayCurrency
+                      ),
+                      displayCurrency
                     )}
                   </span>
                 </>
@@ -231,6 +272,7 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
                     <BudgetItemRow
                       key={item.id}
                       item={item}
+                      displayCurrency={displayCurrency}
                       onEdit={() => {
                         setEditingItem(item);
                         setAddItemOpen(true);
@@ -250,6 +292,7 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
         tripId={tripId}
         categories={budget.categories}
         existingItem={editingItem}
+        defaultCurrency={displayCurrency}
         onSuccess={refetchBudget}
       />
 
@@ -266,14 +309,21 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
 
 function BudgetItemRow({
   item,
+  displayCurrency,
   onEdit,
 }: {
   item: BudgetItemRow;
+  displayCurrency: DisplayCurrency;
   onEdit: () => void;
 }) {
-  const isUsd = item.currency.toUpperCase() === "USD";
-  const amountDisplay = formatItemAmount(item.amount, item.currency);
-  const baseDisplay = formatUsd(Number(item.amount_base));
+  const itemCurrency = item.currency.toUpperCase();
+  const amountDisplay = formatMoney(item.amount, item.currency);
+  const showConverted =
+    itemCurrency !== displayCurrency &&
+    (itemCurrency === "USD" || itemCurrency === "EUR" || itemCurrency === "ILS");
+  const convertedAmount = showConverted
+    ? convert(item.currency, displayCurrency, item.amount)
+    : 0;
   const dateStr = formatDate(item.date);
 
   return (
@@ -287,8 +337,10 @@ function BudgetItemRow({
       <div className="flex items-center gap-3">
         <div className="text-right">
           <p className="font-medium text-[#4A4A4A]">{amountDisplay}</p>
-          {!isUsd && (
-            <p className="text-xs text-[#6B7280]">≈ {baseDisplay}</p>
+          {showConverted && (
+            <p className="text-xs text-[#6B7280]">
+              ≈ {formatMoney(convertedAmount, displayCurrency)}
+            </p>
           )}
         </div>
         <div className="flex items-center gap-1">

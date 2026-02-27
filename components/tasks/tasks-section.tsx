@@ -106,8 +106,13 @@ function ChevronDownIcon({ className }: { className?: string }) {
 const CARD_CLASS = "bg-white rounded-[24px] p-6 shadow-[0_2px_16px_rgba(0,0,0,0.06)]";
 const TASK_CARD_CLASS = "bg-white rounded-[24px] p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]";
 
+const EVERYONE_LABEL = "Everyone";
+
+type TripParticipant = { id: string; name: string };
+
 export function TasksSection({ tripId }: TasksSectionProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [participants, setParticipants] = useState<TripParticipant[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(STATUS_FILTER_ALL);
@@ -150,18 +155,38 @@ export function TasksSection({ tripId }: TasksSectionProps) {
     load();
   }, [tripId]);
 
-  const uniqueAssignees = useMemo(() => {
-    const set = new Set<string>();
-    tasks.forEach((t) => set.add(t.assignee || "Unassigned"));
-    return Array.from(set).sort();
-  }, [tasks]);
+  useEffect(() => {
+    if (!tripId) {
+      setParticipants([]);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from("trip_participants")
+      .select("id, name")
+      .eq("trip_id", tripId)
+      .order("sort_order", { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error(error);
+          setParticipants([]);
+          return;
+        }
+        setParticipants((data ?? []) as TripParticipant[]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tripId]);
 
   const assigneeOptions = useMemo(() => {
-    const base = ["Unassigned", ...uniqueAssignees];
+    const names = participants.map((p) => p.name);
+    const base = [EVERYONE_LABEL, ...names];
     if (editingTaskId && editAssignee && !base.includes(editAssignee))
       return [editAssignee, ...base];
     return base;
-  }, [uniqueAssignees, editingTaskId, editAssignee]);
+  }, [participants, editingTaskId, editAssignee]);
 
   const filteredTasks = useMemo(() => {
     let list = tasks;
@@ -169,7 +194,11 @@ export function TasksSection({ tripId }: TasksSectionProps) {
       list = list.filter((t) => t.status === statusFilter);
     }
     if (assigneeFilter !== "all") {
-      list = list.filter((t) => (t.assignee || "Unassigned") === assigneeFilter);
+      list = list.filter((t) => {
+        const a = t.assignee?.trim() || "";
+        const label = !a || a === "Unassigned" || a === EVERYONE_LABEL ? EVERYONE_LABEL : a;
+        return label === assigneeFilter;
+      });
     }
     const q = searchQuery.trim().toLowerCase();
     if (q) {
@@ -226,12 +255,16 @@ export function TasksSection({ tripId }: TasksSectionProps) {
     assignee: string;
     description: string | null;
   }) {
+    const assigneeVal =
+      params.assignee === EVERYONE_LABEL || !params.assignee?.trim()
+        ? ""
+        : params.assignee.trim();
     const { data, error } = await supabase
       .from("tasks")
       .insert({
         trip_id: tripId,
         title: params.title,
-        assignee: params.assignee,
+        assignee: assigneeVal,
         description: params.description,
       })
       .select("*")
@@ -271,7 +304,8 @@ export function TasksSection({ tripId }: TasksSectionProps) {
   function startEditTask(task: Task) {
     setEditingTaskId(task.id);
     setEditTitle(task.title);
-    setEditAssignee(task.assignee || "Unassigned");
+    const a = task.assignee?.trim() || "";
+    setEditAssignee(!a || a === "Unassigned" || a === EVERYONE_LABEL ? EVERYONE_LABEL : a);
     setEditDescription(task.description ?? "");
   }
 
@@ -289,7 +323,10 @@ export function TasksSection({ tripId }: TasksSectionProps) {
     if (!titleVal) return;
 
     setEditSaving(true);
-    const assigneeVal = editAssignee.trim() || "Unassigned";
+    const assigneeVal =
+      editAssignee.trim() === EVERYONE_LABEL || !editAssignee.trim()
+        ? ""
+        : editAssignee.trim();
     const descriptionVal = editDescription.trim() || null;
 
     setTasks((prev) =>
@@ -428,7 +465,9 @@ export function TasksSection({ tripId }: TasksSectionProps) {
               {task.title}
             </p>
             <p className="text-xs text-[#9B7B6B]">
-              {task.assignee || "Unassigned"}
+              {!task.assignee?.trim() || task.assignee === "Unassigned" || task.assignee === EVERYONE_LABEL
+                ? EVERYONE_LABEL
+                : task.assignee}
             </p>
             {hasDescription && (
               <div className="mt-2">
@@ -554,9 +593,10 @@ export function TasksSection({ tripId }: TasksSectionProps) {
                 className="w-full rounded-lg border border-[#D4C5BA] bg-white px-3 py-2 text-sm text-[#4A4A4A]"
               >
                 <option value="all">All assignees</option>
-                {uniqueAssignees.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
+                <option value={EVERYONE_LABEL}>{EVERYONE_LABEL}</option>
+                {participants.map((p) => (
+                  <option key={p.id} value={p.name}>
+                    {p.name}
                   </option>
                 ))}
               </select>

@@ -13,8 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DISPLAY_CURRENCIES } from "@/components/budget/budget-money";
 
-const CURRENCIES = ["USD", "ISK"];
+const CURRENCIES = DISPLAY_CURRENCIES;
 
 const inputClass =
   "w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0";
@@ -26,6 +27,8 @@ export interface AddBudgetItemDialogProps {
   tripId: string;
   categories: BudgetCategorySummary[];
   existingItem?: BudgetItemRow | null;
+  /** When opening Add (not Edit), currency dropdown defaults to this (display currency). */
+  defaultCurrency?: string;
   onSuccess: () => void;
 }
 
@@ -48,6 +51,7 @@ export function AddBudgetItemDialog({
   tripId,
   categories,
   existingItem,
+  defaultCurrency = "USD",
   onSuccess,
 }: AddBudgetItemDialogProps) {
   const isEdit = Boolean(existingItem);
@@ -74,12 +78,16 @@ export function AddBudgetItemDialog({
     } else {
       setName("");
       setAmount("");
-      setCurrency("USD");
+      setCurrency(
+        DISPLAY_CURRENCIES.includes(defaultCurrency as "ILS" | "USD" | "EUR")
+          ? defaultCurrency
+          : "USD"
+      );
       setCategoryId("");
       setDate("");
       setNotes("");
     }
-  }, [open, existingItem]);
+  }, [open, existingItem, defaultCurrency]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

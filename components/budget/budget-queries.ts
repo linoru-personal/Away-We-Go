@@ -2,15 +2,17 @@ import { supabase } from "@/app/lib/supabaseClient";
 
 /** Budget feature is EXPENSES ONLY. All items are stored in trip_budget_items; totals use amount_base. No "planned" tables/fields. */
 const BASE_CURRENCY = "USD";
+/** Static rates to USD (MVP). Must match components/budget/budget-money.ts RATES_TO_USD for display. */
 const FX_RATES: Record<string, number> = {
   USD: 1,
-  ISK: 0.00727,
+  ILS: 0.27,
+  EUR: 1.09,
 };
 
 function getFxRate(currency: string): number {
   const rate = FX_RATES[currency.toUpperCase()];
   if (rate == null) {
-    throw new Error(`Unsupported currency: ${currency}. MVP supports USD and ISK.`);
+    throw new Error(`Unsupported currency: ${currency}. MVP supports ILS, USD, EUR.`);
   }
   return rate;
 }
