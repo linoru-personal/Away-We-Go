@@ -105,7 +105,7 @@ export function PackingList({
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [createCategoryName, setCreateCategoryName] = useState("");
-  const [createCategoryIcon, setCreateCategoryIcon] = useState<string | null>(null);
+  const [createCategoryIcon, setCreateCategoryIcon] = useState<string>("⭐");
   const [createCategorySaving, setCreateCategorySaving] = useState(false);
   const [createCategoryError, setCreateCategoryError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -199,7 +199,7 @@ export function PackingList({
       .insert({
         trip_id: tripId,
         name,
-        icon: createCategoryIcon ?? "",
+        icon: createCategoryIcon.trim() || "⭐",
         sort_order: sortOrder,
       })
       .select("id")
@@ -213,7 +213,7 @@ export function PackingList({
     if (newId) {
       setAddCategoryId(newId);
       setCreateCategoryName("");
-      setCreateCategoryIcon(null);
+      setCreateCategoryIcon("⭐");
       setAddModalMode("add-item");
       await onRefresh();
     }
@@ -648,7 +648,7 @@ export function PackingList({
                       className="rounded-lg border border-[#D4C5BA] px-4 py-2 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0]"
                       onClick={() => {
                         setCreateCategoryName("");
-                        setCreateCategoryIcon(null);
+                        setCreateCategoryIcon("⭐");
                         setCreateCategoryError(null);
                         setAddModalMode("add-item");
                       }}
