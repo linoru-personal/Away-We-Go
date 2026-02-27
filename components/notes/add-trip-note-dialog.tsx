@@ -52,17 +52,14 @@ export function AddTripNoteDialog({
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [blocks, setBlocks] = useState<{ type: string }[]>([]);
-  const [linkUrl, setLinkUrl] = useState("");
-  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [links, setLinks] = useState<string[]>([]);
   const [linkError, setLinkError] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-  const [existingImagePath, setExistingImagePath] = useState<string | null>(null);
+  const [existingImagePaths, setExistingImagePaths] = useState<string[]>([]);
+  const [newImages, setNewImages] = useState<{ file: File; previewUrl: string }[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [textContent, setTextContent] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
-  const [listItems, setListItems] = useState<string[]>([]);
-  const [showListInput, setShowListInput] = useState(false);
+  const [lists, setLists] = useState<string[][]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -74,33 +71,34 @@ export function AddTripNoteDialog({
     setTags(initialNote.tags ?? []);
     setTagInput("");
     const contentBlocks = getBlocksFromContent(initialNote.content);
-    setLinkUrl("");
-    setShowLinkInput(false);
-    setExistingImagePath(null);
-    setImageFile(null);
-    setImagePreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
+    setLinks([]);
+    setExistingImagePaths([]);
+    setNewImages((prev) => {
+      prev.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
+      return [];
     });
     setTextContent("");
     setShowTextInput(false);
-    setListItems([]);
-    setShowListInput(false);
+    setLists([]);
     setError(null);
+    const loadedLinks: string[] = [];
+    const loadedLists: string[][] = [];
+    const loadedPaths: string[] = [];
     for (const b of contentBlocks) {
       if (b.type === "text" && b.text != null) {
         setTextContent(b.text);
         setShowTextInput(true);
       } else if (b.type === "list" && Array.isArray(b.items)) {
-        setListItems(b.items.length > 0 ? b.items : [""]);
-        setShowListInput(true);
+        loadedLists.push(b.items.length > 0 ? b.items : [""]);
       } else if (b.type === "link" && b.url) {
-        setLinkUrl(b.url);
-        setShowLinkInput(true);
+        loadedLinks.push(b.url);
       } else if (b.type === "image" && b.path) {
-        setExistingImagePath(b.path);
+        loadedPaths.push(b.path);
       }
     }
+    setLinks(loadedLinks.length > 0 ? loadedLinks : []);
+    setLists(loadedLists.length > 0 ? loadedLists : []);
+    setExistingImagePaths(loadedPaths);
   }, [open, initialNote?.id]);
 
   function isValidUrl(s: string): boolean {
@@ -114,17 +112,16 @@ export function AddTripNoteDialog({
       setTagInput("");
       setTags([]);
       setBlocks([]);
-      setLinkUrl("");
-      setShowLinkInput(false);
+      setLinks([]);
       setLinkError(null);
-      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-      setImageFile(null);
-      setImagePreviewUrl(null);
-      setExistingImagePath(null);
+      setNewImages((prev) => {
+        prev.forEach(({ previewUrl }) => URL.revokeObjectURL(previewUrl));
+        return [];
+      });
+      setExistingImagePaths([]);
       setTextContent("");
       setShowTextInput(false);
-      setListItems([]);
-      setShowListInput(false);
+      setLists([]);
       setError(null);
     }
     onOpenChange(next);
@@ -132,13 +129,11 @@ export function AddTripNoteDialog({
 
   function addBlock(type: "text" | "list" | "link" | "image") {
     if (type === "link") {
-      if (linkUrl.trim()) return;
-      setShowLinkInput(true);
+      setLinks((prev) => [...prev, ""]);
       setLinkError(null);
       return;
     }
     if (type === "image") {
-      if (imageFile) return;
       imageInputRef.current?.click();
       return;
     }
@@ -148,31 +143,40 @@ export function AddTripNoteDialog({
       return;
     }
     if (type === "list") {
-      if (showListInput) return;
-      setShowListInput(true);
-      setListItems(listItems.length > 0 ? listItems : ["", "", ""]);
+      setLists((prev) => [...prev, ["", "", ""]]);
       return;
     }
     setBlocks((prev) => [...prev, { type }]);
   }
 
-  function addListItem() {
-    setListItems((prev) => [...prev, ""]);
-  }
-
-  function setListItem(index: number, value: string) {
-    setListItems((prev) =>
-      prev.map((v, i) => (i === index ? value : v))
+  function addListItem(listIndex: number) {
+    setLists((prev) =>
+      prev.map((list, i) =>
+        i === listIndex ? [...list, ""] : list
+      )
     );
   }
 
-  function removeListItem(index: number) {
-    setListItems((prev) => prev.filter((_, i) => i !== index));
+  function setListItem(listIndex: number, itemIndex: number, value: string) {
+    setLists((prev) =>
+      prev.map((list, i) =>
+        i === listIndex
+          ? list.map((v, j) => (j === itemIndex ? value : v))
+          : list
+      )
+    );
   }
 
-  function clearList() {
-    setListItems([]);
-    setShowListInput(false);
+  function removeListItem(listIndex: number, itemIndex: number) {
+    setLists((prev) =>
+      prev.map((list, i) =>
+        i === listIndex ? list.filter((_, j) => j !== itemIndex) : list
+      )
+    );
+  }
+
+  function removeList(listIndex: number) {
+    setLists((prev) => prev.filter((_, i) => i !== listIndex));
   }
 
   function clearText() {
@@ -184,22 +188,28 @@ export function AddTripNoteDialog({
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !ACCEPT_IMAGE.split(",").some((t) => file.type === t.trim())) return;
-    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-    setImageFile(file);
-    setImagePreviewUrl(URL.createObjectURL(file));
+    setNewImages((prev) => [...prev, { file, previewUrl: URL.createObjectURL(file) }]);
   }
 
-  function clearImage() {
-    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-    setImageFile(null);
-    setImagePreviewUrl(null);
-    setExistingImagePath(null);
+  function removeNewImage(index: number) {
+    setNewImages((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      const removed = prev[index];
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return next;
+    });
   }
 
-  function clearLink() {
-    setLinkUrl("");
-    setShowLinkInput(false);
-    setLinkError(null);
+  function removeExistingImage(index: number) {
+    setExistingImagePaths((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function setLink(index: number, value: string) {
+    setLinks((prev) => prev.map((v, i) => (i === index ? value : v)));
+  }
+
+  function removeLink(index: number) {
+    setLinks((prev) => prev.filter((_, i) => i !== index));
   }
 
   function addTag() {
@@ -222,8 +232,8 @@ export function AddTripNoteDialog({
       setError("Title is required.");
       return;
     }
-    const trimmedLink = linkUrl.trim();
-    if (trimmedLink && !isValidUrl(trimmedLink)) {
+    const invalidLinkIndex = links.findIndex((u) => u.trim() && !isValidUrl(u.trim()));
+    if (invalidLinkIndex >= 0) {
       setLinkError("URL must start with http:// or https://");
       return;
     }
@@ -231,18 +241,6 @@ export function AddTripNoteDialog({
     setLinkError(null);
     setSaving(true);
     try {
-      let imagePath: string | null = null;
-      if (imageFile) {
-        const safeName = `${Date.now()}-${imageFile.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
-        const path = `${tripId}/${safeName}`;
-        const { error: uploadError } = await supabase.storage
-          .from(TRIP_NOTES_BUCKET)
-          .upload(path, imageFile, { contentType: imageFile.type, upsert: false });
-        if (uploadError) throw uploadError;
-        imagePath = path;
-      } else if (existingImagePath) {
-        imagePath = existingImagePath;
-      }
       const blocks: (
         | { type: "text"; text: string }
         | { type: "list"; items: string[] }
@@ -253,17 +251,31 @@ export function AddTripNoteDialog({
       if (trimmedText) {
         blocks.push({ type: "text", text: trimmedText });
       }
-      const listItemsFiltered = listItems
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
-      if (listItemsFiltered.length > 0) {
-        blocks.push({ type: "list", items: listItemsFiltered });
+      for (const listItems of lists) {
+        const filtered = listItems
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+        if (filtered.length > 0) {
+          blocks.push({ type: "list", items: filtered });
+        }
       }
-      if (trimmedLink && isValidUrl(trimmedLink)) {
-        blocks.push({ type: "link", url: trimmedLink });
+      for (const url of links) {
+        const trimmed = url.trim();
+        if (trimmed && isValidUrl(trimmed)) {
+          blocks.push({ type: "link", url: trimmed });
+        }
       }
-      if (imagePath) {
-        blocks.push({ type: "image", path: imagePath, bucket: TRIP_NOTES_BUCKET });
+      for (const path of existingImagePaths) {
+        blocks.push({ type: "image", path, bucket: TRIP_NOTES_BUCKET });
+      }
+      for (const { file } of newImages) {
+        const safeName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+        const path = `${tripId}/${safeName}`;
+        const { error: uploadError } = await supabase.storage
+          .from(TRIP_NOTES_BUCKET)
+          .upload(path, file, { contentType: file.type, upsert: false });
+        if (uploadError) throw uploadError;
+        blocks.push({ type: "image", path, bucket: TRIP_NOTES_BUCKET });
       }
       const content = blocks.length > 0 ? { blocks } : null;
       if (initialNote) {
@@ -334,7 +346,7 @@ export function AddTripNoteDialog({
                 type="button"
                 className="rounded-lg border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
                 onClick={() => addBlock("list")}
-                disabled={saving || showListInput}
+                disabled={saving}
               >
                 Add List
               </button>
@@ -342,7 +354,7 @@ export function AddTripNoteDialog({
                 type="button"
                 className="rounded-lg border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
                 onClick={() => addBlock("link")}
-                disabled={saving || !!linkUrl.trim()}
+                disabled={saving}
               >
                 Add Link
               </button>
@@ -350,7 +362,7 @@ export function AddTripNoteDialog({
                 type="button"
                 className="rounded-lg border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
                 onClick={() => addBlock("image")}
-                disabled={saving || !!imageFile}
+                disabled={saving}
               >
                 Add Image
               </button>
@@ -363,50 +375,54 @@ export function AddTripNoteDialog({
               onChange={onImageChange}
               aria-hidden
             />
-            {showListInput && (
-              <div className="mt-2 space-y-2">
-                <label className={LABEL_CLASS}>List</label>
-                <ul className="space-y-2">
-                  {listItems.map((item, index) => (
-                    <li key={index} className="flex gap-2">
-                      <input
-                        type="text"
-                        value={item}
-                        onChange={(e) => setListItem(index, e.target.value)}
-                        placeholder={`Item ${index + 1}`}
-                        className={INPUT_CLASS}
-                        disabled={saving}
-                      />
+            {lists.length > 0 && (
+              <div className="mt-2 space-y-4">
+                <label className={LABEL_CLASS}>Lists</label>
+                {lists.map((listItems, listIndex) => (
+                  <div key={listIndex} className="space-y-2 rounded-lg border border-[#F5F3F0] bg-[#FAFAF8] p-3">
+                    <ul className="space-y-2">
+                      {listItems.map((item, itemIndex) => (
+                        <li key={itemIndex} className="flex gap-2">
+                          <input
+                            type="text"
+                            value={item}
+                            onChange={(e) => setListItem(listIndex, itemIndex, e.target.value)}
+                            placeholder={`Item ${itemIndex + 1}`}
+                            className={INPUT_CLASS}
+                            disabled={saving}
+                          />
+                          <button
+                            type="button"
+                            className="shrink-0 rounded-lg border border-[#D4C5BA] bg-white px-2 py-2 text-sm text-[#6B7280] hover:bg-[#F5F3F0] disabled:opacity-50"
+                            onClick={() => removeListItem(listIndex, itemIndex)}
+                            disabled={saving || listItems.length <= 1}
+                            aria-label="Remove item"
+                          >
+                            ×
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        className="shrink-0 rounded-lg border border-[#D4C5BA] bg-white px-2 py-2 text-sm text-[#6B7280] hover:bg-[#F5F3F0] disabled:opacity-50"
-                        onClick={() => removeListItem(index)}
-                        disabled={saving || listItems.length <= 1}
-                        aria-label="Remove item"
+                        className="rounded-lg border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
+                        onClick={() => addListItem(listIndex)}
+                        disabled={saving}
                       >
-                        ×
+                        Add item
                       </button>
-                    </li>
-                  ))}
-                </ul>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="rounded-lg border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
-                    onClick={addListItem}
-                    disabled={saving}
-                  >
-                    Add item
-                  </button>
-                  <button
-                    type="button"
-                    className="text-sm font-medium text-[#6B7280] hover:text-[#4A4A4A]"
-                    onClick={clearList}
-                    disabled={saving}
-                  >
-                    Remove list
-                  </button>
-                </div>
+                      <button
+                        type="button"
+                        className="text-sm font-medium text-[#6B7280] hover:text-[#4A4A4A]"
+                        onClick={() => removeList(listIndex)}
+                        disabled={saving}
+                      >
+                        Remove list
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
             {showTextInput && (
@@ -430,82 +446,98 @@ export function AddTripNoteDialog({
                 </button>
               </div>
             )}
-            {(existingImagePath && !imageFile) && (
-              <div className="mt-2 flex items-center gap-3 rounded-lg border border-[#F5F3F0] bg-[#FAFAF8] p-3">
-                <img
-                  src={supabase.storage.from(TRIP_NOTES_BUCKET).getPublicUrl(existingImagePath).data.publicUrl}
-                  alt=""
-                  className="size-14 shrink-0 rounded-lg object-cover"
-                />
-                <div className="min-w-0 flex-1 text-start">
-                  <p className="text-sm text-[#4A4A4A]">Current image</p>
-                  <button
-                    type="button"
-                    className="mt-1 text-sm font-medium text-[#6B7280] hover:text-[#4A4A4A]"
-                    onClick={clearImage}
-                    disabled={saving}
+            {(existingImagePaths.length > 0 || newImages.length > 0) && (
+              <div className="mt-2 space-y-2">
+                <label className={LABEL_CLASS}>Images</label>
+                {existingImagePaths.map((path, index) => (
+                  <div
+                    key={`existing-${index}`}
+                    className="flex items-center gap-3 rounded-lg border border-[#F5F3F0] bg-[#FAFAF8] p-3"
                   >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            )}
-            {imagePreviewUrl && (
-              <div className="mt-2 flex items-center gap-3 rounded-lg border border-[#F5F3F0] bg-[#FAFAF8] p-3">
-                <img
-                  src={imagePreviewUrl}
-                  alt=""
-                  className="size-14 shrink-0 rounded-lg object-cover"
-                />
-                <div className="min-w-0 flex-1 text-start">
-                  <p className="truncate text-sm text-[#4A4A4A]">{imageFile?.name}</p>
-                  <button
-                    type="button"
-                    className="mt-1 text-sm font-medium text-[#6B7280] hover:text-[#4A4A4A]"
-                    onClick={clearImage}
-                    disabled={saving}
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            )}
-            {(showLinkInput || linkUrl.trim()) && (
-              <div className="mt-2 space-y-1">
-                <label className={LABEL_CLASS}>URL</label>
-                {linkUrl.trim() ? (
-                  <div className="flex items-center gap-2 rounded-lg border border-[#F5F3F0] bg-[#FAFAF8] p-3">
-                    <span className="min-w-0 flex-1 truncate text-sm text-[#4A4A4A]">
-                      {linkUrl.trim()}
-                    </span>
+                    <span className="text-sm text-[#4A4A4A]">Current image</span>
                     <button
                       type="button"
-                      className="shrink-0 text-sm font-medium text-[#6B7280] hover:text-[#4A4A4A]"
-                      onClick={clearLink}
+                      className="text-sm font-medium text-[#6B7280] hover:text-[#4A4A4A]"
+                      onClick={() => removeExistingImage(index)}
                       disabled={saving}
                     >
                       Remove
                     </button>
                   </div>
-                ) : (
-                  <>
-                    <input
-                      type="url"
-                      value={linkUrl}
-                      onChange={(e) => {
-                        setLinkUrl(e.target.value);
-                        setLinkError(null);
-                      }}
-                      placeholder="https://..."
-                      className={INPUT_CLASS}
-                      disabled={saving}
+                ))}
+                {newImages.map(({ file, previewUrl }, index) => (
+                  <div
+                    key={`new-${index}`}
+                    className="flex items-center gap-3 rounded-lg border border-[#F5F3F0] bg-[#FAFAF8] p-3"
+                  >
+                    <img
+                      src={previewUrl}
+                      alt=""
+                      className="size-14 shrink-0 rounded-lg object-cover"
                     />
-                    {linkError && (
-                      <p className="text-sm text-red-600" role="alert">
-                        {linkError}
-                      </p>
+                    <div className="min-w-0 flex-1 text-start">
+                      <p className="truncate text-sm text-[#4A4A4A]">{file.name}</p>
+                      <button
+                        type="button"
+                        className="mt-1 text-sm font-medium text-[#6B7280] hover:text-[#4A4A4A]"
+                        onClick={() => removeNewImage(index)}
+                        disabled={saving}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {links.length > 0 && (
+              <div className="mt-2 space-y-2">
+                <label className={LABEL_CLASS}>Links</label>
+                {links.map((url, index) => (
+                  <div key={index} className="space-y-1">
+                    {url.trim() ? (
+                      <div className="flex items-center gap-2 rounded-lg border border-[#F5F3F0] bg-[#FAFAF8] p-3">
+                        <span className="min-w-0 flex-1 truncate text-sm text-[#4A4A4A]">
+                          {url.trim()}
+                        </span>
+                        <button
+                          type="button"
+                          className="shrink-0 text-sm font-medium text-[#6B7280] hover:text-[#4A4A4A]"
+                          onClick={() => removeLink(index)}
+                          disabled={saving}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <input
+                          type="url"
+                          value={url}
+                          onChange={(e) => {
+                            setLink(index, e.target.value);
+                            setLinkError(null);
+                          }}
+                          placeholder="https://..."
+                          className={INPUT_CLASS}
+                          disabled={saving}
+                        />
+                        <button
+                          type="button"
+                          className="text-sm font-medium text-[#6B7280] hover:text-[#4A4A4A]"
+                          onClick={() => removeLink(index)}
+                          disabled={saving}
+                        >
+                          Remove
+                        </button>
+                      </>
                     )}
-                  </>
+                  </div>
+                ))}
+                {linkError && (
+                  <p className="text-sm text-red-600" role="alert">
+                    {linkError}
+                  </p>
                 )}
               </div>
             )}
