@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { EmojiIconPicker } from "@/components/ui/emoji-icon-picker";
 
 export type PackingCategory = {
   id: string;
@@ -96,12 +97,17 @@ export function PackingList({
   const [viewMode, setViewMode] = useState<"category" | "participant">("category");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addModalMode, setAddModalMode] = useState<"add-item" | "create-category">("add-item");
   const [addTitle, setAddTitle] = useState("");
   const [addQuantity, setAddQuantity] = useState(1);
   const [addCategoryId, setAddCategoryId] = useState("");
   const [addAssignedTo, setAddAssignedTo] = useState<string | null>(null);
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [createCategoryName, setCreateCategoryName] = useState("");
+  const [createCategoryIcon, setCreateCategoryIcon] = useState<string | null>(null);
+  const [createCategorySaving, setCreateCategorySaving] = useState(false);
+  const [createCategoryError, setCreateCategoryError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editQuantity, setEditQuantity] = useState(1);
@@ -174,6 +180,43 @@ export function PackingList({
       return;
     }
     await onRefresh();
+  }
+
+  async function handleCreateCategory() {
+    const name = createCategoryName.trim();
+    if (!name) {
+      setCreateCategoryError("Category name is required.");
+      return;
+    }
+    setCreateCategoryError(null);
+    setCreateCategorySaving(true);
+    const sortOrder =
+      categories.length > 0
+        ? Math.max(...categories.map((c) => c.sort_order)) + 1
+        : 0;
+    const { data, error } = await supabase
+      .from("packing_categories")
+      .insert({
+        trip_id: tripId,
+        name,
+        icon: createCategoryIcon ?? "",
+        sort_order: sortOrder,
+      })
+      .select("id")
+      .single();
+    setCreateCategorySaving(false);
+    if (error) {
+      setCreateCategoryError(error.message);
+      return;
+    }
+    const newId = data?.id;
+    if (newId) {
+      setAddCategoryId(newId);
+      setCreateCategoryName("");
+      setCreateCategoryIcon(null);
+      setAddModalMode("add-item");
+      await onRefresh();
+    }
   }
 
   async function handleAddItem() {
@@ -266,6 +309,7 @@ export function PackingList({
           className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
           onClick={() => {
             setAddCategoryId(categories[0]?.id ?? "");
+            setAddModalMode("add-item");
             setAddModalOpen(true);
           }}
         >
@@ -567,10 +611,60 @@ export function PackingList({
           <div className="flex max-h-[85vh] min-h-0 flex-1 flex-col">
             <div className="shrink-0">
               <DialogHeader>
-                <DialogTitle className="text-[#4A4A4A]">Add Item</DialogTitle>
+                <DialogTitle className="text-[#4A4A4A]">
+                  {addModalMode === "create-category" ? "Create category" : "Add Item"}
+                </DialogTitle>
               </DialogHeader>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
+              {addModalMode === "create-category" ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-[#4A4A4A]">Category name</label>
+                    <input
+                      type="text"
+                      value={createCategoryName}
+                      onChange={(e) => setCreateCategoryName(e.target.value)}
+                      placeholder="e.g. Toiletries"
+                      className="w-full rounded-lg border border-[#D4C5BA] bg-white px-3 py-2 text-sm text-[#4A4A4A] placeholder:text-[#6B7280]"
+                      disabled={createCategorySaving}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-[#4A4A4A]">Icon</label>
+                    <EmojiIconPicker
+                      value={createCategoryIcon}
+                      onChange={setCreateCategoryIcon}
+                    />
+                  </div>
+                  {createCategoryError && (
+                    <p className="text-sm text-red-600">{createCategoryError}</p>
+                  )}
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      className="rounded-lg border border-[#D4C5BA] px-4 py-2 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0]"
+                      onClick={() => {
+                        setCreateCategoryName("");
+                        setCreateCategoryIcon(null);
+                        setCreateCategoryError(null);
+                        setAddModalMode("add-item");
+                      }}
+                      disabled={createCategorySaving}
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg bg-[#E07A5F] px-4 py-2 text-sm font-medium text-white hover:bg-[#D96A4F] disabled:opacity-50"
+                      onClick={handleCreateCategory}
+                      disabled={createCategorySaving}
+                    >
+                      {createCategorySaving ? "Creating…" : "Create"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
               <div className="space-y-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-[#4A4A4A]">Title (required)</label>
@@ -600,7 +694,14 @@ export function PackingList({
                   <label className="mb-1 block text-sm font-medium text-[#4A4A4A]">Category</label>
                   <select
                     value={addCategoryId}
-                    onChange={(e) => setAddCategoryId(e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "__create_new__") {
+                        setAddModalMode("create-category");
+                      } else {
+                        setAddCategoryId(v);
+                      }
+                    }}
                     className="w-full rounded-lg border border-[#D4C5BA] bg-white px-3 py-2 text-sm text-[#4A4A4A]"
                     disabled={addSaving}
                   >
@@ -609,6 +710,7 @@ export function PackingList({
                         {c.icon ? `${c.icon} ` : ""}{c.name}
                       </option>
                     ))}
+                    <option value="__create_new__">+ Create new category</option>
                   </select>
                 </div>
                 <div>
@@ -627,7 +729,9 @@ export function PackingList({
                 </div>
                 {addError && <p className="text-sm text-red-600">{addError}</p>}
               </div>
+            )}
             </div>
+            {addModalMode === "add-item" && (
             <div className="shrink-0 pt-4">
               <div className="flex gap-2">
                 <button
@@ -648,6 +752,7 @@ export function PackingList({
                 </button>
               </div>
             </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
