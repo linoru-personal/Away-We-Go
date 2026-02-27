@@ -26,67 +26,9 @@ const COLORS = [
   "#5C7A9B", // slate
 ] as const;
 
-const ICON_KEYS = ["home", "car", "utensils", "compass", "bag", "dots"] as const;
-type IconKey = (typeof ICON_KEYS)[number];
-
 const inputClass =
   "w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0";
 const labelClass = "block text-sm font-medium text-[#1f1f1f]";
-
-function IconSymbol({ name, className }: { name: string; className?: string }) {
-  const c = className ?? "size-5";
-  switch (name) {
-    case "home":
-      return (
-        <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-          <polyline points="9 22 9 12 15 12 15 22" />
-        </svg>
-      );
-    case "car":
-      return (
-        <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M14 16H9m10 0h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2h-1" />
-          <path d="M5 16H4a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h1" />
-          <path d="M5 10 7 4h10l2 6" />
-          <path d="M7 14h.01M17 14h.01" />
-        </svg>
-      );
-    case "utensils":
-      return (
-        <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2" />
-          <path d="M7 2v20" />
-          <path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" />
-        </svg>
-      );
-    case "compass":
-      return (
-        <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10" />
-          <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-        </svg>
-      );
-    case "bag":
-      return (
-        <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-          <path d="M3 6h18" />
-          <path d="M16 10a4 4 0 0 1-8 0" />
-        </svg>
-      );
-    case "dots":
-      return (
-        <svg className={c} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="6" r="1.5" />
-          <circle cx="12" cy="12" r="1.5" />
-          <circle cx="12" cy="18" r="1.5" />
-        </svg>
-      );
-    default:
-      return <span className={c} aria-hidden>•</span>;
-  }
-}
 
 export interface ManageCategoriesDialogProps {
   open: boolean;
@@ -105,7 +47,7 @@ export function ManageCategoriesDialog({
 }: ManageCategoriesDialogProps) {
   const [name, setName] = useState("");
   const [color, setColor] = useState<string>(COLORS[0]);
-  const [icon, setIcon] = useState<IconKey>("home");
+  const [icon, setIcon] = useState("");
   const [categories, setCategories] = useState<BudgetCategorySummary[]>(initialCategories);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -117,7 +59,7 @@ export function ManageCategoriesDialog({
       setError(null);
       setName("");
       setColor(COLORS[0]);
-      setIcon("home");
+      setIcon("");
     }
   }, [open, initialCategories]);
 
@@ -131,7 +73,7 @@ export function ManageCategoriesDialog({
     setError(null);
     setSubmitting(true);
     try {
-      await createBudgetCategory(tripId, { name: trimmed, color, icon });
+      await createBudgetCategory(tripId, { name: trimmed, color, icon: icon.trim().slice(0, 2) || "" });
       const data = await fetchBudgetData(tripId);
       setCategories(data.categories);
       onSuccess(data);
@@ -208,25 +150,21 @@ export function ManageCategoriesDialog({
             </div>
 
             <div>
-              <p className={labelClass}>Choose Icon</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {ICON_KEYS.map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    className="flex size-10 items-center justify-center rounded-xl bg-[#f6f2ed] text-[#1f1f1f] transition hover:bg-[#ebe5df] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2"
-                    style={{
-                      outline: icon === key ? "2px solid #E07A5F" : "none",
-                      outlineOffset: 2,
-                    }}
-                    onClick={() => setIcon(key)}
-                    aria-label={`Icon ${key}`}
-                    aria-pressed={icon === key}
-                  >
-                    <IconSymbol name={key} className="size-5" />
-                  </button>
-                ))}
-              </div>
+              <label htmlFor="category-icon" className={labelClass}>
+                Icon
+              </label>
+              <input
+                id="category-icon"
+                type="text"
+                value={icon}
+                onChange={(e) => setIcon(e.target.value)}
+                placeholder="😀"
+                maxLength={2}
+                className={`mt-1.5 ${inputClass} w-16 text-center text-lg`}
+                disabled={submitting}
+                autoComplete="off"
+                aria-label="Category icon (emoji or character)"
+              />
             </div>
 
             {error && (
@@ -257,10 +195,16 @@ export function ManageCategoriesDialog({
                     className="flex items-center gap-3 rounded-[20px] bg-[#f6f2ed] px-3 py-2.5"
                   >
                     <div
-                      className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-[#1f1f1f]"
+                      className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-lg text-[#1f1f1f]"
                       style={{ backgroundColor: cat.color || "#F5F3F0" }}
                     >
-                      <IconSymbol name={cat.icon} className="size-4" />
+                      {cat.icon ? (
+                        <span role="img" aria-hidden>
+                          {cat.icon}
+                        </span>
+                      ) : (
+                        <span aria-hidden>•</span>
+                      )}
                     </div>
                     <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#1f1f1f]">
                       {cat.name}
