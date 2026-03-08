@@ -9,7 +9,6 @@ import { TasksSummaryCard } from "@/components/tasks/tasks-summary-card";
 import { TripNotesSummaryCard } from "@/components/notes/trip-notes-summary-card";
 import { PackingSummaryCard } from "@/components/packing/packing-summary-card";
 import { BudgetSummaryCard } from "@/components/budget/budget-summary-card";
-import { PlacesSummaryCard } from "@/components/places/places-summary-card";
 import TripFormModal from "@/components/trips/trip-form-modal";
 import { TripDashboardSummaryStrip } from "@/components/trip/trip-dashboard-summary-strip";
 import {
@@ -580,11 +579,6 @@ export default function TripPage() {
 
                 {/* Budget */}
                 <BudgetSummaryCard tripId={trip.id} />
-
-                {/* Places preview (full width) */}
-                <div className="md:col-span-2">
-                  <PlacesSummaryCard tripId={trip.id} />
-                </div>
 
                 {/* Photos */}
                 <article className={`${DASHBOARD_CARD_CLASS} md:col-span-2`}>
