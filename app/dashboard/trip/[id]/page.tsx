@@ -9,6 +9,7 @@ import { TasksSummaryCard } from "@/components/tasks/tasks-summary-card";
 import { TripNotesSummaryCard } from "@/components/notes/trip-notes-summary-card";
 import { PackingSummaryCard } from "@/components/packing/packing-summary-card";
 import { BudgetSummaryCard } from "@/components/budget/budget-summary-card";
+import { PlacesSummaryCard } from "@/components/places/places-summary-card";
 import TripFormModal from "@/components/trips/trip-form-modal";
 import { TripDashboardSummaryStrip } from "@/components/trip/trip-dashboard-summary-strip";
 import {
@@ -464,8 +465,19 @@ export default function TripPage() {
 
             <div className="mt-8 space-y-6">
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                {/* Destination / Places (prominent: full-width row) */}
-                <article className={`${DASHBOARD_CARD_CLASS} md:col-span-2`}>
+                {/* Destination / Places & map (prominent: full-width, links to places page) */}
+                <article
+                  className={`${DASHBOARD_CARD_CLASS} md:col-span-2 cursor-pointer transition hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => router.push(`/dashboard/trip/${trip.id}/places`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      router.push(`/dashboard/trip/${trip.id}/places`);
+                    }
+                  }}
+                >
                   <div className="flex items-center gap-2">
                     <MapPinIcon className="size-5 shrink-0 text-[#8a8a8a]" />
                     <h2 className={SECTION_TITLE_CLASS}>Places & map</h2>
@@ -505,6 +517,11 @@ export default function TripPage() {
 
                 {/* Budget */}
                 <BudgetSummaryCard tripId={trip.id} />
+
+                {/* Places preview (full width) */}
+                <div className="md:col-span-2">
+                  <PlacesSummaryCard tripId={trip.id} />
+                </div>
 
                 {/* Photos */}
                 <article className={`${DASHBOARD_CARD_CLASS} md:col-span-2`}>
