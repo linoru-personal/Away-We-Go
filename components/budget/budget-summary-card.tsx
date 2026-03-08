@@ -3,13 +3,17 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchBudgetData } from "@/components/budget/budget-queries";
+import {
+  DASHBOARD_CARD_CLASS,
+  SECTION_TITLE_CLASS,
+  META_CLASS,
+  CARD_CTA_MT,
+  CTA_LINK_CLASS,
+} from "@/components/trip/dashboard-card-styles";
 
 export interface BudgetSummaryCardProps {
   tripId: string;
 }
-
-const CARD_CLASS =
-  "bg-white rounded-[24px] p-6 shadow-[0_2px_16px_rgba(0,0,0,0.06)]";
 
 function formatUsd(amount: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -45,26 +49,26 @@ export function BudgetSummaryCard({ tripId }: BudgetSummaryCardProps) {
   }, [tripId]);
 
   return (
-    <article className={CARD_CLASS}>
+    <article className={DASHBOARD_CARD_CLASS}>
       <div className="flex w-full flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold text-[#4A4A4A]">Budget</h2>
-          <p className="mt-0.5 text-sm text-[#9B7B6B]">
+          <h2 className={SECTION_TITLE_CLASS}>Budget</h2>
+          <p className={META_CLASS}>
             {loading ? "…" : `${itemsCount} items • ${categoriesCount} categories`}
           </p>
         </div>
         {!loading && totalBase !== null && (
-          <span className="text-xl font-semibold text-[#4A4A4A]">
+          <span className="text-xl font-semibold tabular-nums text-[#2d2d2d]">
             {formatUsd(totalBase)}
           </span>
         )}
       </div>
 
       {!loading && (
-        <div className="mt-5 text-center">
+        <div className={`${CARD_CTA_MT} text-center`}>
           <button
             type="button"
-            className="text-sm font-medium text-[#E07A5F] transition hover:text-[#c46950]"
+            className={CTA_LINK_CLASS}
             onClick={() => router.push(`/dashboard/trip/${tripId}/budget`)}
           >
             Manage Trip Budget →

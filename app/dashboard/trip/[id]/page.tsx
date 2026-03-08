@@ -10,15 +10,40 @@ import { TripNotesSummaryCard } from "@/components/notes/trip-notes-summary-card
 import { PackingSummaryCard } from "@/components/packing/packing-summary-card";
 import { BudgetSummaryCard } from "@/components/budget/budget-summary-card";
 import TripFormModal from "@/components/trips/trip-form-modal";
+import { TripDashboardSummaryStrip } from "@/components/trip/trip-dashboard-summary-strip";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DASHBOARD_CARD_CLASS,
+  SECTION_TITLE_CLASS,
+  META_CLASS,
+  EMPTY_STATE_CLASS,
+  EMPTY_STATE_TEXT_CLASS,
+  DESTINATION_PLACEHOLDER_CLASS,
+} from "@/components/trip/dashboard-card-styles";
 
-const CARD_CLASS =
-  "bg-white rounded-[24px] p-6 shadow-[0_2px_16px_rgba(0,0,0,0.06)]";
+function MapPinIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className ?? "size-8 text-[#8a8a8a]"}
+      aria-hidden
+    >
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+      <circle cx="12" cy="10" r="3" />
+    </svg>
+  );
+}
 
 type Trip = {
   id: string;
@@ -354,14 +379,14 @@ export default function TripPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF8]">
-      <div className="mx-auto max-w-5xl px-5 py-6 md:px-8 md:py-10">
+    <main className="min-h-screen bg-[#F8F6F4]">
+      <div className="mx-auto max-w-5xl px-5 py-8 md:px-8 md:py-12">
         {loading ? (
-          <p className="text-[#6B7280]">Loading...</p>
+          <p className={META_CLASS}>Loading…</p>
         ) : !trip ? (
-          <div className="space-y-2">
-            <h1 className="text-2xl font-bold text-[#4A4A4A]">Trip</h1>
-            <p className="text-[#6B7280]">Trip id: {id ?? "—"}</p>
+          <div className="space-y-3">
+            <h1 className={SECTION_TITLE_CLASS}>Trip</h1>
+            <p className={META_CLASS}>Trip id: {id ?? "—"}</p>
             {titleError && (
               <p className="text-sm text-red-600">{titleError}</p>
             )}
@@ -432,16 +457,41 @@ export default function TripPage() {
               />
             </div>
 
-            <div className="mt-8 space-y-5">
+            {/* Compact summary strip */}
+            <div className="mt-6">
+              <TripDashboardSummaryStrip tripId={trip.id} />
+            </div>
+
+            <div className="mt-8 space-y-6">
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                {/* Destination */}
-                <article className={CARD_CLASS}>
-                  <h2 className="text-lg font-semibold text-[#4A4A4A]">
-                    Destination
-                  </h2>
-                  <p className="mt-0.5 text-sm text-[#9B7B6B]">
-                    {trip.destination ?? "—"}
-                  </p>
+                {/* Destination / Places (prominent: full-width row) */}
+                <article className={`${DASHBOARD_CARD_CLASS} md:col-span-2`}>
+                  <div className="flex items-center gap-2">
+                    <MapPinIcon className="size-5 shrink-0 text-[#8a8a8a]" />
+                    <h2 className={SECTION_TITLE_CLASS}>Places & map</h2>
+                  </div>
+                  {trip.destination?.trim() ? (
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-[#2d2d2d]">
+                        {trip.destination}
+                      </p>
+                      <span className="text-xs text-[#8a8a8a]">
+                        Your saved places will appear here
+                      </span>
+                    </div>
+                  ) : (
+                    <div className={`mt-4 ${DESTINATION_PLACEHOLDER_CLASS}`}>
+                      <div className="text-center">
+                        <MapPinIcon className="mx-auto mb-2" />
+                        <p className="text-sm font-medium text-[#2d2d2d]">
+                          View your trip map
+                        </p>
+                        <p className="mt-0.5 text-xs text-[#8a8a8a]">
+                          Places you add will appear here
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </article>
 
                 {/* Tasks summary */}
@@ -457,17 +507,15 @@ export default function TripPage() {
                 <BudgetSummaryCard tripId={trip.id} />
 
                 {/* Photos */}
-                <article className={`${CARD_CLASS} md:col-span-2`}>
-                  <h2 className="text-lg font-semibold text-[#4A4A4A]">
-                    Photos
-                  </h2>
-                  <p className="mt-0.5 text-sm text-[#9B7B6B]">0 photos</p>
-                  <div className="mt-4 grid grid-cols-2 gap-1">
-                    <div className="aspect-square rounded-lg bg-[#F5F3F0]" />
-                    <div className="aspect-square rounded-lg bg-[#F5F3F0]" />
+                <article className={`${DASHBOARD_CARD_CLASS} md:col-span-2`}>
+                  <h2 className={SECTION_TITLE_CLASS}>Photos</h2>
+                  <p className={META_CLASS}>0 photos</p>
+                  <div className={`mt-4 ${EMPTY_STATE_CLASS}`}>
+                    <p className={EMPTY_STATE_TEXT_CLASS}>
+                      Photos from your trip will appear here
+                    </p>
                   </div>
                 </article>
-
               </div>
             </div>
           </>

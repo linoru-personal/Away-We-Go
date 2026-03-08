@@ -3,6 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
+import {
+  DASHBOARD_CARD_CLASS,
+  SECTION_TITLE_CLASS,
+  META_CLASS,
+  NUMERIC_EMPHASIS_CLASS,
+  PROGRESS_TRACK_CLASS,
+  PROGRESS_FILL_CLASS,
+  EMPTY_STATE_CLASS,
+  EMPTY_STATE_TEXT_CLASS,
+  CARD_CONTENT_MT,
+  CARD_CTA_MT,
+  CTA_LINK_CLASS,
+} from "@/components/trip/dashboard-card-styles";
 
 export type Task = {
   id: string;
@@ -16,9 +29,6 @@ export type Task = {
 export interface TasksSummaryCardProps {
   tripId: string;
 }
-
-const CARD_CLASS =
-  "bg-white rounded-[24px] p-6 shadow-[0_2px_16px_rgba(0,0,0,0.06)]";
 
 function CheckIcon() {
   return (
@@ -67,38 +77,36 @@ export function TasksSummaryCard({ tripId }: TasksSummaryCardProps) {
   const displayTasks = tasks.slice(0, 4);
 
   return (
-    <article className={CARD_CLASS}>
+    <article className={DASHBOARD_CARD_CLASS}>
       <button
         type="button"
         className="flex w-full flex-wrap items-start justify-between gap-4 text-left"
         onClick={() => router.push(`/dashboard/trip/${tripId}/tasks`)}
       >
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold text-[#4A4A4A]">Tasks</h2>
-          <p className="mt-0.5 text-sm text-[#9B7B6B]">
+          <h2 className={SECTION_TITLE_CLASS}>Tasks</h2>
+          <p className={META_CLASS}>
             {loading ? "…" : `${completed} of ${total} completed`}
           </p>
         </div>
         {!loading && (
-          <span className="text-2xl font-semibold text-[#E07A5F]">
-            {openCount}
-          </span>
+          <span className={NUMERIC_EMPHASIS_CLASS}>{openCount}</span>
         )}
       </button>
 
       {loading ? (
-        <p className="mt-4 text-sm text-[#6B7280]">Loading…</p>
+        <p className={`${CARD_CONTENT_MT} text-sm text-[#8a8a8a]`}>Loading…</p>
       ) : (
         <>
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#F5F3F0]">
+          <div className={`${CARD_CONTENT_MT} ${PROGRESS_TRACK_CLASS}`}>
             <div
-              className="h-full rounded-full bg-[#E07A5F] transition-all duration-500"
+              className={PROGRESS_FILL_CLASS}
               style={{ width: `${progressValue}%` }}
             />
           </div>
 
           {displayTasks.length > 0 ? (
-            <ul className="mt-4 space-y-3">
+            <ul className={`${CARD_CONTENT_MT} space-y-3`}>
               {displayTasks.map((t) => (
                 <li key={t.id} className="flex items-start gap-3">
                   <span
@@ -120,7 +128,7 @@ export function TasksSummaryCard({ tripId }: TasksSummaryCardProps) {
                     >
                       {t.title}
                     </p>
-                    <p className="text-xs text-[#9B7B6B]">
+                    <p className="text-xs text-[#8a8a8a]">
                       {!t.assignee?.trim() || t.assignee === "Unassigned"
                         ? "Everyone"
                         : t.assignee}
@@ -130,13 +138,15 @@ export function TasksSummaryCard({ tripId }: TasksSummaryCardProps) {
               ))}
             </ul>
           ) : (
-            <p className="mt-4 text-sm text-[#6B7280]">No tasks yet.</p>
+            <div className={`${CARD_CONTENT_MT} ${EMPTY_STATE_CLASS}`}>
+              <p className={EMPTY_STATE_TEXT_CLASS}>No tasks yet</p>
+            </div>
           )}
 
-          <div className="mt-5 text-center">
+          <div className={`${CARD_CTA_MT} text-center`}>
             <button
               type="button"
-              className="text-sm font-medium text-[#E07A5F] transition hover:text-[#c46950]"
+              className={CTA_LINK_CLASS}
               onClick={(e) => {
                 e.stopPropagation();
                 router.push(`/dashboard/trip/${tripId}/tasks`);
