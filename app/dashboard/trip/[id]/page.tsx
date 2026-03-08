@@ -55,6 +55,7 @@ type Trip = {
   end_date: string | null;
   cover_image_url: string | null;
   cover_image_path: string | null;
+  destination_image_url: string | null;
   created_at: string | null;
 };
 
@@ -127,6 +128,7 @@ export default function TripPage() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
 
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [destinationImageUrl, setDestinationImageUrl] = useState<string | null>(null);
   const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
 
   const isOwner = Boolean(trip && user && trip.user_id === user.id);
@@ -277,6 +279,30 @@ export default function TripPage() {
       cancelled = true;
     };
   }, [trip?.cover_image_path]);
+
+  // Signed URL for destination (hero) image when set
+  useEffect(() => {
+    if (!trip?.destination_image_url) {
+      setDestinationImageUrl(null);
+      return;
+    }
+    let cancelled = false;
+    supabase.storage
+      .from("trip-covers")
+      .createSignedUrl(trip.destination_image_url, 3600)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.error("Destination image signed URL:", error);
+          setDestinationImageUrl(null);
+        } else if (data?.signedUrl) {
+          setDestinationImageUrl(data.signedUrl);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trip?.destination_image_url]);
 
   useEffect(() => {
     if (!trip?.id) {
@@ -467,7 +493,7 @@ export default function TripPage() {
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 {/* Destination / Places & map (prominent: full-width, links to places page) */}
                 <article
-                  className={`${DASHBOARD_CARD_CLASS} md:col-span-2 cursor-pointer transition hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]`}
+                  className={`md:col-span-2 cursor-pointer transition hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] overflow-hidden rounded-2xl border border-[#ebe5df] shadow-[0_2px_12px_rgba(0,0,0,0.04)] ${destinationImageUrl ? "min-h-[140px]" : DASHBOARD_CARD_CLASS}`}
                   role="button"
                   tabIndex={0}
                   onClick={() => router.push(`/dashboard/trip/${trip.id}/places`)}
@@ -478,31 +504,68 @@ export default function TripPage() {
                     }
                   }}
                 >
-                  <div className="flex items-center gap-2">
-                    <MapPinIcon className="size-5 shrink-0 text-[#8a8a8a]" />
-                    <h2 className={SECTION_TITLE_CLASS}>Places & map</h2>
-                  </div>
-                  {trip.destination?.trim() ? (
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-[#2d2d2d]">
-                        {trip.destination}
-                      </p>
-                      <span className="text-xs text-[#8a8a8a]">
-                        Your saved places will appear here
-                      </span>
-                    </div>
-                  ) : (
-                    <div className={`mt-4 ${DESTINATION_PLACEHOLDER_CLASS}`}>
-                      <div className="text-center">
-                        <MapPinIcon className="mx-auto mb-2" />
-                        <p className="text-sm font-medium text-[#2d2d2d]">
-                          View your trip map
-                        </p>
-                        <p className="mt-0.5 text-xs text-[#8a8a8a]">
-                          Places you add will appear here
-                        </p>
+                  {destinationImageUrl ? (
+                    <>
+                      <div className="relative h-[140px] w-full overflow-hidden rounded-2xl bg-neutral-200">
+                        <img
+                          src={destinationImageUrl}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
+                        <div
+                          className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent"
+                          aria-hidden
+                        />
+                        <div className="relative flex h-full flex-col justify-end p-5">
+                          <div className="flex items-center gap-2">
+                            <MapPinIcon className="size-5 shrink-0 text-white/90" />
+                            <h2 className="text-base font-semibold tracking-tight text-white">
+                              Places & map
+                            </h2>
+                          </div>
+                          {trip.destination?.trim() ? (
+                            <p className="mt-1 text-sm text-white/90">
+                              {trip.destination}
+                            </p>
+                          ) : (
+                            <p className="mt-1 text-xs text-white/80">
+                              Your saved places will appear here
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="p-5">
+                        <div className="flex items-center gap-2">
+                          <MapPinIcon className="size-5 shrink-0 text-[#8a8a8a]" />
+                          <h2 className={SECTION_TITLE_CLASS}>Places & map</h2>
+                        </div>
+                        {trip.destination?.trim() ? (
+                          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                            <p className="text-sm font-medium text-[#2d2d2d]">
+                              {trip.destination}
+                            </p>
+                            <span className="text-xs text-[#8a8a8a]">
+                              Your saved places will appear here
+                            </span>
+                          </div>
+                        ) : (
+                          <div className={`mt-4 ${DESTINATION_PLACEHOLDER_CLASS}`}>
+                            <div className="text-center">
+                              <MapPinIcon className="mx-auto mb-2" />
+                              <p className="text-sm font-medium text-[#2d2d2d]">
+                                View your trip map
+                              </p>
+                              <p className="mt-0.5 text-xs text-[#8a8a8a]">
+                                Places you add will appear here
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
                 </article>
 

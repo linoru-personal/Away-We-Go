@@ -20,6 +20,7 @@ type Trip = {
   end_date: string | null;
   cover_image_url: string | null;
   cover_image_path: string | null;
+  destination_image_url: string | null;
   created_at: string | null;
 };
 
@@ -72,6 +73,7 @@ function DashboardInner({ user }: { user: User }) {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loadingTrips, setLoadingTrips] = useState(true);
   const [coverSignedUrls, setCoverSignedUrls] = useState<Record<string, string>>({});
+  const [destinationSignedUrls, setDestinationSignedUrls] = useState<Record<string, string>>({});
   const [tripParticipantAvatars, setTripParticipantAvatars] = useState<
     Record<string, (string | null)[]>
   >({});
@@ -118,6 +120,29 @@ function DashboardInner({ user }: { user: User }) {
         if (r.url) next[r.id] = r.url;
       });
       setCoverSignedUrls(next);
+    });
+  }, [trips]);
+
+  useEffect(() => {
+    const withDestination = trips.filter((t) => t.destination_image_url);
+    if (withDestination.length === 0) {
+      setDestinationSignedUrls({});
+      return;
+    }
+    Promise.all(
+      withDestination.map(async (t) => {
+        const { data, error } = await supabase.storage
+          .from("trip-covers")
+          .createSignedUrl(t.destination_image_url!, 3600);
+        if (error || !data?.signedUrl) return { id: t.id, url: null };
+        return { id: t.id, url: data.signedUrl };
+      })
+    ).then((results) => {
+      const next: Record<string, string> = {};
+      results.forEach((r) => {
+        if (r.url) next[r.id] = r.url;
+      });
+      setDestinationSignedUrls(next);
     });
   }, [trips]);
 
@@ -278,7 +303,7 @@ function DashboardInner({ user }: { user: User }) {
                   title={t.title}
                   startDate={t.start_date ?? "—"}
                   endDate={t.end_date ?? "—"}
-                  coverImageUrl={coverSignedUrls[t.id] ?? t.cover_image_url ?? undefined}
+                  coverImageUrl={destinationSignedUrls[t.id] ?? coverSignedUrls[t.id] ?? t.cover_image_url ?? undefined}
                   onClick={() => router.push(`/dashboard/trip/${t.id}`)}
                   participantAvatarUrls={tripParticipantAvatars[t.id] ?? []}
                 />

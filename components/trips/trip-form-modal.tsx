@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { supabase } from "@/app/lib/supabaseClient";
+import { DestinationImageCropDialog } from "@/components/trips/destination-image-crop-dialog";
 
 export type TripForForm = {
   id: string;
@@ -18,6 +19,7 @@ export type TripForForm = {
   end_date: string | null;
   cover_image_url: string | null;
   cover_image_path: string | null;
+  destination_image_url: string | null;
   created_at: string | null;
 };
 
@@ -57,9 +59,14 @@ export default function TripFormModal({
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [existingCoverSignedUrl, setExistingCoverSignedUrl] = useState<string | null>(null);
+  const [existingDestinationSignedUrl, setExistingDestinationSignedUrl] = useState<string | null>(null);
+  const [destinationCropOpen, setDestinationCropOpen] = useState(false);
+  const [destinationImageSrcForCrop, setDestinationImageSrcForCrop] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const destinationFileInputRef = useRef<HTMLInputElement>(null);
+  const hasJustUploadedDestinationRef = useRef(false);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
 
   const isCreate = mode === "create";
@@ -85,8 +92,22 @@ export default function TripFormModal({
       } else {
         setExistingCoverSignedUrl(null);
       }
+      if (trip.destination_image_url) {
+        hasJustUploadedDestinationRef.current = false;
+        supabase.storage
+          .from("trip-covers")
+          .createSignedUrl(trip.destination_image_url, 3600)
+          .then(({ data }) => {
+            if (data?.signedUrl) setExistingDestinationSignedUrl(data.signedUrl);
+            else setExistingDestinationSignedUrl(null);
+          });
+      } else if (!hasJustUploadedDestinationRef.current) {
+        setExistingDestinationSignedUrl(null);
+      } else {
+        hasJustUploadedDestinationRef.current = false;
+      }
     }
-  }, [open, trip?.id, trip?.title, trip?.destination, trip?.start_date, trip?.end_date, trip?.cover_image_path, mode]);
+  }, [open, trip?.id, trip?.title, trip?.destination, trip?.start_date, trip?.end_date, trip?.cover_image_path, trip?.destination_image_url, mode]);
 
   // Load participants when editing
   useEffect(() => {
@@ -144,6 +165,7 @@ export default function TripFormModal({
       setCoverFile(null);
       setCoverPreviewUrl(null);
       setExistingCoverSignedUrl(null);
+      setExistingDestinationSignedUrl(null);
       setError(null);
       setParticipants([]);
     }
@@ -184,6 +206,34 @@ export default function TripFormModal({
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+  };
+
+  const handleDestinationImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file && file.type.startsWith("image/") && trip?.id) {
+      const url = URL.createObjectURL(file);
+      setDestinationImageSrcForCrop(url);
+      setDestinationCropOpen(true);
+    }
+  };
+
+  const handleDestinationCropClose = (open: boolean) => {
+    if (!open && destinationImageSrcForCrop?.startsWith("blob:")) {
+      URL.revokeObjectURL(destinationImageSrcForCrop);
+    }
+    setDestinationCropOpen(open);
+    if (!open) setDestinationImageSrcForCrop(null);
+  };
+
+  const removeDestinationImage = async () => {
+    if (!trip?.id) return;
+    await supabase
+      .from("trips")
+      .update({ destination_image_url: null })
+      .eq("id", trip.id);
+    setExistingDestinationSignedUrl(null);
+    onSuccess?.();
   };
 
   const addParticipant = () => {
@@ -430,6 +480,56 @@ export default function TripFormModal({
               </button>
             </div>
 
+            {mode === "edit" && trip && (
+              <div>
+                <label className={LABEL_CLASS}>Destination cover image</label>
+                <input
+                  ref={destinationFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  aria-hidden
+                  onChange={handleDestinationImageSelect}
+                />
+                {existingDestinationSignedUrl ? (
+                  <div className="mt-1.5 flex items-center gap-3">
+                    <img
+                      src={existingDestinationSignedUrl}
+                      alt="Destination cover"
+                      className="h-[100px] w-full max-w-[280px] rounded-[12px] object-cover"
+                    />
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => destinationFileInputRef.current?.click()}
+                        disabled={saving}
+                        className="text-sm font-medium text-[#d97b5e] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0 disabled:opacity-50"
+                      >
+                        Change
+                      </button>
+                      <button
+                        type="button"
+                        onClick={removeDestinationImage}
+                        disabled={saving}
+                        className="text-left text-sm text-[#8a8a8a] hover:text-[#1f1f1f] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0 disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => destinationFileInputRef.current?.click()}
+                    disabled={saving}
+                    className="mt-1.5 flex h-[80px] w-full max-w-[280px] items-center justify-center rounded-[12px] border-2 border-dashed border-[#e0d9d2] bg-[#fbf7f2] text-sm text-[#8a8a8a] transition hover:border-[#d97b5e]/50 hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 disabled:opacity-50"
+                  >
+                    Upload destination cover image
+                  </button>
+                )}
+              </div>
+            )}
+
             <div>
               <label htmlFor="trip-form-title" className={LABEL_CLASS}>
                 Trip name (required)
@@ -587,6 +687,24 @@ export default function TripFormModal({
             </button>
           </div>
         </form>
+
+        {trip?.id && destinationImageSrcForCrop && (
+          <DestinationImageCropDialog
+            open={destinationCropOpen}
+            onOpenChange={handleDestinationCropClose}
+            imageSrc={destinationImageSrcForCrop}
+            tripId={trip.id}
+            onSuccess={async () => {
+              onSuccess?.();
+              hasJustUploadedDestinationRef.current = true;
+              const path = `${trip.id}/destination.jpg`;
+              const { data } = await supabase.storage
+                .from("trip-covers")
+                .createSignedUrl(path, 3600);
+              if (data?.signedUrl) setExistingDestinationSignedUrl(data.signedUrl);
+            }}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
