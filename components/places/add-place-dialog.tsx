@@ -8,6 +8,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { EmojiIconPicker } from "@/components/ui/emoji-icon-picker";
+import { CATEGORY_ICON_CHOICES } from "@/components/ui/category-icon-choices";
 
 /** Accepts valid Google Maps URLs: maps.app.goo.gl, google.com/maps, maps.google.com, goo.gl/maps */
 function isGoogleMapsUrl(url: string): boolean {
@@ -42,11 +44,18 @@ function extractPlaceNameFromUrl(url: string): string | null {
   }
 }
 
+export type PlaceCategory = {
+  id: string;
+  name: string;
+  icon: string | null;
+};
+
 export type PlaceFormInitialValues = {
   id: string;
   title: string;
   google_maps_url: string;
   notes: string | null;
+  category_id: string | null;
 };
 
 export interface AddPlaceDialogProps {
@@ -56,8 +65,14 @@ export interface AddPlaceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  onCategoryCreated?: () => void;
+  categories: PlaceCategory[];
   initialValues?: PlaceFormInitialValues | null;
 }
+
+const inputClass =
+  "w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0 disabled:opacity-60";
+const labelClass = "block text-sm font-medium text-[#1f1f1f]";
 
 export function AddPlaceDialog({
   mode,
@@ -66,11 +81,19 @@ export function AddPlaceDialog({
   open,
   onOpenChange,
   onSuccess,
+  onCategoryCreated,
+  categories,
   initialValues,
 }: AddPlaceDialogProps) {
   const [googleMapsUrl, setGoogleMapsUrl] = useState("");
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
+  const [categoryId, setCategoryId] = useState<string>("");
+  const [dialogMode, setDialogMode] = useState<"place-form" | "create-category">("place-form");
+  const [createCategoryName, setCreateCategoryName] = useState("");
+  const [createCategoryIcon, setCreateCategoryIcon] = useState<string | null>(CATEGORY_ICON_CHOICES[0]);
+  const [createCategorySaving, setCreateCategorySaving] = useState(false);
+  const [createCategoryError, setCreateCategoryError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,14 +102,20 @@ export function AddPlaceDialog({
   useEffect(() => {
     if (open) {
       setError(null);
+      setDialogMode("place-form");
+      setCreateCategoryName("");
+      setCreateCategoryIcon(CATEGORY_ICON_CHOICES[0]);
+      setCreateCategoryError(null);
       if (mode === "edit" && initialValues) {
         setGoogleMapsUrl(initialValues.google_maps_url);
         setTitle(initialValues.title);
         setNotes(initialValues.notes ?? "");
+        setCategoryId(initialValues.category_id ?? "");
       } else {
         setGoogleMapsUrl("");
         setTitle("");
         setNotes("");
+        setCategoryId("");
       }
     }
   }, [open, mode, editPlaceId]);
@@ -111,14 +140,16 @@ export function AddPlaceDialog({
     }
     const titleToSave = title.trim() || "Place";
     setSaving(true);
+    const payload = {
+      title: titleToSave,
+      google_maps_url: urlTrimmed,
+      notes: notes.trim() || null,
+      category_id: categoryId.trim() || null,
+    };
     if (mode === "edit" && initialValues) {
       const { error: updateError } = await supabase
         .from("trip_places")
-        .update({
-          title: titleToSave,
-          google_maps_url: urlTrimmed,
-          notes: notes.trim() || null,
-        })
+        .update(payload)
         .eq("id", initialValues.id);
       setSaving(false);
       if (updateError) {
@@ -129,9 +160,7 @@ export function AddPlaceDialog({
       const { error: insertError } = await supabase.from("trip_places").insert({
         trip_id: tripId,
         added_by_user_id: userId,
-        title: titleToSave,
-        google_maps_url: urlTrimmed,
-        notes: notes.trim() || null,
+        ...payload,
       });
       setSaving(false);
       if (insertError) {
@@ -141,6 +170,37 @@ export function AddPlaceDialog({
     }
     onSuccess();
     handleClose();
+  };
+
+  const handleCreateCategory = async () => {
+    const nameTrimmed = createCategoryName.trim();
+    if (!nameTrimmed) {
+      setCreateCategoryError("Category name is required.");
+      return;
+    }
+    setCreateCategoryError(null);
+    setCreateCategorySaving(true);
+    const { data, error: insertError } = await supabase
+      .from("trip_place_categories")
+      .insert({
+        trip_id: tripId,
+        name: nameTrimmed,
+        icon: createCategoryIcon?.trim() || null,
+      })
+      .select("id")
+      .single();
+    setCreateCategorySaving(false);
+    if (insertError) {
+      setCreateCategoryError(insertError.message);
+      return;
+    }
+    if (data?.id) {
+      setCategoryId(data.id);
+      setCreateCategoryName("");
+      setCreateCategoryIcon(CATEGORY_ICON_CHOICES[0]);
+      setDialogMode("place-form");
+      onCategoryCreated?.();
+    }
   };
 
   const handleUrlChange = (value: string) => {
@@ -173,86 +233,174 @@ export function AddPlaceDialog({
             className="flex min-h-0 flex-1 flex-col gap-0"
           >
             <div className="min-h-0 flex-1 overflow-y-auto py-1">
-              <div className="space-y-4">
-                <div>
-                  <label
-                    htmlFor="add-place-url"
-                    className="block text-sm font-medium text-[#1f1f1f]"
-                  >
-                    Google Maps link <span className="text-[#8a8a8a]">(required)</span>
-                  </label>
-                  <input
-                    id="add-place-url"
-                    type="url"
-                    placeholder="https://www.google.com/maps/place/..."
-                    value={googleMapsUrl}
-                    onChange={(e) => handleUrlChange(e.target.value)}
-                    disabled={saving}
-                    aria-invalid={!!error}
-                    className="mt-1.5 w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0 disabled:opacity-60 aria-[invalid=true]:border-red-400"
-                  />
+              {dialogMode === "create-category" ? (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0">
+                      <label className={labelClass}>Icon</label>
+                      <div className="mt-1.5">
+                        <EmojiIconPicker
+                          value={createCategoryIcon}
+                          onChange={setCreateCategoryIcon}
+                        />
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <label htmlFor="create-place-category-name" className={labelClass}>
+                        Category name <span className="text-[#8a8a8a]">(required)</span>
+                      </label>
+                      <input
+                        id="create-place-category-name"
+                        type="text"
+                        value={createCategoryName}
+                        onChange={(e) => setCreateCategoryName(e.target.value)}
+                        placeholder="e.g. Restaurants"
+                        className={`mt-1.5 ${inputClass}`}
+                        disabled={createCategorySaving}
+                        autoComplete="off"
+                      />
+                    </div>
+                  </div>
+                  {createCategoryError && (
+                    <p className="text-sm text-red-600" role="alert">
+                      {createCategoryError}
+                    </p>
+                  )}
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      className="rounded-full border border-[#e0d9d2] bg-transparent px-4 py-2 text-sm font-medium text-[#1f1f1f] transition hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-2 disabled:opacity-50"
+                      onClick={() => {
+                        setDialogMode("place-form");
+                        setCreateCategoryName("");
+                        setCreateCategoryIcon(CATEGORY_ICON_CHOICES[0]);
+                        setCreateCategoryError(null);
+                      }}
+                      disabled={createCategorySaving}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-full bg-[#d97b5e] px-4 py-2 text-sm font-medium text-white shadow-[0_2px_8px_rgba(217,123,94,0.25)] transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 disabled:opacity-60"
+                      onClick={handleCreateCategory}
+                      disabled={createCategorySaving}
+                    >
+                      {createCategorySaving ? "Creating…" : "Create"}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label
-                    htmlFor="add-place-title"
-                    className="block text-sm font-medium text-[#1f1f1f]"
-                  >
-                    Title <span className="text-[#8a8a8a]">(optional)</span>
-                  </label>
-                  <input
-                    id="add-place-title"
-                    type="text"
-                    placeholder="e.g. Café Central"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    disabled={saving}
-                    className="mt-1.5 w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0 disabled:opacity-60"
-                  />
-                  <p className="mt-1 text-xs text-[#8a8a8a]">
-                    Defaults to &quot;Place&quot; if left blank.
-                  </p>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label
+                      htmlFor="add-place-url"
+                      className="block text-sm font-medium text-[#1f1f1f]"
+                    >
+                      Google Maps link <span className="text-[#8a8a8a]">(required)</span>
+                    </label>
+                    <input
+                      id="add-place-url"
+                      type="url"
+                      placeholder="https://www.google.com/maps/place/..."
+                      value={googleMapsUrl}
+                      onChange={(e) => handleUrlChange(e.target.value)}
+                      disabled={saving}
+                      aria-invalid={!!error}
+                      className={`mt-1.5 ${inputClass} aria-[invalid=true]:border-red-400`}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="add-place-title"
+                      className={labelClass}
+                    >
+                      Title <span className="text-[#8a8a8a]">(optional)</span>
+                    </label>
+                    <input
+                      id="add-place-title"
+                      type="text"
+                      placeholder="e.g. Café Central"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      disabled={saving}
+                      className={`mt-1.5 ${inputClass}`}
+                    />
+                    <p className="mt-1 text-xs text-[#8a8a8a]">
+                      Defaults to &quot;Place&quot; if left blank.
+                    </p>
+                  </div>
+                  <div>
+                    <label htmlFor="add-place-category" className={labelClass}>
+                      Category <span className="text-[#8a8a8a]">(optional)</span>
+                    </label>
+                    <select
+                      id="add-place-category"
+                      value={categoryId}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "__create_new__") {
+                          setDialogMode("create-category");
+                        } else {
+                          setCategoryId(v);
+                        }
+                      }}
+                      className={`mt-1.5 ${inputClass}`}
+                      disabled={saving}
+                    >
+                      <option value="">No category</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.icon ?? "•"} {c.name}
+                        </option>
+                      ))}
+                      <option value="__create_new__">+ Create new category</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="add-place-notes"
+                      className={labelClass}
+                    >
+                      Notes <span className="text-[#8a8a8a]">(optional)</span>
+                    </label>
+                    <textarea
+                      id="add-place-notes"
+                      rows={2}
+                      placeholder="Opening hours, order the..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      disabled={saving}
+                      className={`mt-1.5 ${inputClass} resize-none`}
+                    />
+                  </div>
+                  {error && (
+                    <p className="text-sm text-red-600" role="alert">
+                      {error}
+                    </p>
+                  )}
                 </div>
-                <div>
-                  <label
-                    htmlFor="add-place-notes"
-                    className="block text-sm font-medium text-[#1f1f1f]"
-                  >
-                    Notes <span className="text-[#8a8a8a]">(optional)</span>
-                  </label>
-                  <textarea
-                    id="add-place-notes"
-                    rows={2}
-                    placeholder="Opening hours, order the..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    disabled={saving}
-                    className="mt-1.5 w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0 disabled:opacity-60 resize-none"
-                  />
-                </div>
-                {error && (
-                  <p className="text-sm text-red-600" role="alert">
-                    {error}
-                  </p>
-                )}
+              )}
+            </div>
+            {dialogMode === "place-form" && (
+              <div className="mt-4 shrink-0 flex gap-3 pt-1">
+                <button
+                  type="button"
+                  className="flex-1 rounded-full border border-[#e0d9d2] bg-transparent px-4 py-2.5 text-sm font-medium text-[#1f1f1f] transition hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-2"
+                  onClick={handleClose}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 rounded-full bg-[#d97b5e] px-4 py-2.5 text-sm font-medium text-white shadow-[0_2px_8px_rgba(217,123,94,0.25)] transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 disabled:opacity-60"
+                  disabled={saving}
+                >
+                  {saving ? "Saving…" : mode === "edit" ? "Save changes" : "Add place"}
+                </button>
               </div>
-            </div>
-            <div className="mt-4 shrink-0 flex gap-3 pt-1">
-              <button
-                type="button"
-                className="flex-1 rounded-full border border-[#e0d9d2] bg-transparent px-4 py-2.5 text-sm font-medium text-[#1f1f1f] transition hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-2"
-                onClick={handleClose}
-                disabled={saving}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="flex-1 rounded-full bg-[#d97b5e] px-4 py-2.5 text-sm font-medium text-white shadow-[0_2px_8px_rgba(217,123,94,0.25)] transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 disabled:opacity-60"
-                disabled={saving}
-              >
-                {saving ? "Saving…" : mode === "edit" ? "Save changes" : "Add place"}
-              </button>
-            </div>
+            )}
           </form>
         </div>
       </DialogContent>

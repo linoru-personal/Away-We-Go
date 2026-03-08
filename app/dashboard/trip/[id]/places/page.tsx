@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
 import TripHero from "@/components/trip/trip-hero";
-import { AddPlaceDialog } from "@/components/places/add-place-dialog";
+import { AddPlaceDialog, type PlaceCategory } from "@/components/places/add-place-dialog";
 import { PlaceCard, type TripPlace } from "@/components/places/place-card";
 import { SECTION_TITLE_CLASS } from "@/components/trip/dashboard-card-styles";
 
@@ -37,6 +37,7 @@ export default function TripPlacesPage() {
   const [tripLoading, setTripLoading] = useState(true);
   const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
   const [places, setPlaces] = useState<TripPlace[]>([]);
+  const [categories, setCategories] = useState<PlaceCategory[]>([]);
   const [placesLoading, setPlacesLoading] = useState(true);
   const [placeDialogOpen, setPlaceDialogOpen] = useState(false);
   const [editingPlace, setEditingPlace] = useState<TripPlace | null>(null);
@@ -105,12 +106,29 @@ export default function TripPlacesPage() {
     };
   }, [id]);
 
+  const fetchCategories = () => {
+    if (!id) return;
+    supabase
+      .from("trip_place_categories")
+      .select("id, name, icon")
+      .eq("trip_id", id)
+      .order("name", { ascending: true })
+      .then(({ data, error }) => {
+        if (error) {
+          console.error(error);
+          setCategories([]);
+        } else {
+          setCategories((data ?? []) as PlaceCategory[]);
+        }
+      });
+  };
+
   const fetchPlaces = () => {
     if (!id) return;
     setPlacesLoading(true);
     supabase
       .from("trip_places")
-      .select("id, trip_id, title, google_maps_url, notes, created_at")
+      .select("id, trip_id, title, google_maps_url, notes, category_id, created_at")
       .eq("trip_id", id)
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
@@ -129,6 +147,7 @@ export default function TripPlacesPage() {
       setPlacesLoading(false);
       return;
     }
+    fetchCategories();
     fetchPlaces();
   }, [id]);
 
@@ -211,19 +230,28 @@ export default function TripPlacesPage() {
               </div>
             ) : (
               <ul className="mt-6 space-y-4" role="list">
-                {places.map((place) => (
-                  <li key={place.id}>
-                    <PlaceCard
-                      place={place}
-                      onEdit={(p) => {
-                        setEditingPlace(p);
-                        setPlaceDialogOpen(true);
-                      }}
-                      onDelete={handleDelete}
-                      deletingId={deletingId}
-                    />
-                  </li>
-                ))}
+                {places.map((place) => {
+                  const categoryDisplay = place.category_id
+                    ? (() => {
+                        const cat = categories.find((c) => c.id === place.category_id);
+                        return cat ? { name: cat.name, icon: cat.icon } : null;
+                      })()
+                    : null;
+                  return (
+                    <li key={place.id}>
+                      <PlaceCard
+                        place={place}
+                        category={categoryDisplay}
+                        onEdit={(p) => {
+                          setEditingPlace(p);
+                          setPlaceDialogOpen(true);
+                        }}
+                        onDelete={handleDelete}
+                        deletingId={deletingId}
+                      />
+                    </li>
+                  );
+                })}
               </ul>
             )}
             <AddPlaceDialog
@@ -235,7 +263,12 @@ export default function TripPlacesPage() {
                 setPlaceDialogOpen(open);
                 if (!open) setEditingPlace(null);
               }}
-              onSuccess={fetchPlaces}
+              onSuccess={() => {
+                fetchPlaces();
+                fetchCategories();
+              }}
+              onCategoryCreated={fetchCategories}
+              categories={categories}
               initialValues={
                 editingPlace
                   ? {
@@ -243,6 +276,7 @@ export default function TripPlacesPage() {
                       title: editingPlace.title,
                       google_maps_url: editingPlace.google_maps_url,
                       notes: editingPlace.notes,
+                      category_id: editingPlace.category_id,
                     }
                   : null
               }

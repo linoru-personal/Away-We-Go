@@ -13,11 +13,19 @@ export type TripPlace = {
   title: string;
   google_maps_url: string;
   notes: string | null;
+  category_id: string | null;
   created_at: string;
 };
 
+/** Resolved category for display (name + icon). */
+export type PlaceCategoryDisplay = {
+  name: string;
+  icon: string | null;
+} | null;
+
 export interface PlaceCardProps {
   place: TripPlace;
+  category: PlaceCategoryDisplay;
   onEdit: (place: TripPlace) => void;
   onDelete: (id: string) => void;
   deletingId: string | null;
@@ -81,7 +89,7 @@ function TrashIcon() {
   );
 }
 
-export function PlaceCard({ place, onEdit, onDelete, deletingId }: PlaceCardProps) {
+export function PlaceCard({ place, category, onEdit, onDelete, deletingId }: PlaceCardProps) {
   const isDeleting = deletingId === place.id;
 
   return (
@@ -89,6 +97,11 @@ export function PlaceCard({ place, onEdit, onDelete, deletingId }: PlaceCardProp
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className={SECTION_TITLE_CLASS}>{place.title}</h3>
+          {category && (
+            <p className={`${META_CLASS} mt-0.5 text-[#8a8a8a]`}>
+              <span aria-hidden>{category.icon ?? "•"}</span> {category.name}
+            </p>
+          )}
           {place.notes?.trim() && (
             <p className={`${META_CLASS} mt-1.5 text-[#2d2d2d]`}>
               {place.notes}
