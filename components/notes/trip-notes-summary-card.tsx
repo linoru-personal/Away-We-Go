@@ -1,18 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   DASHBOARD_CARD_CLASS,
+  DASHBOARD_CARD_LINK_CLASS,
+  DASHBOARD_CARD_CHEVRON_CLASS,
+  DASHBOARD_CARD_CHEVRON_ICON_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
   NUMERIC_EMPHASIS_CLASS,
   EMPTY_STATE_CLASS,
   EMPTY_STATE_TEXT_CLASS,
   CARD_CONTENT_MT,
-  CARD_CTA_MT,
-  CTA_LINK_CLASS,
 } from "@/components/trip/dashboard-card-styles";
 
 export type TripNote = {
@@ -189,7 +190,6 @@ function LinkIcon() {
 }
 
 export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
-  const router = useRouter();
   const [total, setTotal] = useState(0);
   const [latestNote, setLatestNote] = useState<TripNote | null>(null);
   const [loading, setLoading] = useState(true);
@@ -277,7 +277,10 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
   const linkFaviconSrc = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(linkDomain)}&sz=64`;
 
   return (
-    <article className={`${DASHBOARD_CARD_CLASS} flex h-full flex-col`}>
+    <Link
+      href={`/dashboard/trip/${tripId}/notes`}
+      className={`${DASHBOARD_CARD_CLASS} ${DASHBOARD_CARD_LINK_CLASS} flex h-full flex-col`}
+    >
       <div className="flex w-full flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1 text-start">
           <h2 className={SECTION_TITLE_CLASS}>Trip Notes</h2>
@@ -334,20 +337,21 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
         </div>
       )}
 
-      {!loading && (
-        <>
-          <div className="mt-auto" aria-hidden />
-          <div className={`${CARD_CTA_MT} text-center`}>
-            <button
-              type="button"
-              className={CTA_LINK_CLASS}
-              onClick={() => router.push(`/dashboard/trip/${tripId}/notes`)}
-            >
-              Manage Trip Notes →
-            </button>
-          </div>
-        </>
-      )}
-    </article>
+      <div className="mt-auto" aria-hidden />
+      <span className={DASHBOARD_CARD_CHEVRON_CLASS} aria-hidden>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={DASHBOARD_CARD_CHEVRON_ICON_CLASS}
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </span>
+    </Link>
   );
 }

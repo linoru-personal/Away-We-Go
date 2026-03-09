@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   DASHBOARD_CARD_CLASS,
+  DASHBOARD_CARD_LINK_CLASS,
+  DASHBOARD_CARD_CHEVRON_CLASS,
+  DASHBOARD_CARD_CHEVRON_ICON_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
   NUMERIC_EMPHASIS_CLASS,
@@ -13,8 +16,6 @@ import {
   EMPTY_STATE_CLASS,
   EMPTY_STATE_TEXT_CLASS,
   CARD_CONTENT_MT,
-  CARD_CTA_MT,
-  CTA_LINK_CLASS,
 } from "@/components/trip/dashboard-card-styles";
 
 type PackingItemRow = {
@@ -46,7 +47,6 @@ function CheckIcon() {
 }
 
 export function PackingSummaryCard({ tripId }: PackingSummaryCardProps) {
-  const router = useRouter();
   const [items, setItems] = useState<PackingItemRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -73,12 +73,11 @@ export function PackingSummaryCard({ tripId }: PackingSummaryCardProps) {
   const displayItems = items.slice(0, 4);
 
   return (
-    <article className={DASHBOARD_CARD_CLASS}>
-      <button
-        type="button"
-        className="flex w-full flex-wrap items-start justify-between gap-4 text-left"
-        onClick={() => router.push(`/dashboard/trip/${tripId}/packing`)}
-      >
+    <Link
+      href={`/dashboard/trip/${tripId}/packing`}
+      className={`${DASHBOARD_CARD_CLASS} ${DASHBOARD_CARD_LINK_CLASS}`}
+    >
+      <div className="flex w-full flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h2 className={SECTION_TITLE_CLASS}>Packing</h2>
           <p className={META_CLASS}>
@@ -88,7 +87,7 @@ export function PackingSummaryCard({ tripId }: PackingSummaryCardProps) {
         {!loading && (
           <span className={NUMERIC_EMPHASIS_CLASS}>{total - packed}</span>
         )}
-      </button>
+      </div>
 
       {loading ? (
         <p className={`${CARD_CONTENT_MT} text-sm text-[#8a8a8a]`}>Loading…</p>
@@ -133,21 +132,23 @@ export function PackingSummaryCard({ tripId }: PackingSummaryCardProps) {
               <p className={EMPTY_STATE_TEXT_CLASS}>No packing items yet</p>
             </div>
           )}
-
-          <div className={`${CARD_CTA_MT} text-center`}>
-            <button
-              type="button"
-              className={CTA_LINK_CLASS}
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/dashboard/trip/${tripId}/packing`);
-              }}
-            >
-              Manage Packing →
-            </button>
-          </div>
         </>
       )}
-    </article>
+
+      <span className={DASHBOARD_CARD_CHEVRON_CLASS} aria-hidden>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={DASHBOARD_CARD_CHEVRON_ICON_CLASS}
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </span>
+    </Link>
   );
 }

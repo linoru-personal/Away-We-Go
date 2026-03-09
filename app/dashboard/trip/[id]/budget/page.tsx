@@ -33,7 +33,27 @@ export default function TripBudgetPage() {
   const { user, loading: sessionLoading } = useSession();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [tripLoading, setTripLoading] = useState(true);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
+
+  useEffect(() => {
+    if (!trip?.cover_image_path) {
+      setCoverImageUrl(null);
+      return;
+    }
+    let cancelled = false;
+    supabase.storage
+      .from("trip-covers")
+      .createSignedUrl(trip.cover_image_path, 3600)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (!error && data?.signedUrl) setCoverImageUrl(data.signedUrl);
+        else setCoverImageUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trip?.cover_image_path]);
 
   useEffect(() => {
     if (!sessionLoading && !user) {
@@ -128,7 +148,7 @@ export default function TripBudgetPage() {
             <TripHero
               title={trip.title}
               dates={formatDates(trip.start_date, trip.end_date)}
-              imageUrl={trip.cover_image_url ?? undefined}
+              imageUrl={coverImageUrl ?? trip.cover_image_url ?? undefined}
               onBack={() => router.push(`/dashboard/trip/${id}`)}
               participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
             />

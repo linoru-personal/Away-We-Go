@@ -13,6 +13,7 @@ type Trip = {
   title: string;
   start_date: string | null;
   end_date: string | null;
+  cover_image_url: string | null;
   cover_image_path: string | null;
 };
 
@@ -52,7 +53,7 @@ export default function TripPhotosPage() {
     let cancelled = false;
     supabase
       .from("trips")
-      .select("id, title, start_date, end_date, cover_image_path")
+      .select("id, title, start_date, end_date, cover_image_url, cover_image_path")
       .eq("id", id)
       .single()
       .then(({ data, error }) => {
@@ -206,7 +207,7 @@ export default function TripPhotosPage() {
       tripId={trip.id}
       title={trip.title}
       dates={dates}
-      coverImageUrl={coverImageUrl}
+      coverImageUrl={coverImageUrl ?? trip.cover_image_url ?? null}
       photos={photosLoading ? [] : photosWithUrls}
       onUploadSuccess={refetchPhotos}
     />

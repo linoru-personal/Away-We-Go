@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { fetchBudgetData } from "@/components/budget/budget-queries";
 import {
   DASHBOARD_CARD_CLASS,
+  DASHBOARD_CARD_LINK_CLASS,
+  DASHBOARD_CARD_CHEVRON_CLASS,
+  DASHBOARD_CARD_CHEVRON_ICON_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
-  CARD_CTA_MT,
-  CTA_LINK_CLASS,
 } from "@/components/trip/dashboard-card-styles";
 
 export interface BudgetSummaryCardProps {
@@ -25,7 +26,6 @@ function formatUsd(amount: number): string {
 }
 
 export function BudgetSummaryCard({ tripId }: BudgetSummaryCardProps) {
-  const router = useRouter();
   const [totalBase, setTotalBase] = useState<number | null>(null);
   const [itemsCount, setItemsCount] = useState(0);
   const [categoriesCount, setCategoriesCount] = useState(0);
@@ -49,7 +49,10 @@ export function BudgetSummaryCard({ tripId }: BudgetSummaryCardProps) {
   }, [tripId]);
 
   return (
-    <article className={DASHBOARD_CARD_CLASS}>
+    <Link
+      href={`/dashboard/trip/${tripId}/budget`}
+      className={`${DASHBOARD_CARD_CLASS} ${DASHBOARD_CARD_LINK_CLASS}`}
+    >
       <div className="flex w-full flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h2 className={SECTION_TITLE_CLASS}>Budget</h2>
@@ -64,17 +67,20 @@ export function BudgetSummaryCard({ tripId }: BudgetSummaryCardProps) {
         )}
       </div>
 
-      {!loading && (
-        <div className={`${CARD_CTA_MT} text-center`}>
-          <button
-            type="button"
-            className={CTA_LINK_CLASS}
-            onClick={() => router.push(`/dashboard/trip/${tripId}/budget`)}
-          >
-            Manage Trip Budget →
-          </button>
-        </div>
-      )}
-    </article>
+      <span className={DASHBOARD_CARD_CHEVRON_CLASS} aria-hidden>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={DASHBOARD_CARD_CHEVRON_ICON_CLASS}
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </span>
+    </Link>
   );
 }

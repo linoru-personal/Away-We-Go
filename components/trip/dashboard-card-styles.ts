@@ -47,3 +47,14 @@ export const SUMMARY_STRIP_LABEL_CLASS =
 /** Destination/places card empty state (map preview feel). */
 export const DESTINATION_PLACEHOLDER_CLASS =
   "flex min-h-[100px] flex-col items-center justify-center rounded-xl border border-[#ebe5df] bg-[#F3F1ED] py-6";
+
+/** Interactive state for entry-point cards (use with DASHBOARD_CARD_CLASS on a Link). */
+export const DASHBOARD_CARD_LINK_CLASS =
+  "relative transition hover:border-[#D4C5BA] hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#d97b5e] focus-visible:ring-offset-2 group";
+
+/** Bottom-right chevron wrapper for entry-point cards (absolute; parent must be relative). */
+export const DASHBOARD_CARD_CHEVRON_CLASS =
+  "absolute bottom-4 right-4 flex text-[#8a8a8a] transition-transform duration-150 group-hover:translate-x-0.5 group-focus-visible:translate-x-0.5";
+
+/** Chevron icon size (use on svg inside DASHBOARD_CARD_CHEVRON_CLASS). */
+export const DASHBOARD_CARD_CHEVRON_ICON_CLASS = "size-5";

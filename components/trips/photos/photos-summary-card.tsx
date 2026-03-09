@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getTripPhotosPreview } from "@/lib/trip-photos/queries";
 import type { TripPhotoRow } from "@/lib/trip-photos/queries";
 import {
   DASHBOARD_CARD_CLASS,
+  DASHBOARD_CARD_LINK_CLASS,
+  DASHBOARD_CARD_CHEVRON_CLASS,
+  DASHBOARD_CARD_CHEVRON_ICON_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
   CARD_CONTENT_MT,
@@ -21,7 +24,6 @@ export interface PhotosSummaryCardProps {
 }
 
 export function PhotosSummaryCard({ tripId }: PhotosSummaryCardProps) {
-  const router = useRouter();
   const [totalCount, setTotalCount] = useState(0);
   const [thumbnailUrls, setThumbnailUrls] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,19 +67,18 @@ export function PhotosSummaryCard({ tripId }: PhotosSummaryCardProps) {
   }, [tripId]);
 
   return (
-    <article className={`${DASHBOARD_CARD_CLASS} md:col-span-2`}>
-      <button
-        type="button"
-        className="flex w-full flex-wrap items-start justify-between gap-4 text-left"
-        onClick={() => router.push(`/dashboard/trip/${tripId}/photos`)}
-      >
+    <Link
+      href={`/dashboard/trip/${tripId}/photos`}
+      className={`${DASHBOARD_CARD_CLASS} ${DASHBOARD_CARD_LINK_CLASS} md:col-span-2`}
+    >
+      <div className="flex w-full flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h2 className={SECTION_TITLE_CLASS}>Photos</h2>
           <p className={META_CLASS}>
             {loading ? "…" : `${totalCount} ${totalCount === 1 ? "photo" : "photos"}`}
           </p>
         </div>
-      </button>
+      </div>
 
       {loading ? (
         <p className={`${CARD_CONTENT_MT} text-sm text-[#8a8a8a]`}>Loading…</p>
@@ -103,6 +104,21 @@ export function PhotosSummaryCard({ tripId }: PhotosSummaryCardProps) {
           </p>
         </div>
       )}
-    </article>
+
+      <span className={DASHBOARD_CARD_CHEVRON_CLASS} aria-hidden>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={DASHBOARD_CARD_CHEVRON_ICON_CLASS}
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </span>
+    </Link>
   );
 }

@@ -1,18 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   DASHBOARD_CARD_CLASS,
+  DASHBOARD_CARD_LINK_CLASS,
+  DASHBOARD_CARD_CHEVRON_CLASS,
+  DASHBOARD_CARD_CHEVRON_ICON_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
   NUMERIC_EMPHASIS_CLASS,
   EMPTY_STATE_CLASS,
   EMPTY_STATE_TEXT_CLASS,
   CARD_CONTENT_MT,
-  CARD_CTA_MT,
-  CTA_LINK_CLASS,
 } from "@/components/trip/dashboard-card-styles";
 
 export type TripPlace = {
@@ -48,7 +49,6 @@ function MapPinIcon() {
 }
 
 export function PlacesSummaryCard({ tripId }: PlacesSummaryCardProps) {
-  const router = useRouter();
   const [places, setPlaces] = useState<TripPlace[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -74,12 +74,11 @@ export function PlacesSummaryCard({ tripId }: PlacesSummaryCardProps) {
   const displayPlaces = places.slice(0, 3);
 
   return (
-    <article className={DASHBOARD_CARD_CLASS}>
-      <button
-        type="button"
-        className="flex w-full flex-wrap items-start justify-between gap-4 text-left"
-        onClick={() => router.push(`/dashboard/trip/${tripId}/places`)}
-      >
+    <Link
+      href={`/dashboard/trip/${tripId}/places`}
+      className={`${DASHBOARD_CARD_CLASS} ${DASHBOARD_CARD_LINK_CLASS}`}
+    >
+      <div className="flex w-full flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h2 className={SECTION_TITLE_CLASS}>Places</h2>
           <p className={META_CLASS}>
@@ -89,57 +88,46 @@ export function PlacesSummaryCard({ tripId }: PlacesSummaryCardProps) {
         {!loading && total > 0 && (
           <span className={NUMERIC_EMPHASIS_CLASS}>{total}</span>
         )}
-      </button>
+      </div>
 
       {loading ? (
         <p className={`${CARD_CONTENT_MT} text-sm text-[#8a8a8a]`}>Loading…</p>
       ) : displayPlaces.length > 0 ? (
-        <>
-          <ul className={`${CARD_CONTENT_MT} space-y-2`}>
-            {displayPlaces.map((place) => (
-              <li
-                key={place.id}
-                className="flex items-center gap-2 text-left"
-              >
-                <MapPinIcon />
-                <span className="min-w-0 flex-1 truncate text-sm text-[#2d2d2d]">
-                  {place.title}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <div className={`${CARD_CTA_MT} text-center`}>
-            <button
-              type="button"
-              className={CTA_LINK_CLASS}
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/dashboard/trip/${tripId}/places`);
-              }}
+        <ul className={`${CARD_CONTENT_MT} space-y-2`}>
+          {displayPlaces.map((place) => (
+            <li
+              key={place.id}
+              className="flex items-center gap-2 text-left"
             >
-              Manage Places →
-            </button>
-          </div>
-        </>
+              <MapPinIcon />
+              <span className="min-w-0 flex-1 truncate text-sm text-[#2d2d2d]">
+                {place.title}
+              </span>
+            </li>
+          ))}
+        </ul>
       ) : (
         <div className={`${CARD_CONTENT_MT} ${EMPTY_STATE_CLASS}`}>
           <p className={EMPTY_STATE_TEXT_CLASS}>
             Add places from Google Maps to plan where you&apos;ll go.
           </p>
-          <div className={`${CARD_CTA_MT} text-center`}>
-            <button
-              type="button"
-              className={CTA_LINK_CLASS}
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/dashboard/trip/${tripId}/places`);
-              }}
-            >
-              Add your first place →
-            </button>
-          </div>
         </div>
       )}
-    </article>
+
+      <span className={DASHBOARD_CARD_CHEVRON_CLASS} aria-hidden>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={DASHBOARD_CARD_CHEVRON_ICON_CLASS}
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </span>
+    </Link>
   );
 }

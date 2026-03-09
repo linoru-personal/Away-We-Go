@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   DASHBOARD_CARD_CLASS,
+  DASHBOARD_CARD_LINK_CLASS,
+  DASHBOARD_CARD_CHEVRON_CLASS,
+  DASHBOARD_CARD_CHEVRON_ICON_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
   NUMERIC_EMPHASIS_CLASS,
@@ -13,8 +16,6 @@ import {
   EMPTY_STATE_CLASS,
   EMPTY_STATE_TEXT_CLASS,
   CARD_CONTENT_MT,
-  CARD_CTA_MT,
-  CTA_LINK_CLASS,
 } from "@/components/trip/dashboard-card-styles";
 
 export type Task = {
@@ -48,7 +49,6 @@ function CheckIcon() {
 }
 
 export function TasksSummaryCard({ tripId }: TasksSummaryCardProps) {
-  const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -77,12 +77,11 @@ export function TasksSummaryCard({ tripId }: TasksSummaryCardProps) {
   const displayTasks = tasks.slice(0, 4);
 
   return (
-    <article className={DASHBOARD_CARD_CLASS}>
-      <button
-        type="button"
-        className="flex w-full flex-wrap items-start justify-between gap-4 text-left"
-        onClick={() => router.push(`/dashboard/trip/${tripId}/tasks`)}
-      >
+    <Link
+      href={`/dashboard/trip/${tripId}/tasks`}
+      className={`${DASHBOARD_CARD_CLASS} ${DASHBOARD_CARD_LINK_CLASS}`}
+    >
+      <div className="flex w-full flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h2 className={SECTION_TITLE_CLASS}>Tasks</h2>
           <p className={META_CLASS}>
@@ -92,7 +91,7 @@ export function TasksSummaryCard({ tripId }: TasksSummaryCardProps) {
         {!loading && (
           <span className={NUMERIC_EMPHASIS_CLASS}>{openCount}</span>
         )}
-      </button>
+      </div>
 
       {loading ? (
         <p className={`${CARD_CONTENT_MT} text-sm text-[#8a8a8a]`}>Loading…</p>
@@ -142,21 +141,23 @@ export function TasksSummaryCard({ tripId }: TasksSummaryCardProps) {
               <p className={EMPTY_STATE_TEXT_CLASS}>No tasks yet</p>
             </div>
           )}
-
-          <div className={`${CARD_CTA_MT} text-center`}>
-            <button
-              type="button"
-              className={CTA_LINK_CLASS}
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/dashboard/trip/${tripId}/tasks`);
-              }}
-            >
-              Manage Tasks →
-            </button>
-          </div>
         </>
       )}
-    </article>
+
+      <span className={DASHBOARD_CARD_CHEVRON_CLASS} aria-hidden>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={DASHBOARD_CARD_CHEVRON_ICON_CLASS}
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      </span>
+    </Link>
   );
 }
