@@ -9,6 +9,7 @@ import { TasksSummaryCard } from "@/components/tasks/tasks-summary-card";
 import { TripNotesSummaryCard } from "@/components/notes/trip-notes-summary-card";
 import { PackingSummaryCard } from "@/components/packing/packing-summary-card";
 import { BudgetSummaryCard } from "@/components/budget/budget-summary-card";
+import { PhotosSummaryCard } from "@/components/trips/photos/photos-summary-card";
 import TripFormModal from "@/components/trips/trip-form-modal";
 import { TripDashboardSummaryStrip } from "@/components/trip/trip-dashboard-summary-strip";
 import {
@@ -21,8 +22,6 @@ import {
   DASHBOARD_CARD_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
-  EMPTY_STATE_CLASS,
-  EMPTY_STATE_TEXT_CLASS,
   DESTINATION_PLACEHOLDER_CLASS,
 } from "@/components/trip/dashboard-card-styles";
 
@@ -581,15 +580,7 @@ export default function TripPage() {
                 <BudgetSummaryCard tripId={trip.id} />
 
                 {/* Photos */}
-                <article className={`${DASHBOARD_CARD_CLASS} md:col-span-2`}>
-                  <h2 className={SECTION_TITLE_CLASS}>Photos</h2>
-                  <p className={META_CLASS}>0 photos</p>
-                  <div className={`mt-4 ${EMPTY_STATE_CLASS}`}>
-                    <p className={EMPTY_STATE_TEXT_CLASS}>
-                      Photos from your trip will appear here
-                    </p>
-                  </div>
-                </article>
+                <PhotosSummaryCard tripId={trip.id} />
               </div>
             </div>
           </>
