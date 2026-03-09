@@ -6,6 +6,7 @@ import {
   META_CLASS,
   CTA_LINK_CLASS,
 } from "@/components/trip/dashboard-card-styles";
+import { LinkFavicon } from "@/components/ui/link-favicon";
 
 export type TripPlace = {
   id: string;
@@ -115,6 +116,7 @@ export function PlaceCard({ place, category, onEdit, onDelete, deletingId }: Pla
             rel="noopener noreferrer"
             className={`inline-flex items-center gap-1.5 ${CTA_LINK_CLASS}`}
           >
+            <LinkFavicon url={place.google_maps_url} size={24} className="shrink-0" />
             <ExternalLinkIcon />
             Open in Google Maps
           </a>

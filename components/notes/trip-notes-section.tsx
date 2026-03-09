@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/app/lib/supabaseClient";
+import { LinkFavicon } from "@/components/ui/link-favicon";
 import { AddTripNoteDialog } from "@/components/notes/add-trip-note-dialog";
 
 type LinkPreviewData = {
@@ -107,6 +108,7 @@ function truncateUrl(url: string, maxLen: number): string {
 function LinkPreviewBlock({ href }: { href: string }) {
   const [preview, setPreview] = useState<LinkPreviewData | null>(null);
   const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
+  const [imageError, setImageError] = useState(false);
   const fetched = useRef(false);
 
   useEffect(() => {
@@ -153,10 +155,13 @@ function LinkPreviewBlock({ href }: { href: string }) {
   const domain = getDomain(href);
   const displayUrl = truncateUrl(href, 50);
   const fallback = (
-    <>
-      <span className="font-medium text-[#4A4A4A]">{domain}</span>
-      <span className="mt-1 block truncate text-[#6B7280]">{displayUrl}</span>
-    </>
+    <div className="flex items-start gap-2">
+      <LinkFavicon url={href} size={24} className="mt-0.5 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <span className="font-medium text-[#4A4A4A]">{domain}</span>
+        <span className="mt-1 block truncate text-[#6B7280]">{displayUrl}</span>
+      </div>
+    </div>
   );
 
   if (status === "error" || status === "loading" || !preview) {
@@ -172,33 +177,32 @@ function LinkPreviewBlock({ href }: { href: string }) {
     );
   }
 
-  const faviconUrl = `https://www.google.com/s2/favicons?domain=${preview.domain}&sz=48`;
-  const thumb = preview.image ? (
-    <img
-      src={preview.image}
-      alt=""
-      className="size-12 shrink-0 rounded-lg object-cover"
-    />
-  ) : (
-    <img
-      src={faviconUrl}
-      alt=""
-      className="size-12 shrink-0 rounded-lg bg-[#F5F3F0] object-contain"
-    />
-  );
+  const showPreviewImage = preview.image && !imageError;
 
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex gap-3 rounded-lg border border-[#D4C5BA] bg-[#FAFAF8] p-3 text-start text-sm transition hover:bg-[#F5F3F0]"
+      className="block overflow-hidden rounded-lg border border-[#D4C5BA] bg-[#FAFAF8] text-start text-sm transition hover:bg-[#F5F3F0]"
     >
-      {thumb}
-      <div className="min-w-0 flex-1">
-        <span className="block truncate font-medium text-[#4A4A4A]">
-          {preview.title || preview.domain}
-        </span>
+      {showPreviewImage && (
+        <div className="aspect-video max-h-48 w-full overflow-hidden rounded-t-lg bg-[#F5F3F0]">
+          <img
+            src={preview.image!}
+            alt=""
+            className="h-full w-full object-cover"
+            onError={() => setImageError(true)}
+          />
+        </div>
+      )}
+      <div className="p-3">
+        <div className="flex items-center gap-2">
+          <LinkFavicon url={href} size={24} className="shrink-0" />
+          <span className="min-w-0 truncate font-medium text-[#4A4A4A]">
+            {preview.title || preview.domain}
+          </span>
+        </div>
         <span className="mt-0.5 block text-xs text-[#6B7280]">
           {preview.domain}
         </span>

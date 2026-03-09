@@ -6,13 +6,6 @@ import { supabase } from "@/app/lib/supabaseClient";
 
 const BUCKET = "trip-photos";
 
-const IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-]);
-
 function getExtension(file: File): string {
   const name = file.name;
   const last = name.split(".").pop()?.toLowerCase();
@@ -41,46 +34,61 @@ export function PhotoUploadForm({ tripId, userId, onUploadSuccess }: PhotoUpload
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     setError(null);
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
 
-    if (!IMAGE_TYPES.has(file.type)) {
-      setError("Please select an image file (JPEG, PNG, GIF, or WebP).");
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    if (imageFiles.length === 0) {
+      setError("Please select image files.");
       e.target.value = "";
       return;
     }
+    if (imageFiles.length < files.length) {
+      setError("Some files were not images and were skipped.");
+    }
 
     setUploading(true);
-    try {
-      const photoId = crypto.randomUUID();
-      const ext = getExtension(file);
-      const path = `${tripId}/${photoId}.${ext}`;
+    const errors: string[] = [];
+    for (const file of imageFiles) {
+      try {
+        const photoId = crypto.randomUUID();
+        const ext = getExtension(file);
+        const path = `${tripId}/${photoId}.${ext}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET)
-        .upload(path, file, { contentType: file.type, upsert: false });
+        const { error: uploadError } = await supabase.storage
+          .from(BUCKET)
+          .upload(path, file, { contentType: file.type, upsert: false });
 
-      if (uploadError) {
-        throw new Error(uploadError.message);
+        if (uploadError) {
+          throw new Error(uploadError.message);
+        }
+
+        const { error: insertError } = await supabase.from("trip_photos").insert({
+          trip_id: tripId,
+          added_by_user_id: userId,
+          image_path: path,
+        });
+
+        if (insertError) {
+          throw new Error(insertError.message);
+        }
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : "Upload failed.");
       }
+    }
 
-      const { error: insertError } = await supabase.from("trip_photos").insert({
-        trip_id: tripId,
-        added_by_user_id: userId,
-        image_path: path,
-      });
-
-      if (insertError) {
-        throw new Error(insertError.message);
-      }
-
-      e.target.value = "";
+    e.target.value = "";
+    setUploading(false);
+    if (errors.length > 0) {
+      setError(
+        errors.length === imageFiles.length
+          ? errors[0]
+          : `${errors.length} of ${imageFiles.length} uploads failed.`
+      );
+    }
+    if (imageFiles.length > errors.length) {
       onUploadSuccess?.();
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed.");
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -89,9 +97,10 @@ export function PhotoUploadForm({ tripId, userId, onUploadSuccess }: PhotoUpload
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/gif,image/webp"
+        accept="image/*"
+        multiple
         className="hidden"
-        aria-label="Select image to upload"
+        aria-label="Select images to upload"
         onChange={handleFileChange}
         disabled={uploading}
       />
