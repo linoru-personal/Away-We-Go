@@ -8,6 +8,7 @@ import {
   DASHBOARD_CARD_LINK_CLASS,
   DASHBOARD_CARD_CHEVRON_CLASS,
   DASHBOARD_CARD_CHEVRON_ICON_CLASS,
+  DASHBOARD_CARD_CONTENT_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
   NUMERIC_EMPHASIS_CLASS,
@@ -281,6 +282,7 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
       href={`/dashboard/trip/${tripId}/notes`}
       className={`${DASHBOARD_CARD_CLASS} ${DASHBOARD_CARD_LINK_CLASS} flex h-full flex-col`}
     >
+      <div className={`${DASHBOARD_CARD_CONTENT_CLASS} flex min-h-0 flex-1 flex-col`}>
       <div className="flex w-full flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1 text-start">
           <h2 className={SECTION_TITLE_CLASS}>Trip Notes</h2>
@@ -338,6 +340,7 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
       )}
 
       <div className="mt-auto" aria-hidden />
+      </div>
       <span className={DASHBOARD_CARD_CHEVRON_CLASS} aria-hidden>
         <svg
           xmlns="http://www.w3.org/2000/svg"

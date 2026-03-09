@@ -10,6 +10,7 @@ import {
   DASHBOARD_CARD_LINK_CLASS,
   DASHBOARD_CARD_CHEVRON_CLASS,
   DASHBOARD_CARD_CHEVRON_ICON_CLASS,
+  DASHBOARD_CARD_CONTENT_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
   CARD_CONTENT_MT,
@@ -71,6 +72,7 @@ export function PhotosSummaryCard({ tripId }: PhotosSummaryCardProps) {
       href={`/dashboard/trip/${tripId}/photos`}
       className={`${DASHBOARD_CARD_CLASS} ${DASHBOARD_CARD_LINK_CLASS} md:col-span-2`}
     >
+      <div className={DASHBOARD_CARD_CONTENT_CLASS}>
       <div className="flex w-full flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h2 className={SECTION_TITLE_CLASS}>Photos</h2>
@@ -104,6 +106,7 @@ export function PhotosSummaryCard({ tripId }: PhotosSummaryCardProps) {
           </p>
         </div>
       )}
+      </div>
 
       <span className={DASHBOARD_CARD_CHEVRON_CLASS} aria-hidden>
         <svg

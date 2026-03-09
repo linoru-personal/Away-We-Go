@@ -567,8 +567,8 @@ export default function TripPage() {
                   )}
                 </article>
 
-                {/* Tasks summary */}
-                <TasksSummaryCard tripId={trip.id} />
+                {/* Budget (first) */}
+                <BudgetSummaryCard tripId={trip.id} />
 
                 {/* Trip Notes */}
                 <TripNotesSummaryCard tripId={trip.id} />
@@ -576,8 +576,8 @@ export default function TripPage() {
                 {/* Packing */}
                 <PackingSummaryCard tripId={trip.id} />
 
-                {/* Budget */}
-                <BudgetSummaryCard tripId={trip.id} />
+                {/* Tasks */}
+                <TasksSummaryCard tripId={trip.id} />
 
                 {/* Photos */}
                 <PhotosSummaryCard tripId={trip.id} />

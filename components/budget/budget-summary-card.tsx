@@ -12,6 +12,7 @@ import {
   DASHBOARD_CARD_LINK_CLASS,
   DASHBOARD_CARD_CHEVRON_CLASS,
   DASHBOARD_CARD_CHEVRON_ICON_CLASS,
+  DASHBOARD_CARD_CONTENT_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
   NUMERIC_EMPHASIS_CLASS,
@@ -68,40 +69,42 @@ export function BudgetSummaryCard({ tripId }: BudgetSummaryCardProps) {
       href={`/dashboard/trip/${tripId}/budget`}
       className={`${DASHBOARD_CARD_CLASS} ${DASHBOARD_CARD_LINK_CLASS}`}
     >
-      <h2 className={SECTION_TITLE_CLASS}>Budget</h2>
+      <div className={DASHBOARD_CARD_CONTENT_CLASS}>
+        <h2 className={SECTION_TITLE_CLASS}>Budget</h2>
 
-      <p className={`${META_CLASS} text-[#6B7280]`}>Total Spent</p>
-      <p className={`mt-0.5 ${NUMERIC_EMPHASIS_CLASS}`}>
-        {loading ? "…" : formatUsd(totalBase ?? 0)}
-      </p>
+        <p className={`${META_CLASS} text-[#6B7280]`}>Total Spent</p>
+        <p className={`mt-0.5 ${NUMERIC_EMPHASIS_CLASS}`}>
+          {loading ? "…" : formatUsd(totalBase ?? 0)}
+        </p>
 
-      {!loading && topCategories.length > 0 && (
-        <>
-          <p
-            className={`${CARD_CONTENT_MT} text-xs font-medium uppercase tracking-wide text-[#8a8a8a]`}
-          >
-            Top Spending
-          </p>
-          <ul className={`${CARD_CONTENT_MT} space-y-2`}>
-            {topCategories.map((cat) => (
-              <li
-                key={cat.id}
-                className="flex items-center justify-between gap-2 text-sm"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="shrink-0 text-[#8a8a8a]" aria-hidden>
-                    <CategoryIcon iconKey={getIconKey(cat.icon)} size={18} />
+        {!loading && topCategories.length > 0 && (
+          <>
+            <p
+              className={`${CARD_CONTENT_MT} text-xs font-medium uppercase tracking-wide text-[#8a8a8a]`}
+            >
+              Top Spending
+            </p>
+            <ul className={`${CARD_CONTENT_MT} space-y-2`}>
+              {topCategories.map((cat) => (
+                <li
+                  key={cat.id}
+                  className="flex items-center justify-between gap-2 text-sm"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="shrink-0 text-[#8a8a8a]" aria-hidden>
+                      <CategoryIcon iconKey={getIconKey(cat.icon)} size={18} />
+                    </span>
+                    <span className="truncate text-[#2d2d2d]">{cat.name}</span>
                   </span>
-                  <span className="truncate text-[#2d2d2d]">{cat.name}</span>
-                </span>
-                <span className="shrink-0 tabular-nums text-[#2d2d2d]">
-                  {formatUsd(cat.total_base)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+                  <span className="shrink-0 tabular-nums text-[#2d2d2d]">
+                    {formatUsd(cat.total_base)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
 
       <span className={DASHBOARD_CARD_CHEVRON_CLASS} aria-hidden>
         <svg

@@ -8,6 +8,7 @@ import {
   DASHBOARD_CARD_LINK_CLASS,
   DASHBOARD_CARD_CHEVRON_CLASS,
   DASHBOARD_CARD_CHEVRON_ICON_CLASS,
+  DASHBOARD_CARD_CONTENT_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
   NUMERIC_EMPHASIS_CLASS,
@@ -78,6 +79,7 @@ export function PlacesSummaryCard({ tripId }: PlacesSummaryCardProps) {
       href={`/dashboard/trip/${tripId}/places`}
       className={`${DASHBOARD_CARD_CLASS} ${DASHBOARD_CARD_LINK_CLASS}`}
     >
+      <div className={DASHBOARD_CARD_CONTENT_CLASS}>
       <div className="flex w-full flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h2 className={SECTION_TITLE_CLASS}>Places</h2>
@@ -113,6 +115,7 @@ export function PlacesSummaryCard({ tripId }: PlacesSummaryCardProps) {
           </p>
         </div>
       )}
+      </div>
 
       <span className={DASHBOARD_CARD_CHEVRON_CLASS} aria-hidden>
         <svg

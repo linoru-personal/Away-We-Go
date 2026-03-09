@@ -8,6 +8,7 @@ import {
   DASHBOARD_CARD_LINK_CLASS,
   DASHBOARD_CARD_CHEVRON_CLASS,
   DASHBOARD_CARD_CHEVRON_ICON_CLASS,
+  DASHBOARD_CARD_CONTENT_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
   NUMERIC_EMPHASIS_CLASS,
@@ -81,19 +82,20 @@ export function TasksSummaryCard({ tripId }: TasksSummaryCardProps) {
       href={`/dashboard/trip/${tripId}/tasks`}
       className={`${DASHBOARD_CARD_CLASS} ${DASHBOARD_CARD_LINK_CLASS}`}
     >
-      <div className="flex w-full flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <h2 className={SECTION_TITLE_CLASS}>Tasks</h2>
-          <p className={META_CLASS}>
-            {loading ? "…" : `${completed} of ${total} completed`}
-          </p>
+      <div className={DASHBOARD_CARD_CONTENT_CLASS}>
+        <div className="flex w-full flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h2 className={SECTION_TITLE_CLASS}>Tasks</h2>
+            <p className={META_CLASS}>
+              {loading ? "…" : `${completed} of ${total} completed`}
+            </p>
+          </div>
+          {!loading && (
+            <span className={NUMERIC_EMPHASIS_CLASS}>{openCount}</span>
+          )}
         </div>
-        {!loading && (
-          <span className={NUMERIC_EMPHASIS_CLASS}>{openCount}</span>
-        )}
-      </div>
 
-      {loading ? (
+        {loading ? (
         <p className={`${CARD_CONTENT_MT} text-sm text-[#8a8a8a]`}>Loading…</p>
       ) : (
         <>
@@ -143,6 +145,7 @@ export function TasksSummaryCard({ tripId }: TasksSummaryCardProps) {
           )}
         </>
       )}
+      </div>
 
       <span className={DASHBOARD_CARD_CHEVRON_CLASS} aria-hidden>
         <svg

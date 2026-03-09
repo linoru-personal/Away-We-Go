@@ -58,3 +58,6 @@ export const DASHBOARD_CARD_CHEVRON_CLASS =
 
 /** Chevron icon size (use on svg inside DASHBOARD_CARD_CHEVRON_CLASS). */
 export const DASHBOARD_CARD_CHEVRON_ICON_CLASS = "size-5";
+
+/** Wrapper for card content so text/numbers don’t overlap the bottom-right chevron. Use around all content except the chevron span. */
+export const DASHBOARD_CARD_CONTENT_CLASS = "min-w-0 pr-10";
