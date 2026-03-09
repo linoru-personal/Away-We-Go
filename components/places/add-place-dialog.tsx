@@ -8,8 +8,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmojiIconPicker } from "@/components/ui/emoji-icon-picker";
-import { CATEGORY_ICON_CHOICES } from "@/components/ui/category-icon-choices";
+import {
+  CategoryIconPicker,
+  PLACES_DEFAULT_ICON,
+  getIconKey,
+  type CategoryIconKey,
+} from "@/components/ui/category-icons";
 
 /** Accepts valid Google Maps URLs: maps.app.goo.gl, google.com/maps, maps.google.com, goo.gl/maps */
 function isGoogleMapsUrl(url: string): boolean {
@@ -91,7 +95,7 @@ export function AddPlaceDialog({
   const [categoryId, setCategoryId] = useState<string>("");
   const [dialogMode, setDialogMode] = useState<"place-form" | "create-category">("place-form");
   const [createCategoryName, setCreateCategoryName] = useState("");
-  const [createCategoryIcon, setCreateCategoryIcon] = useState<string | null>(CATEGORY_ICON_CHOICES[0]);
+  const [createCategoryIcon, setCreateCategoryIcon] = useState<CategoryIconKey>(PLACES_DEFAULT_ICON);
   const [createCategorySaving, setCreateCategorySaving] = useState(false);
   const [createCategoryError, setCreateCategoryError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -104,7 +108,7 @@ export function AddPlaceDialog({
       setError(null);
       setDialogMode("place-form");
       setCreateCategoryName("");
-      setCreateCategoryIcon(CATEGORY_ICON_CHOICES[0]);
+      setCreateCategoryIcon(PLACES_DEFAULT_ICON);
       setCreateCategoryError(null);
       if (mode === "edit" && initialValues) {
         setGoogleMapsUrl(initialValues.google_maps_url);
@@ -185,7 +189,7 @@ export function AddPlaceDialog({
       .insert({
         trip_id: tripId,
         name: nameTrimmed,
-        icon: createCategoryIcon?.trim() || null,
+        icon: createCategoryIcon ?? PLACES_DEFAULT_ICON,
       })
       .select("id")
       .single();
@@ -197,7 +201,7 @@ export function AddPlaceDialog({
     if (data?.id) {
       setCategoryId(data.id);
       setCreateCategoryName("");
-      setCreateCategoryIcon(CATEGORY_ICON_CHOICES[0]);
+      setCreateCategoryIcon(PLACES_DEFAULT_ICON);
       setDialogMode("place-form");
       onCategoryCreated?.();
     }
@@ -239,7 +243,7 @@ export function AddPlaceDialog({
                     <div className="shrink-0">
                       <label className={labelClass}>Icon</label>
                       <div className="mt-1.5">
-                        <EmojiIconPicker
+                        <CategoryIconPicker
                           value={createCategoryIcon}
                           onChange={setCreateCategoryIcon}
                         />
@@ -273,7 +277,7 @@ export function AddPlaceDialog({
                       onClick={() => {
                         setDialogMode("place-form");
                         setCreateCategoryName("");
-                        setCreateCategoryIcon(CATEGORY_ICON_CHOICES[0]);
+                        setCreateCategoryIcon(PLACES_DEFAULT_ICON);
                         setCreateCategoryError(null);
                       }}
                       disabled={createCategorySaving}
@@ -351,7 +355,7 @@ export function AddPlaceDialog({
                       <option value="">No category</option>
                       {categories.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.icon ?? "•"} {c.name}
+                          {c.name}
                         </option>
                       ))}
                       <option value="__create_new__">+ Create new category</option>

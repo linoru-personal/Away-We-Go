@@ -21,7 +21,7 @@ import {
 import { AddBudgetItemDialog } from "@/components/budget/add-budget-item-dialog";
 import { AddCurrencyDialog } from "@/components/budget/add-currency-dialog";
 import { ManageCategoriesDialog } from "@/components/budget/manage-categories-dialog";
-import { normalizeBudgetIcon } from "@/components/budget/budget-utils";
+import { CategoryIcon, BUDGET_DEFAULT_ICON, getIconKey } from "@/components/ui/category-icons";
 import {
   Dialog,
   DialogContent,
@@ -277,10 +277,8 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
             <div className="mb-3 flex items-center gap-3">
               {group.category ? (
                 <>
-                  <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl text-lg text-[#1f1f1f]">
-                    <span role="img" aria-hidden>
-                      {normalizeBudgetIcon(group.category.icon) ?? "•"}
-                    </span>
+                  <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl text-[#1f1f1f]">
+                    <CategoryIcon iconKey={getIconKey(group.category.icon)} size={22} />
                   </div>
                   <span className="flex-1 font-semibold text-[#4A4A4A]">
                     {group.category.name}
@@ -294,8 +292,8 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
                 </>
               ) : (
                 <>
-                  <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl text-lg text-[#1f1f1f]">
-                    <span role="img" aria-hidden>💰</span>
+                  <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl text-[#1f1f1f]">
+                    <CategoryIcon iconKey={BUDGET_DEFAULT_ICON} size={22} />
                   </div>
                   <span className="flex-1 font-semibold text-[#4A4A4A]">General</span>
                   <span className="text-right font-medium text-[#4A4A4A]">

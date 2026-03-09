@@ -8,7 +8,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmojiIconPicker } from "@/components/ui/emoji-icon-picker";
+import {
+  CategoryIcon,
+  CategoryIconPicker,
+  PACKING_DEFAULT_ICON,
+  getIconKey,
+  type CategoryIconKey,
+} from "@/components/ui/category-icons";
 
 export type PackingCategory = {
   id: string;
@@ -105,7 +111,7 @@ export function PackingList({
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [createCategoryName, setCreateCategoryName] = useState("");
-  const [createCategoryIcon, setCreateCategoryIcon] = useState<string>("⭐");
+  const [createCategoryIcon, setCreateCategoryIcon] = useState<CategoryIconKey>(PACKING_DEFAULT_ICON);
   const [createCategorySaving, setCreateCategorySaving] = useState(false);
   const [createCategoryError, setCreateCategoryError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -213,7 +219,7 @@ export function PackingList({
     if (newId) {
       setAddCategoryId(newId);
       setCreateCategoryName("");
-      setCreateCategoryIcon("⭐");
+      setCreateCategoryIcon(PACKING_DEFAULT_ICON);
       setAddModalMode("add-item");
       await onRefresh();
     }
@@ -394,11 +400,9 @@ export function PackingList({
           itemsByCategory.map(({ category, items: catItems }) => (
             <div key={category.id} className={CARD_CLASS}>
               <div className="mb-3 flex items-center gap-2">
-                {category.icon && (
-                  <span className="text-lg" role="img" aria-hidden>
-                    {category.icon}
-                  </span>
-                )}
+                <span className="shrink-0 text-[#4A4A4A]">
+                  <CategoryIcon iconKey={getIconKey(category.icon, PACKING_DEFAULT_ICON)} size={20} />
+                </span>
                 <h3 className="text-base font-semibold text-[#4A4A4A]">{category.name}</h3>
               </div>
               <ul className="space-y-3">
@@ -438,7 +442,7 @@ export function PackingList({
                         >
                           {categories.map((c) => (
                             <option key={c.id} value={c.id}>
-                              {c.icon ? `${c.icon} ` : ""}{c.name}
+                              {c.name}
                             </option>
                           ))}
                         </select>
@@ -622,7 +626,7 @@ export function PackingList({
                   <div className="flex items-end gap-3">
                     <div className="shrink-0">
                       <label className="mb-1 block text-sm font-medium text-[#4A4A4A]">Icon</label>
-                      <EmojiIconPicker
+                      <CategoryIconPicker
                         value={createCategoryIcon}
                         onChange={setCreateCategoryIcon}
                       />
@@ -648,7 +652,7 @@ export function PackingList({
                       className="rounded-lg border border-[#D4C5BA] px-4 py-2 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0]"
                       onClick={() => {
                         setCreateCategoryName("");
-                        setCreateCategoryIcon("⭐");
+                        setCreateCategoryIcon(PACKING_DEFAULT_ICON);
                         setCreateCategoryError(null);
                         setAddModalMode("add-item");
                       }}
@@ -709,7 +713,7 @@ export function PackingList({
                   >
                     {categories.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.icon ? `${c.icon} ` : ""}{c.name}
+                        {c.name}
                       </option>
                     ))}
                     <option value="__create_new__">+ Create new category</option>

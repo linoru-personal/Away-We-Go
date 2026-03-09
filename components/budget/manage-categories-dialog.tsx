@@ -9,15 +9,19 @@ import {
   type BudgetCategorySummary,
   type BudgetData,
 } from "@/components/budget/budget-queries";
-import { normalizeBudgetIcon } from "@/components/budget/budget-utils";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmojiIconPicker } from "@/components/ui/emoji-icon-picker";
-import { CATEGORY_ICON_CHOICES } from "@/components/ui/category-icon-choices";
+import {
+  CategoryIcon,
+  CategoryIconPicker,
+  BUDGET_DEFAULT_ICON,
+  getIconKey,
+  type CategoryIconKey,
+} from "@/components/ui/category-icons";
 
 const inputClass =
   "w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0";
@@ -39,14 +43,14 @@ export function ManageCategoriesDialog({
   onSuccess,
 }: ManageCategoriesDialogProps) {
   const [name, setName] = useState("");
-  const [icon, setIcon] = useState<string | null>(CATEGORY_ICON_CHOICES[0]);
+  const [icon, setIcon] = useState<CategoryIconKey>(BUDGET_DEFAULT_ICON);
   const [categories, setCategories] = useState<BudgetCategorySummary[]>(initialCategories);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
-  const [editIcon, setEditIcon] = useState<string | null>(null);
+  const [editIcon, setEditIcon] = useState<CategoryIconKey>(BUDGET_DEFAULT_ICON);
   const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
@@ -54,7 +58,7 @@ export function ManageCategoriesDialog({
       setCategories(initialCategories);
       setError(null);
       setName("");
-      setIcon(CATEGORY_ICON_CHOICES[0]);
+      setIcon(BUDGET_DEFAULT_ICON);
       setEditingId(null);
     }
   }, [open, initialCategories]);
@@ -71,13 +75,13 @@ export function ManageCategoriesDialog({
     try {
       await createBudgetCategory(tripId, {
         name: trimmed,
-        icon: icon ?? CATEGORY_ICON_CHOICES[0],
+        icon: icon ?? BUDGET_DEFAULT_ICON,
       });
       const data = await fetchBudgetData(tripId);
       setCategories(data.categories);
       onSuccess(data);
       setName("");
-      setIcon(CATEGORY_ICON_CHOICES[0]);
+      setIcon(BUDGET_DEFAULT_ICON);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add category.");
     } finally {
@@ -88,7 +92,7 @@ export function ManageCategoriesDialog({
   const startEdit = (cat: BudgetCategorySummary) => {
     setEditingId(cat.id);
     setEditName(cat.name);
-    setEditIcon(cat.icon ?? CATEGORY_ICON_CHOICES[0]);
+    setEditIcon(getIconKey(cat.icon, BUDGET_DEFAULT_ICON));
     setEditSaving(false);
   };
 
@@ -152,8 +156,8 @@ export function ManageCategoriesDialog({
             <p className={`mb-2 ${labelClass}`}>Categories</p>
             <ul className="space-y-2" role="list">
               <li className="flex items-center gap-3 rounded-[20px] bg-[#f6f2ed] px-3 py-2.5">
-                <div className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-lg text-[#1f1f1f]">
-                  <span role="img" aria-hidden>💰</span>
+                <div className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-[#1f1f1f]">
+                  <CategoryIcon iconKey={BUDGET_DEFAULT_ICON} size={20} />
                 </div>
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#1f1f1f]">General</span>
               </li>
@@ -167,9 +171,9 @@ export function ManageCategoriesDialog({
                       <div className="shrink-0">
                         <span className={labelClass}>Icon</span>
                         <div className="mt-1.5">
-                          <EmojiIconPicker
+                          <CategoryIconPicker
                             value={editIcon}
-                            onChange={(v) => setEditIcon(v)}
+                            onChange={setEditIcon}
                           />
                         </div>
                       </div>
@@ -212,10 +216,8 @@ export function ManageCategoriesDialog({
                     key={cat.id}
                     className="flex items-center gap-3 rounded-[20px] bg-[#f6f2ed] px-3 py-2.5"
                   >
-                    <div className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-lg text-[#1f1f1f]">
-                      <span role="img" aria-hidden>
-                        {normalizeBudgetIcon(cat.icon) ?? "•"}
-                      </span>
+                    <div className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-[#1f1f1f]">
+                      <CategoryIcon iconKey={getIconKey(cat.icon)} size={20} />
                     </div>
                     <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#1f1f1f]">
                       {cat.name}
@@ -252,7 +254,7 @@ export function ManageCategoriesDialog({
               <div className="shrink-0">
                 <span className={labelClass}>Icon</span>
                 <div className="mt-1.5">
-                  <EmojiIconPicker value={icon} onChange={(v) => setIcon(v)} />
+                  <CategoryIconPicker value={icon} onChange={setIcon} />
                 </div>
               </div>
               <div className="min-w-0 flex-1">

@@ -6,7 +6,7 @@ import {
   fetchBudgetData,
   type BudgetCategorySummary,
 } from "@/components/budget/budget-queries";
-import { normalizeBudgetIcon } from "@/components/budget/budget-utils";
+import { CategoryIcon, getIconKey } from "@/components/ui/category-icons";
 import {
   DASHBOARD_CARD_CLASS,
   DASHBOARD_CARD_LINK_CLASS,
@@ -90,7 +90,7 @@ export function BudgetSummaryCard({ tripId }: BudgetSummaryCardProps) {
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="shrink-0 text-[#8a8a8a]" aria-hidden>
-                    {normalizeBudgetIcon(cat.icon) ?? "•"}
+                    <CategoryIcon iconKey={getIconKey(cat.icon)} size={18} />
                   </span>
                   <span className="truncate text-[#2d2d2d]">{cat.name}</span>
                 </span>

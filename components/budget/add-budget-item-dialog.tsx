@@ -15,9 +15,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DISPLAY_CURRENCIES, DEFAULT_CURRENCIES } from "@/components/budget/budget-money";
-import { EmojiIconPicker } from "@/components/ui/emoji-icon-picker";
-import { CATEGORY_ICON_CHOICES } from "@/components/ui/category-icon-choices";
-import { normalizeBudgetIcon } from "@/components/budget/budget-utils";
+import {
+  CategoryIcon,
+  CategoryIconPicker,
+  BUDGET_DEFAULT_ICON,
+  getIconKey,
+  type CategoryIconKey,
+} from "@/components/ui/category-icons";
 
 const CURRENCIES = [...DEFAULT_CURRENCIES];
 const DEFAULT_CATEGORY_COLOR = "#E07A5F";
@@ -79,7 +83,7 @@ export function AddBudgetItemDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createCategoryName, setCreateCategoryName] = useState("");
-  const [createCategoryIcon, setCreateCategoryIcon] = useState<string | null>(CATEGORY_ICON_CHOICES[0]);
+  const [createCategoryIcon, setCreateCategoryIcon] = useState<CategoryIconKey>(BUDGET_DEFAULT_ICON);
   const [createCategorySaving, setCreateCategorySaving] = useState(false);
   const [createCategoryError, setCreateCategoryError] = useState<string | null>(null);
   const prevOpenRef = useRef(false);
@@ -96,7 +100,7 @@ export function AddBudgetItemDialog({
     setMode("add-item");
     setCreateCategoryError(null);
     setCreateCategoryName("");
-    setCreateCategoryIcon(CATEGORY_ICON_CHOICES[0]);
+    setCreateCategoryIcon(BUDGET_DEFAULT_ICON);
     if (existingItem) {
       setName(existingItem.name);
       setAmount(String(existingItem.amount));
@@ -177,7 +181,7 @@ export function AddBudgetItemDialog({
       const created = await createBudgetCategory(tripId, {
         name: nameTrimmed,
         color: DEFAULT_CATEGORY_COLOR,
-        icon: createCategoryIcon ?? CATEGORY_ICON_CHOICES[0],
+        icon: createCategoryIcon ?? BUDGET_DEFAULT_ICON,
       });
       const newCategory: BudgetCategorySummary = {
         id: created.id,
@@ -188,7 +192,7 @@ export function AddBudgetItemDialog({
       };
       setCategoryId(created.id);
       setCreateCategoryName("");
-      setCreateCategoryIcon(CATEGORY_ICON_CHOICES[0]);
+      setCreateCategoryIcon(BUDGET_DEFAULT_ICON);
       setMode("add-item");
       onCategoryCreated?.(newCategory);
     } catch (err) {
@@ -218,7 +222,7 @@ export function AddBudgetItemDialog({
                 <div className="shrink-0">
                   <label className={labelClass}>Icon</label>
                   <div className="mt-1.5">
-                    <EmojiIconPicker
+                    <CategoryIconPicker
                       value={createCategoryIcon}
                       onChange={setCreateCategoryIcon}
                     />
@@ -251,7 +255,7 @@ export function AddBudgetItemDialog({
                   className="rounded-full border border-[#e0d9d2] bg-transparent px-4 py-2 text-sm font-medium text-[#1f1f1f] transition hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-2 disabled:opacity-50"
                   onClick={() => {
                     setCreateCategoryName("");
-                    setCreateCategoryIcon(CATEGORY_ICON_CHOICES[0]);
+                    setCreateCategoryIcon(BUDGET_DEFAULT_ICON);
                     setCreateCategoryError(null);
                     setMode("add-item");
                   }}
@@ -345,10 +349,10 @@ export function AddBudgetItemDialog({
               className={`mt-1.5 ${inputClass}`}
               disabled={submitting}
             >
-              <option value="">💰 General</option>
+              <option value="">General</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {normalizeBudgetIcon(c.icon) ?? "•"} {c.name}
+                  {c.name}
                 </option>
               ))}
               <option value="__create_new__">+ Create new category</option>
