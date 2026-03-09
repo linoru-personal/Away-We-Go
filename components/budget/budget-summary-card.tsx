@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { fetchBudgetData } from "@/components/budget/budget-queries";
+import {
+  fetchBudgetData,
+  type BudgetCategorySummary,
+} from "@/components/budget/budget-queries";
+import { normalizeBudgetIcon } from "@/components/budget/budget-utils";
 import {
   DASHBOARD_CARD_CLASS,
   DASHBOARD_CARD_LINK_CLASS,
@@ -10,6 +14,8 @@ import {
   DASHBOARD_CARD_CHEVRON_ICON_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
+  NUMERIC_EMPHASIS_CLASS,
+  CARD_CONTENT_MT,
 } from "@/components/trip/dashboard-card-styles";
 
 export interface BudgetSummaryCardProps {
@@ -25,10 +31,19 @@ function formatUsd(amount: number): string {
   }).format(amount);
 }
 
+function topSpendingCategories(
+  categories: BudgetCategorySummary[],
+  limit: number
+): BudgetCategorySummary[] {
+  return [...categories]
+    .filter((c) => c.total_base > 0)
+    .sort((a, b) => b.total_base - a.total_base)
+    .slice(0, limit);
+}
+
 export function BudgetSummaryCard({ tripId }: BudgetSummaryCardProps) {
   const [totalBase, setTotalBase] = useState<number | null>(null);
-  const [itemsCount, setItemsCount] = useState(0);
-  const [categoriesCount, setCategoriesCount] = useState(0);
+  const [categories, setCategories] = useState<BudgetCategorySummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,35 +52,56 @@ export function BudgetSummaryCard({ tripId }: BudgetSummaryCardProps) {
     fetchBudgetData(tripId)
       .then((data) => {
         setTotalBase(data.total_base);
-        setItemsCount(data.items_count);
-        setCategoriesCount(data.categories_count);
+        setCategories(data.categories);
       })
       .catch(() => {
         setTotalBase(0);
-        setItemsCount(0);
-        setCategoriesCount(0);
+        setCategories([]);
       })
       .finally(() => setLoading(false));
   }, [tripId]);
+
+  const topCategories = topSpendingCategories(categories, 3);
 
   return (
     <Link
       href={`/dashboard/trip/${tripId}/budget`}
       className={`${DASHBOARD_CARD_CLASS} ${DASHBOARD_CARD_LINK_CLASS}`}
     >
-      <div className="flex w-full flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <h2 className={SECTION_TITLE_CLASS}>Budget</h2>
-          <p className={META_CLASS}>
-            {loading ? "…" : `${itemsCount} items • ${categoriesCount} categories`}
+      <h2 className={SECTION_TITLE_CLASS}>Budget</h2>
+
+      <p className={`${META_CLASS} text-[#6B7280]`}>Total Spent</p>
+      <p className={`mt-0.5 ${NUMERIC_EMPHASIS_CLASS}`}>
+        {loading ? "…" : formatUsd(totalBase ?? 0)}
+      </p>
+
+      {!loading && topCategories.length > 0 && (
+        <>
+          <p
+            className={`${CARD_CONTENT_MT} text-xs font-medium uppercase tracking-wide text-[#8a8a8a]`}
+          >
+            Top Spending
           </p>
-        </div>
-        {!loading && totalBase !== null && (
-          <span className="text-xl font-semibold tabular-nums text-[#2d2d2d]">
-            {formatUsd(totalBase)}
-          </span>
-        )}
-      </div>
+          <ul className={`${CARD_CONTENT_MT} space-y-2`}>
+            {topCategories.map((cat) => (
+              <li
+                key={cat.id}
+                className="flex items-center justify-between gap-2 text-sm"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="shrink-0 text-[#8a8a8a]" aria-hidden>
+                    {normalizeBudgetIcon(cat.icon) ?? "•"}
+                  </span>
+                  <span className="truncate text-[#2d2d2d]">{cat.name}</span>
+                </span>
+                <span className="shrink-0 tabular-nums text-[#2d2d2d]">
+                  {formatUsd(cat.total_base)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       <span className={DASHBOARD_CARD_CHEVRON_CLASS} aria-hidden>
         <svg

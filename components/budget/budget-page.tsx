@@ -201,19 +201,10 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
 
   return (
     <div className="mt-8 space-y-6">
-      {/* Header: title + subtitle + Add Item */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[#4A4A4A]">Budget</h1>
-          <p className="mt-0.5 text-sm text-[#9B7B6B]">Track your trip expenses</p>
-        </div>
-        <button
-          type="button"
-          className="rounded-full bg-[#E07A5F] px-4 py-2.5 text-sm font-medium text-white shadow-[0_2px_8px_rgba(224,122,95,0.25)] transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
-          onClick={() => setAddItemOpen(true)}
-        >
-          Add Item
-        </button>
+      {/* Header: title + subtitle */}
+      <div>
+        <h1 className="text-2xl font-bold text-[#4A4A4A]">Budget</h1>
+        <p className="mt-0.5 text-sm text-[#9B7B6B]">Track your trip expenses</p>
       </div>
 
       {/* Total Budget card (large orange rounded) */}
@@ -257,6 +248,16 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
         </div>
       </div>
 
+      <div className="flex justify-end">
+        <button
+          type="button"
+          className="rounded-full bg-[#E07A5F] px-4 py-2.5 text-sm font-medium text-white shadow-[0_2px_8px_rgba(224,122,95,0.25)] transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
+          onClick={() => setAddItemOpen(true)}
+        >
+          Add Item
+        </button>
+      </div>
+
       {/* Manage Categories */}
       <div>
         <button
@@ -276,10 +277,7 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
             <div className="mb-3 flex items-center gap-3">
               {group.category ? (
                 <>
-                  <div
-                    className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl text-lg"
-                    style={{ backgroundColor: group.category.color || "#F5F3F0" }}
-                  >
+                  <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl text-lg text-[#1f1f1f]">
                     <span role="img" aria-hidden>
                       {normalizeBudgetIcon(group.category.icon) ?? "•"}
                     </span>
@@ -296,10 +294,10 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
                 </>
               ) : (
                 <>
-                  <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl bg-[#F5F3F0] text-[#6B7280]">
-                    —
+                  <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl text-lg text-[#1f1f1f]">
+                    <span role="img" aria-hidden>💰</span>
                   </div>
-                  <span className="flex-1 font-semibold text-[#4A4A4A]">Uncategorized</span>
+                  <span className="flex-1 font-semibold text-[#4A4A4A]">General</span>
                   <span className="text-right font-medium text-[#4A4A4A]">
                     {formatMoney(
                       usdToDisplay(
@@ -348,6 +346,13 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
         defaultCurrency={displayCurrency}
         tripCurrencies={displayCurrencies}
         onSuccess={refetchBudget}
+        onCategoryCreated={(category) => {
+          setData((prev) =>
+            prev
+              ? { ...prev, categories: [...prev.categories, category] }
+              : prev
+          );
+        }}
       />
 
       <AddCurrencyDialog

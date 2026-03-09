@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   createBudgetCategory,
   deleteBudgetCategory,
+  updateBudgetCategory,
   fetchBudgetData,
   type BudgetCategorySummary,
   type BudgetData,
@@ -15,17 +16,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-const COLORS = [
-  "#E07A5F", // coral
-  "#4A90A4", // teal
-  "#81B29A", // green
-  "#F2CC8F", // sand
-  "#E0AFA0", // dusty
-  "#9B7B6B", // brown
-  "#6B5B95", // purple
-  "#5C7A9B", // slate
-] as const;
+import { EmojiIconPicker } from "@/components/ui/emoji-icon-picker";
+import { CATEGORY_ICON_CHOICES } from "@/components/ui/category-icon-choices";
 
 const inputClass =
   "w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0";
@@ -47,20 +39,23 @@ export function ManageCategoriesDialog({
   onSuccess,
 }: ManageCategoriesDialogProps) {
   const [name, setName] = useState("");
-  const [color, setColor] = useState<string>(COLORS[0]);
-  const [icon, setIcon] = useState("");
+  const [icon, setIcon] = useState<string | null>(CATEGORY_ICON_CHOICES[0]);
   const [categories, setCategories] = useState<BudgetCategorySummary[]>(initialCategories);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editIcon, setEditIcon] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
       setCategories(initialCategories);
       setError(null);
       setName("");
-      setColor(COLORS[0]);
-      setIcon("");
+      setIcon(CATEGORY_ICON_CHOICES[0]);
+      setEditingId(null);
     }
   }, [open, initialCategories]);
 
@@ -74,15 +69,55 @@ export function ManageCategoriesDialog({
     setError(null);
     setSubmitting(true);
     try {
-      await createBudgetCategory(tripId, { name: trimmed, color, icon: icon.trim().slice(0, 2) || "" });
+      await createBudgetCategory(tripId, {
+        name: trimmed,
+        icon: icon ?? CATEGORY_ICON_CHOICES[0],
+      });
       const data = await fetchBudgetData(tripId);
       setCategories(data.categories);
       onSuccess(data);
       setName("");
+      setIcon(CATEGORY_ICON_CHOICES[0]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add category.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const startEdit = (cat: BudgetCategorySummary) => {
+    setEditingId(cat.id);
+    setEditName(cat.name);
+    setEditIcon(cat.icon ?? CATEGORY_ICON_CHOICES[0]);
+    setEditSaving(false);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    const trimmed = editName.trim();
+    if (!trimmed) {
+      setError("Category name is required.");
+      return;
+    }
+    setError(null);
+    setEditSaving(true);
+    try {
+      await updateBudgetCategory(tripId, editingId, {
+        name: trimmed,
+        icon: editIcon ?? undefined,
+      });
+      const data = await fetchBudgetData(tripId);
+      setCategories(data.categories);
+      onSuccess(data);
+      setEditingId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update category.");
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -110,62 +145,131 @@ export function ManageCategoriesDialog({
           </DialogTitle>
         </DialogHeader>
 
+        <div className="min-h-0 flex-1 overflow-y-auto -mx-1 px-1">
         <div className="flex flex-col gap-6">
-          {/* Add New Category */}
-          <form onSubmit={handleAdd} className="flex flex-col gap-4">
-            <div>
-              <label htmlFor="category-name" className={labelClass}>
-                Category name
-              </label>
-              <input
-                id="category-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Transport"
-                className={`mt-1.5 ${inputClass}`}
-                disabled={submitting}
-                autoComplete="off"
-              />
-            </div>
+          {/* List of categories */}
+          <div>
+            <p className={`mb-2 ${labelClass}`}>Categories</p>
+            <ul className="space-y-2" role="list">
+              <li className="flex items-center gap-3 rounded-[20px] bg-[#f6f2ed] px-3 py-2.5">
+                <div className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-lg text-[#1f1f1f]">
+                  <span role="img" aria-hidden>💰</span>
+                </div>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#1f1f1f]">General</span>
+              </li>
+              {categories.map((cat) =>
+                editingId === cat.id ? (
+                  <li
+                    key={cat.id}
+                    className="flex flex-col gap-3 rounded-[20px] border border-[#e0d9d2] bg-white p-3"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="shrink-0">
+                        <span className={labelClass}>Icon</span>
+                        <div className="mt-1.5">
+                          <EmojiIconPicker
+                            value={editIcon}
+                            onChange={(v) => setEditIcon(v)}
+                          />
+                        </div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <label htmlFor="edit-category-name" className={labelClass}>
+                          Name
+                        </label>
+                        <input
+                          id="edit-category-name"
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className={`mt-1.5 ${inputClass}`}
+                          disabled={editSaving}
+                          autoComplete="off"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        className="rounded-full border border-[#e0d9d2] bg-transparent px-3 py-1.5 text-sm font-medium text-[#1f1f1f] transition hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-2 disabled:opacity-50"
+                        onClick={cancelEdit}
+                        disabled={editSaving}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full bg-[#d97b5e] px-3 py-1.5 text-sm font-medium text-white transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 disabled:opacity-50"
+                        onClick={handleSaveEdit}
+                        disabled={editSaving}
+                      >
+                        {editSaving ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  </li>
+                ) : (
+                  <li
+                    key={cat.id}
+                    className="flex items-center gap-3 rounded-[20px] bg-[#f6f2ed] px-3 py-2.5"
+                  >
+                    <div className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-lg text-[#1f1f1f]">
+                      <span role="img" aria-hidden>
+                        {normalizeBudgetIcon(cat.icon) ?? "•"}
+                      </span>
+                    </div>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#1f1f1f]">
+                      {cat.name}
+                    </span>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        className="rounded-full p-2 text-[#6B7280] transition hover:bg-[#ebe5df] hover:text-[#1f1f1f] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 disabled:opacity-50"
+                        onClick={() => startEdit(cat)}
+                        aria-label={`Edit ${cat.name}`}
+                      >
+                        <EditIcon />
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full p-2 text-[#6B7280] transition hover:bg-[#ebe5df] hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 disabled:opacity-50"
+                        onClick={() => handleDelete(cat.id)}
+                        disabled={deletingId === cat.id}
+                        aria-label={`Delete ${cat.name}`}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+                  </li>
+                )
+              )}
+            </ul>
+          </div>
 
-            <div>
-              <p className={labelClass}>Choose Color</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    className="size-9 rounded-full transition focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2"
-                    style={{
-                      backgroundColor: c,
-                      outline: color === c ? "2px solid #1f1f1f" : "none",
-                      outlineOffset: 2,
-                    }}
-                    onClick={() => setColor(c)}
-                    aria-label={`Color ${c}`}
-                    aria-pressed={color === c}
-                  />
-                ))}
+          {/* Add new category */}
+          <form onSubmit={handleAdd} className="flex flex-col gap-4 border-t border-[#ebe5df] pt-4">
+            <p className={labelClass}>Add new category</p>
+            <div className="flex items-start gap-3">
+              <div className="shrink-0">
+                <span className={labelClass}>Icon</span>
+                <div className="mt-1.5">
+                  <EmojiIconPicker value={icon} onChange={(v) => setIcon(v)} />
+                </div>
               </div>
-            </div>
-
-            <div>
-              <label htmlFor="category-icon" className={labelClass}>
-                Icon
-              </label>
-              <input
-                id="category-icon"
-                type="text"
-                value={icon}
-                onChange={(e) => setIcon(e.target.value)}
-                placeholder="😀"
-                maxLength={2}
-                className={`mt-1.5 ${inputClass} w-16 text-center text-lg`}
-                disabled={submitting}
-                autoComplete="off"
-                aria-label="Category icon (emoji or character)"
-              />
+              <div className="min-w-0 flex-1">
+                <label htmlFor="category-name" className={labelClass}>
+                  Name
+                </label>
+                <input
+                  id="category-name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Transport"
+                  className={`mt-1.5 ${inputClass}`}
+                  disabled={submitting}
+                  autoComplete="off"
+                />
+              </div>
             </div>
 
             {error && (
@@ -182,47 +286,27 @@ export function ManageCategoriesDialog({
               {submitting ? "Adding…" : "Add Category"}
             </button>
           </form>
-
-          {/* Existing Categories */}
-          <div>
-            <p className={`mb-2 ${labelClass}`}>Existing Categories</p>
-            {categories.length === 0 ? (
-              <p className="text-sm text-[#6B7280]">No categories yet.</p>
-            ) : (
-              <ul className="space-y-2" role="list">
-                {categories.map((cat) => (
-                  <li
-                    key={cat.id}
-                    className="flex items-center gap-3 rounded-[20px] bg-[#f6f2ed] px-3 py-2.5"
-                  >
-                    <div
-                      className="flex size-9 flex-shrink-0 items-center justify-center rounded-lg text-lg text-[#1f1f1f]"
-                      style={{ backgroundColor: cat.color || "#F5F3F0" }}
-                    >
-                      <span role="img" aria-hidden>
-                        {normalizeBudgetIcon(cat.icon) ?? "•"}
-                      </span>
-                    </div>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#1f1f1f]">
-                      {cat.name}
-                    </span>
-                    <button
-                      type="button"
-                      className="flex flex-shrink-0 items-center justify-center rounded-full p-2 text-[#6B7280] transition hover:bg-[#ebe5df] hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 disabled:opacity-50"
-                      onClick={() => handleDelete(cat.id)}
-                      disabled={deletingId === cat.id}
-                      aria-label={`Delete ${cat.name}`}
-                    >
-                      <TrashIcon />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+        </div>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function EditIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-4"
+    >
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+    </svg>
   );
 }
 

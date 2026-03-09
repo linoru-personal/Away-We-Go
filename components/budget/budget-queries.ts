@@ -201,8 +201,13 @@ export type UpdateBudgetItemPayload = {
 
 export type CreateBudgetCategoryPayload = {
   name: string;
-  color: string;
+  color?: string;
   icon: string;
+};
+
+export type UpdateBudgetCategoryPayload = {
+  name?: string;
+  icon?: string;
 };
 
 export async function fetchBudgetData(tripId: string): Promise<BudgetData> {
@@ -385,6 +390,8 @@ export async function deleteBudgetItem(itemId: string): Promise<void> {
   }
 }
 
+const DEFAULT_CATEGORY_COLOR = "#E07A5F";
+
 export async function createBudgetCategory(
   tripId: string,
   payload: CreateBudgetCategoryPayload
@@ -394,7 +401,7 @@ export async function createBudgetCategory(
     .insert({
       trip_id: tripId,
       name: payload.name,
-      color: payload.color,
+      color: payload.color ?? DEFAULT_CATEGORY_COLOR,
       icon: payload.icon,
     })
     .select("id, trip_id, name, color, icon")
@@ -406,12 +413,51 @@ export async function createBudgetCategory(
   return data as { id: string; trip_id: string; name: string; color: string; icon: string };
 }
 
+export async function updateBudgetCategory(
+  tripId: string,
+  categoryId: string,
+  payload: UpdateBudgetCategoryPayload
+): Promise<{ id: string; trip_id: string; name: string; color: string; icon: string }> {
+  const updates: Record<string, unknown> = {};
+  if (payload.name !== undefined) updates.name = payload.name;
+  if (payload.icon !== undefined) updates.icon = payload.icon;
+  if (Object.keys(updates).length === 0) {
+    const { data, error } = await supabase
+      .from("trip_budget_categories")
+      .select("id, trip_id, name, color, icon")
+      .eq("id", categoryId)
+      .eq("trip_id", tripId)
+      .single();
+    if (error) throw new Error(error.message);
+    return data as { id: string; trip_id: string; name: string; color: string; icon: string };
+  }
+  const { data, error } = await supabase
+    .from("trip_budget_categories")
+    .update(updates)
+    .eq("id", categoryId)
+    .eq("trip_id", tripId)
+    .select("id, trip_id, name, color, icon")
+    .single();
+  if (error) {
+    throw new Error(error.message);
+  }
+  return data as { id: string; trip_id: string; name: string; color: string; icon: string };
+}
+
+/** Move all items in this category to General (uncategorized), then delete the category. */
 export async function deleteBudgetCategory(categoryId: string): Promise<void> {
-  const { error } = await supabase
+  const { error: updateError } = await supabase
+    .from("trip_budget_items")
+    .update({ category_id: null })
+    .eq("category_id", categoryId);
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+  const { error: deleteError } = await supabase
     .from("trip_budget_categories")
     .delete()
     .eq("id", categoryId);
-  if (error) {
-    throw new Error(error.message);
+  if (deleteError) {
+    throw new Error(deleteError.message);
   }
 }

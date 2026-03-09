@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   createBudgetItem,
   updateBudgetItem,
@@ -37,6 +37,8 @@ export interface AddBudgetItemDialogProps {
   /** Trip currencies for the currency dropdown; falls back to DISPLAY_CURRENCIES when not set. */
   tripCurrencies?: string[];
   onSuccess: () => void;
+  /** When a new category is created from this dialog, call with the new category so the parent can add it to the list without closing the dialog. */
+  onCategoryCreated?: (category: BudgetCategorySummary) => void;
 }
 
 function toDateInputValue(date: string | null): string {
@@ -61,6 +63,7 @@ export function AddBudgetItemDialog({
   defaultCurrency = "ILS",
   tripCurrencies,
   onSuccess,
+  onCategoryCreated,
 }: AddBudgetItemDialogProps) {
   const isEdit = Boolean(existingItem);
   const currencies =
@@ -79,9 +82,16 @@ export function AddBudgetItemDialog({
   const [createCategoryIcon, setCreateCategoryIcon] = useState<string | null>(CATEGORY_ICON_CHOICES[0]);
   const [createCategorySaving, setCreateCategorySaving] = useState(false);
   const [createCategoryError, setCreateCategoryError] = useState<string | null>(null);
+  const prevOpenRef = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      prevOpenRef.current = false;
+      return;
+    }
+    const justOpened = !prevOpenRef.current;
+    prevOpenRef.current = true;
+    if (!justOpened) return;
     setError(null);
     setMode("add-item");
     setCreateCategoryError(null);
@@ -169,11 +179,18 @@ export function AddBudgetItemDialog({
         color: DEFAULT_CATEGORY_COLOR,
         icon: createCategoryIcon ?? CATEGORY_ICON_CHOICES[0],
       });
+      const newCategory: BudgetCategorySummary = {
+        id: created.id,
+        name: created.name,
+        color: created.color,
+        icon: created.icon,
+        total_base: 0,
+      };
       setCategoryId(created.id);
       setCreateCategoryName("");
       setCreateCategoryIcon(CATEGORY_ICON_CHOICES[0]);
       setMode("add-item");
-      onSuccess();
+      onCategoryCreated?.(newCategory);
     } catch (err) {
       setCreateCategoryError(err instanceof Error ? err.message : "Failed to create category.");
     } finally {
@@ -328,7 +345,7 @@ export function AddBudgetItemDialog({
               className={`mt-1.5 ${inputClass}`}
               disabled={submitting}
             >
-              <option value="">No category</option>
+              <option value="">💰 General</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {normalizeBudgetIcon(c.icon) ?? "•"} {c.name}
