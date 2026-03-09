@@ -15,6 +15,7 @@ import {
   getIconKey,
   type CategoryIconKey,
 } from "@/components/ui/category-icons";
+import { ManagePackingCategoriesDialog } from "@/components/packing/manage-packing-categories-dialog";
 
 export type PackingCategory = {
   id: string;
@@ -123,6 +124,7 @@ export function PackingList({
   const [toggleErrorId, setToggleErrorId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
 
   const packedCount = items.filter((i) => i.is_packed).length;
   const totalCount = items.length;
@@ -205,7 +207,7 @@ export function PackingList({
       .insert({
         trip_id: tripId,
         name,
-        icon: createCategoryIcon.trim() || "⭐",
+        icon: createCategoryIcon ?? PACKING_DEFAULT_ICON,
         sort_order: sortOrder,
       })
       .select("id")
@@ -305,23 +307,18 @@ export function PackingList({
 
   return (
     <div className="mt-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 flex-1 text-start">
-          <h2 className="text-2xl font-bold text-[#4A4A4A]">Packing</h2>
-          <p className="mt-0.5 text-sm text-[#9B7B6B]">List progress</p>
-        </div>
-        <button
-          type="button"
-          className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
-          onClick={() => {
-            setAddCategoryId(categories[0]?.id ?? "");
-            setAddModalMode("add-item");
-            setAddModalOpen(true);
-          }}
-        >
-          + Add Item
-        </button>
+      <div>
+        <h2 className="text-2xl font-bold text-[#4A4A4A]">Packing</h2>
+        <p className="mt-0.5 text-sm text-[#9B7B6B]">List progress</p>
       </div>
+
+      <ManagePackingCategoriesDialog
+        open={manageCategoriesOpen}
+        onOpenChange={setManageCategoriesOpen}
+        tripId={tripId}
+        categories={categories}
+        onSuccess={onRefresh}
+      />
 
       <p className="mt-4 text-2xl font-semibold text-[#E07A5F]">{progressPercent}%</p>
       <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#F5F3F0]">
@@ -393,6 +390,27 @@ export function PackingList({
             {p.name}
           </button>
         ))}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+        <button
+          type="button"
+          className="text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
+          onClick={() => setManageCategoriesOpen(true)}
+        >
+          Manage Categories
+        </button>
+        <button
+          type="button"
+          className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
+          onClick={() => {
+            setAddCategoryId(categories[0]?.id ?? "");
+            setAddModalMode("add-item");
+            setAddModalOpen(true);
+          }}
+        >
+          + Add Item
+        </button>
       </div>
 
       <div className="mt-6 space-y-6">
