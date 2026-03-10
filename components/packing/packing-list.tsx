@@ -46,6 +46,8 @@ export interface PackingListProps {
   items: PackingItem[];
   participants: PackingParticipant[];
   loading: boolean;
+  /** When false (e.g. viewer), hide add/edit/delete/toggle and show read-only list. Default true. */
+  canEditContent?: boolean;
   onRefresh: () => Promise<void>;
 }
 
@@ -99,6 +101,7 @@ export function PackingList({
   items,
   participants,
   loading,
+  canEditContent = true,
   onRefresh,
 }: PackingListProps) {
   const [viewMode, setViewMode] = useState<"category" | "participant">("category");
@@ -309,7 +312,9 @@ export function PackingList({
     <div className="mt-8">
       <div>
         <h2 className="text-2xl font-bold text-[#4A4A4A]">Packing</h2>
-        <p className="mt-0.5 text-sm text-[#9B7B6B]">List progress</p>
+        <p className="mt-0.5 text-sm text-[#9B7B6B]">
+          {canEditContent ? "List progress" : "Read-only — you can view but not edit"}
+        </p>
       </div>
 
       <ManagePackingCategoriesDialog
@@ -392,6 +397,7 @@ export function PackingList({
         ))}
       </div>
 
+      {canEditContent && (
       <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
         <button
           type="button"
@@ -412,6 +418,7 @@ export function PackingList({
           + Add Item
         </button>
       </div>
+      )}
 
       <div className="mt-6 space-y-6">
         {viewMode === "category" &&
@@ -426,17 +433,28 @@ export function PackingList({
               <ul className="space-y-3">
                 {catItems.map((item) => (
                   <li key={item.id} className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                        item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                      }`}
-                      onClick={() => handleTogglePacked(item)}
-                      disabled={!!toggleErrorId}
-                    >
-                      {item.is_packed && <CheckIcon />}
-                    </button>
-                    {editingId === item.id ? (
+                    {canEditContent ? (
+                      <button
+                        type="button"
+                        className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
+                          item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
+                        }`}
+                        onClick={() => handleTogglePacked(item)}
+                        disabled={!!toggleErrorId}
+                      >
+                        {item.is_packed && <CheckIcon />}
+                      </button>
+                    ) : (
+                      <span
+                        className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 ${
+                          item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
+                        }`}
+                        aria-hidden
+                      >
+                        {item.is_packed && <CheckIcon />}
+                      </span>
+                    )}
+                    {editingId === item.id && canEditContent ? (
                       <div className="flex flex-1 flex-wrap items-center gap-2">
                         <input
                           type="text"
@@ -509,6 +527,7 @@ export function PackingList({
                             )}
                           </p>
                         </div>
+                        {canEditContent && (
                         <div className="flex shrink-0 gap-1">
                           <button
                             type="button"
@@ -548,6 +567,7 @@ export function PackingList({
                             </button>
                           )}
                         </div>
+                        )}
                       </>
                     )}
                   </li>
@@ -563,16 +583,27 @@ export function PackingList({
               <ul className="space-y-3">
                 {partItems.map((item) => (
                   <li key={item.id} className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                        item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                      }`}
-                      onClick={() => handleTogglePacked(item)}
-                      disabled={!!toggleErrorId}
-                    >
-                      {item.is_packed && <CheckIcon />}
-                    </button>
+                    {canEditContent ? (
+                      <button
+                        type="button"
+                        className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
+                          item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
+                        }`}
+                        onClick={() => handleTogglePacked(item)}
+                        disabled={!!toggleErrorId}
+                      >
+                        {item.is_packed && <CheckIcon />}
+                      </button>
+                    ) : (
+                      <span
+                        className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 ${
+                          item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
+                        }`}
+                        aria-hidden
+                      >
+                        {item.is_packed && <CheckIcon />}
+                      </span>
+                    )}
                     <div className="min-w-0 flex-1">
                       <p
                         className={item.is_packed ? "text-sm text-[#9B7B6B] line-through" : "text-sm text-[#6B7280]"}
@@ -590,6 +621,8 @@ export function PackingList({
                         )}
                       </p>
                     </div>
+                    {canEditContent && (
+                    <>
                     <button
                       type="button"
                       className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]"
@@ -616,6 +649,8 @@ export function PackingList({
                       >
                         <TrashIcon />
                       </button>
+                    )}
+                    </>
                     )}
                   </li>
                 ))}

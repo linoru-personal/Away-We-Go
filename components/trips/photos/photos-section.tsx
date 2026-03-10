@@ -18,6 +18,8 @@ export type PhotoWithUrl = {
 export interface PhotosSectionProps {
   tripId: string;
   photos: PhotoWithUrl[];
+  /** When false (e.g. viewer), hide upload form and delete on photos. Default true. */
+  canEditContent?: boolean;
   onUploadSuccess?: () => void;
 }
 
@@ -44,9 +46,11 @@ function TrashIcon() {
 
 function PhotoCard({
   photo,
+  canDelete,
   onDelete,
 }: {
   photo: PhotoWithUrl;
+  canDelete: boolean;
   onDelete: () => void;
 }) {
   const [deleting, setDeleting] = useState(false);
@@ -62,6 +66,7 @@ function PhotoCard({
       {photo.caption && (
         <p className="p-2 text-sm text-[#2d2d2d]">{photo.caption}</p>
       )}
+      {canDelete && (
       <button
         type="button"
         disabled={deleting}
@@ -75,11 +80,12 @@ function PhotoCard({
       >
         <TrashIcon />
       </button>
+      )}
     </div>
   );
 }
 
-export function PhotosSection({ tripId, photos, onUploadSuccess }: PhotosSectionProps) {
+export function PhotosSection({ tripId, photos, canEditContent = true, onUploadSuccess }: PhotosSectionProps) {
   const router = useRouter();
   const { user, loading: sessionLoading } = useSession();
 
@@ -99,10 +105,13 @@ export function PhotosSection({ tripId, photos, onUploadSuccess }: PhotosSection
         <h1 className="text-xl font-semibold text-[#2d2d2d]">Photos</h1>
         <span className="text-sm text-[#8a8a8a]">
           {photos.length} {photos.length === 1 ? "photo" : "photos"}
+          {!canEditContent && " (read-only)"}
         </span>
       </div>
 
+      {canEditContent && (
       <PhotoUploadForm tripId={tripId} userId={user.id} onUploadSuccess={onUploadSuccess} />
+      )}
 
       {photos.length > 0 ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
@@ -110,13 +119,14 @@ export function PhotosSection({ tripId, photos, onUploadSuccess }: PhotosSection
             <PhotoCard
               key={photo.id}
               photo={photo}
+              canDelete={canEditContent}
               onDelete={() => router.refresh()}
             />
           ))}
         </div>
       ) : (
         <p className="rounded-xl border border-[#ebe5df] bg-[#FAFAF8] py-8 text-center text-sm text-[#8a8a8a]">
-          No photos yet. Add one above.
+          {canEditContent ? "No photos yet. Add one above." : "No photos yet."}
         </p>
       )}
     </div>

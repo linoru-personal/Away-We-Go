@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
+import { useTripRole } from "@/app/lib/useTripRole";
 import TripHero from "@/components/trip/trip-hero";
 import { TasksSummaryCard } from "@/components/tasks/tasks-summary-card";
 import { TripNotesSummaryCard } from "@/components/notes/trip-notes-summary-card";
@@ -106,8 +107,8 @@ export default function TripPage() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const { user, loading: sessionLoading } = useSession();
-
   const [trip, setTrip] = useState<Trip | null>(null);
+  const { canManageSharing, canEditMetadata, canDeleteTrip, role: tripRole } = useTripRole(trip, user?.id ?? undefined);
   const [loading, setLoading] = useState(true);
   const [titleError, setTitleError] = useState<string | null>(null);
 
@@ -116,20 +117,20 @@ export default function TripPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
 
-  const [members, setMembers] = useState<{ user_id: string; email: string | null }[]>([]);
+  const [members, setMembers] = useState<{ user_id: string; email: string | null; role: string }[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [shareEmail, setShareEmail] = useState("");
+  const [shareRole, setShareRole] = useState<"admin" | "editor" | "viewer">("viewer");
   const [shareLoading, setShareLoading] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareSuccess, setShareSuccess] = useState(false);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
+  const [changingRoleUserId, setChangingRoleUserId] = useState<string | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
 
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [destinationImageUrl, setDestinationImageUrl] = useState<string | null>(null);
   const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
-
-  const isOwner = Boolean(trip && user && trip.user_id === user.id);
 
   useEffect(() => {
     if (!sessionLoading && !user) {
@@ -177,7 +178,7 @@ export default function TripPage() {
   }, [id, user]);
 
   useEffect(() => {
-    if (shareModalOpen && trip?.id && isOwner) {
+    if (shareModalOpen && trip?.id && canManageSharing) {
       let cancelled = false;
       setMembersLoading(true);
       supabase
@@ -188,7 +189,7 @@ export default function TripPage() {
             console.error(error);
             setMembers([]);
           } else {
-            setMembers((data ?? []) as { user_id: string; email: string | null }[]);
+            setMembers((data ?? []) as { user_id: string; email: string | null; role: string }[]);
           }
           setMembersLoading(false);
         });
@@ -197,15 +198,16 @@ export default function TripPage() {
       };
     }
     if (!shareModalOpen) setMembers([]);
-  }, [shareModalOpen, trip?.id, isOwner]);
+  }, [shareModalOpen, trip?.id, canManageSharing]);
 
   const handleShare = async () => {
     if (!id || !trip || !shareEmail.trim()) return;
     setShareError(null);
     setShareLoading(true);
-    const { data, error } = await supabase.rpc('share_trip', {
+    const { data, error } = await supabase.rpc("share_trip", {
       p_trip_id: trip.id,
-      p_email: shareEmail
+      p_email: shareEmail,
+      p_role: shareRole,
     });
     setShareLoading(false);
     const result = data as { ok?: boolean; message?: string } | null;
@@ -216,12 +218,10 @@ export default function TripPage() {
     if (result?.ok) {
       setShareEmail("");
       setShareSuccess(true);
-      if (trip) {
-        const { data: memberData } = await supabase.rpc("get_trip_members", {
-          p_trip_id: trip.id,
-        });
-        setMembers((memberData ?? []) as { user_id: string; email: string | null }[]);
-      }
+      const { data: memberData } = await supabase.rpc("get_trip_members", {
+        p_trip_id: trip.id,
+      });
+      setMembers((memberData ?? []) as { user_id: string; email: string | null; role: string }[]);
       setTimeout(() => setShareSuccess(false), 3000);
     } else {
       setShareError(result?.message ?? "Could not share.");
@@ -236,12 +236,35 @@ export default function TripPage() {
       p_user_id: memberUserId,
     });
     setRemovingUserId(null);
-    const result = data as { ok?: boolean } | null;
-    if (error || !result?.ok) {
-      console.error(error ?? "Unshare failed");
+    const result = data as { ok?: boolean; message?: string } | null;
+    if (error) {
+      setShareError(error.message);
+      return;
+    }
+    if (!result?.ok) {
+      setShareError(result?.message ?? "Could not remove.");
       return;
     }
     setMembers((prev) => prev.filter((m) => m.user_id !== memberUserId));
+  };
+
+  const handleChangeRole = async (memberUserId: string, newRole: "admin" | "editor" | "viewer") => {
+    if (!trip?.id) return;
+    setChangingRoleUserId(memberUserId);
+    const { error } = await supabase
+      .from("trip_members")
+      .update({ role: newRole })
+      .eq("trip_id", trip.id)
+      .eq("user_id", memberUserId);
+    setChangingRoleUserId(null);
+    if (error) {
+      setShareError(error.message);
+      return;
+    }
+    setShareError(null);
+    setMembers((prev) =>
+      prev.map((m) => (m.user_id === memberUserId ? { ...m, role: newRole } : m))
+    );
   };
 
   useEffect(() => {
@@ -427,7 +450,7 @@ export default function TripPage() {
                 participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
                 topRight={
                   <div className="relative flex items-center gap-2" ref={menuRef}>
-                    {isOwner && (
+                    {canManageSharing && (
                       <button
                         type="button"
                         title="Share"
@@ -453,7 +476,7 @@ export default function TripPage() {
                     </button>
                     {menuOpen && (
                       <div className="absolute right-0 top-full z-10 mt-1 min-w-[140px] rounded-lg border border-[#D4C5BA] bg-white py-1 shadow-lg">
-                        {isOwner && (
+                        {canEditMetadata && (
                           <button
                             type="button"
                             className="w-full px-4 py-2 text-left text-sm text-[#4A4A4A] hover:bg-[#F5F3F0]"
@@ -465,16 +488,21 @@ export default function TripPage() {
                             Edit trip
                           </button>
                         )}
-                        <button
-                          type="button"
-                          className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                          onClick={() => {
-                            setMenuOpen(false);
-                            setShowDeleteConfirm(true);
-                          }}
-                        >
-                          Delete trip
-                        </button>
+                        {canDeleteTrip && (
+                          <button
+                            type="button"
+                            className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                            onClick={() => {
+                              setMenuOpen(false);
+                              setShowDeleteConfirm(true);
+                            }}
+                          >
+                            Delete trip
+                          </button>
+                        )}
+                        {menuOpen && !canEditMetadata && !canDeleteTrip && (
+                          <p className="px-4 py-2 text-xs text-[#8a8a8a]">No actions available</p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -600,8 +628,8 @@ export default function TripPage() {
 
       <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
         <DialogContent>
-          <div className="max-w-[420px] w-full">
-            <DialogHeader>
+          <div className="flex max-h-[85vh] max-w-[420px] w-full flex-col">
+            <DialogHeader className="shrink-0">
               <DialogTitle className="text-xl font-semibold text-[#1f1f1f]">
                 Share this trip
               </DialogTitle>
@@ -609,6 +637,7 @@ export default function TripPage() {
                 Invite someone by email to collaborate on this trip.
               </p>
             </DialogHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="space-y-4">
               <div>
                 <label
@@ -638,6 +667,16 @@ export default function TripPage() {
                   className="mt-1.5 w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0 disabled:opacity-60 aria-[invalid=true]:focus:ring-red-400/40 aria-[invalid=true]:focus:border-red-400"
                 />
                 <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <select
+                    aria-label="Role for new member"
+                    value={shareRole}
+                    onChange={(e) => setShareRole(e.target.value as "admin" | "editor" | "viewer")}
+                    className="rounded-[20px] border border-[#e0d9d2] bg-[#f6f2ed] px-3 py-2 text-sm text-[#1f1f1f] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30"
+                  >
+                    <option value="viewer">Viewer</option>
+                    <option value="editor">Editor</option>
+                    <option value="admin">Admin</option>
+                  </select>
                   <button
                     type="button"
                     className="flex h-[48px] min-w-[100px] items-center justify-center rounded-full bg-[#d97b5e] px-5 text-sm font-medium text-white shadow-[0_2px_8px_rgba(217,123,94,0.25)] transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 focus:ring-offset-white active:bg-[#b85a42] disabled:opacity-60 disabled:hover:bg-[#d97b5e]"
@@ -665,7 +704,7 @@ export default function TripPage() {
                   </p>
                 )}
                 <p id="share-helper" className="mt-1.5 text-xs text-[#8a8a8a]">
-                  They&apos;ll be able to view and edit this trip.
+                  Viewer: read-only. Editor: can edit content. Admin: can edit and manage sharing.
                 </p>
               </div>
               <div>
@@ -681,35 +720,63 @@ export default function TripPage() {
                       />
                     ))}
                   </div>
-                ) : members.length === 0 ? (
-                  <p className="mt-2 text-sm text-[#8a8a8a]">
-                    No members yet.
-                  </p>
                 ) : (
                   <ul className="mt-2 space-y-2" role="list">
-                    {members.map((m) => (
-                      <li
-                        key={m.user_id}
-                        className="flex items-center justify-between gap-2 rounded-[20px] bg-[#f6f2ed] px-3 py-2.5 text-sm shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
-                      >
-                        <span className="truncate text-[#1f1f1f]">
-                          {m.email ?? m.user_id}
+                    {trip && (
+                      <li className="flex items-center justify-between gap-2 rounded-[20px] bg-[#ebe5df] px-3 py-2.5 text-sm">
+                        <span className="truncate font-medium text-[#1f1f1f]">
+                          {trip.user_id === user?.id ? "You (owner)" : "Trip owner"}
                         </span>
-                        <button
-                          type="button"
-                          className="shrink-0 rounded-full px-3 py-1.5 text-xs font-medium text-[#d97b5e] transition hover:bg-[#d97b5e]/10 focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 disabled:opacity-50"
-                          onClick={() => handleUnshare(m.user_id)}
-                          disabled={removingUserId === m.user_id}
-                        >
-                          {removingUserId === m.user_id ? "Removing…" : "Remove"}
-                        </button>
+                        <span className="shrink-0 rounded-full bg-[#d97b5e]/20 px-2 py-0.5 text-xs font-medium text-[#b85a42]">
+                          Owner
+                        </span>
                       </li>
-                    ))}
+                    )}
+                    {members.length === 0 ? (
+                      <li className="py-2 text-sm text-[#8a8a8a]">
+                        No other members yet.
+                      </li>
+                    ) : (
+                      members.map((m) => (
+                        <li
+                          key={m.user_id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-[20px] bg-[#f6f2ed] px-3 py-2.5 text-sm shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
+                        >
+                          <span className="truncate text-[#1f1f1f]">
+                            {m.email ?? m.user_id}
+                          </span>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <select
+                              aria-label={`Change role for ${m.email ?? m.user_id}`}
+                              value={m.role}
+                              onChange={(e) =>
+                                handleChangeRole(m.user_id, e.target.value as "admin" | "editor" | "viewer")
+                              }
+                              disabled={changingRoleUserId === m.user_id}
+                              className="rounded-full border border-[#e0d9d2] bg-white px-2 py-1 text-xs text-[#1f1f1f] disabled:opacity-50"
+                            >
+                              <option value="viewer">Viewer</option>
+                              <option value="editor">Editor</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                            <button
+                              type="button"
+                              className="rounded-full px-3 py-1.5 text-xs font-medium text-[#d97b5e] transition hover:bg-[#d97b5e]/10 focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 disabled:opacity-50"
+                              onClick={() => handleUnshare(m.user_id)}
+                              disabled={removingUserId === m.user_id}
+                            >
+                              {removingUserId === m.user_id ? "Removing…" : "Remove"}
+                            </button>
+                          </div>
+                        </li>
+                      ))
+                    )}
                   </ul>
                 )}
               </div>
             </div>
-            <div className="mt-6 flex justify-end">
+            </div>
+            <div className="mt-4 shrink-0 flex justify-end border-t border-[#e0d9d2] pt-4">
               <button
                 type="button"
                 className="rounded-full border border-[#e0d9d2] bg-transparent px-4 py-2 text-sm font-medium text-[#1f1f1f] transition hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-2"

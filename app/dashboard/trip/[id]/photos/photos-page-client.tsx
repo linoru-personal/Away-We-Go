@@ -12,6 +12,8 @@ export interface PhotosPageClientProps {
   dates: string;
   coverImageUrl: string | null;
   photos: PhotoWithUrl[];
+  /** When false (e.g. viewer), hide upload and delete. Default true. */
+  canEditContent?: boolean;
   onUploadSuccess?: () => void;
 }
 
@@ -21,6 +23,7 @@ export function PhotosPageClient({
   dates,
   coverImageUrl,
   photos,
+  canEditContent = true,
   onUploadSuccess,
 }: PhotosPageClientProps) {
   const router = useRouter();
@@ -54,7 +57,7 @@ export function PhotosPageClient({
           onBack={() => router.push(`/dashboard/trip/${tripId}`)}
         />
         <div className="mt-8">
-          <PhotosSection tripId={tripId} photos={photos} onUploadSuccess={onUploadSuccess} />
+          <PhotosSection tripId={tripId} photos={photos} canEditContent={canEditContent} onUploadSuccess={onUploadSuccess} />
         </div>
       </div>
     </main>

@@ -20,6 +20,8 @@ export type Task = {
 
 export interface TasksSectionProps {
   tripId: string;
+  /** When false (e.g. viewer), hide add/edit/delete/toggle. Default true. */
+  canEditContent?: boolean;
 }
 
 const STATUS_FILTER_ALL = "all" as const;
@@ -110,7 +112,7 @@ const EVERYONE_LABEL = "Everyone";
 
 type TripParticipant = { id: string; name: string };
 
-export function TasksSection({ tripId }: TasksSectionProps) {
+export function TasksSection({ tripId, canEditContent = true }: TasksSectionProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [participants, setParticipants] = useState<TripParticipant[]>([]);
   const [loading, setLoading] = useState(true);
@@ -440,18 +442,31 @@ export function TasksSection({ tripId }: TasksSectionProps) {
     return (
       <div className={`${TASK_CARD_CLASS} text-right`} dir="rtl">
         <div className="flex items-start gap-3">
-          <button
-            type="button"
-            className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition [&_svg]:size-2.5"
-            style={{
-              borderColor: task.status === "done" ? "#E07A5F" : "#D4C5BA",
-              backgroundColor: task.status === "done" ? "#E07A5F" : "transparent",
-            }}
-            onClick={() => handleToggleDone(task.id)}
-            aria-label={task.status === "done" ? "Mark not done" : "Mark done"}
-          >
-            {task.status === "done" && <CheckIcon />}
-          </button>
+          {canEditContent ? (
+            <button
+              type="button"
+              className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition [&_svg]:size-2.5"
+              style={{
+                borderColor: task.status === "done" ? "#E07A5F" : "#D4C5BA",
+                backgroundColor: task.status === "done" ? "#E07A5F" : "transparent",
+              }}
+              onClick={() => handleToggleDone(task.id)}
+              aria-label={task.status === "done" ? "Mark not done" : "Mark done"}
+            >
+              {task.status === "done" && <CheckIcon />}
+            </button>
+          ) : (
+            <span
+              className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 [&_svg]:size-2.5"
+              style={{
+                borderColor: task.status === "done" ? "#E07A5F" : "#D4C5BA",
+                backgroundColor: task.status === "done" ? "#E07A5F" : "transparent",
+              }}
+              aria-hidden
+            >
+              {task.status === "done" && <CheckIcon />}
+            </span>
+          )}
 
           <div className="min-w-0 flex-1">
             <p
@@ -501,6 +516,7 @@ export function TasksSection({ tripId }: TasksSectionProps) {
             )}
           </div>
 
+          {canEditContent && (
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
@@ -519,6 +535,7 @@ export function TasksSection({ tripId }: TasksSectionProps) {
               <TrashIcon />
             </button>
           </div>
+          )}
         </div>
 
         {toggleErrorTaskId === task.id && (
@@ -567,6 +584,7 @@ export function TasksSection({ tripId }: TasksSectionProps) {
                 {openCount}
               </span>
             )}
+            {canEditContent && (
             <button
               type="button"
               className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
@@ -574,6 +592,7 @@ export function TasksSection({ tripId }: TasksSectionProps) {
             >
               Add Task
             </button>
+            )}
           </div>
         </div>
 

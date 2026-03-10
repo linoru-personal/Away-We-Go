@@ -27,6 +27,8 @@ export type TripNote = {
 
 export interface TripNotesSectionProps {
   tripId: string;
+  /** When false (e.g. viewer), hide add note and edit/delete on cards. Default true. */
+  canEditContent?: boolean;
 }
 
 const CARD_CLASS =
@@ -427,7 +429,7 @@ function fetchNotes(tripId: string) {
     .order("created_at", { ascending: false });
 }
 
-export function TripNotesSection({ tripId }: TripNotesSectionProps) {
+export function TripNotesSection({ tripId, canEditContent = true }: TripNotesSectionProps) {
   const [notes, setNotes] = useState<TripNote[]>([]);
   const [loading, setLoading] = useState(true);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -488,9 +490,10 @@ export function TripNotesSection({ tripId }: TripNotesSectionProps) {
         <div className="min-w-0 flex-1 text-start">
           <h2 className="text-2xl font-bold text-[#4A4A4A]">Trip Notes</h2>
           <p className="mt-0.5 text-sm text-[#9B7B6B]">
-            Your travel knowledge base
+            {canEditContent ? "Your travel knowledge base" : "Read-only — you can view but not edit"}
           </p>
         </div>
+        {canEditContent && (
         <button
           type="button"
           className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
@@ -502,6 +505,7 @@ export function TripNotesSection({ tripId }: TripNotesSectionProps) {
         >
           + Add Note
         </button>
+        )}
       </div>
 
       <AddTripNoteDialog
@@ -528,8 +532,8 @@ export function TripNotesSection({ tripId }: TripNotesSectionProps) {
               <li key={note.id}>
                 <NoteCard
                   note={note}
-                  onEditRequest={handleEditRequest}
-                  onDeleteRequest={handleDeleteRequest}
+                  onEditRequest={canEditContent ? handleEditRequest : undefined}
+                  onDeleteRequest={canEditContent ? handleDeleteRequest : undefined}
                   isDeleting={deletingId === note.id}
                 />
               </li>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
+import { useTripRole } from "@/app/lib/useTripRole";
 import TripHero from "@/components/trip/trip-hero";
 import { AddPlaceDialog, type PlaceCategory } from "@/components/places/add-place-dialog";
 import { PlaceCard, type TripPlace } from "@/components/places/place-card";
@@ -34,6 +35,7 @@ export default function TripPlacesPage() {
 
   const { user, loading: sessionLoading } = useSession();
   const [trip, setTrip] = useState<Trip | null>(null);
+  const { canEditContent } = useTripRole(trip, user?.id ?? undefined);
   const [tripLoading, setTripLoading] = useState(true);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
@@ -219,6 +221,7 @@ export default function TripPlacesPage() {
             />
             <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
               <h1 className={SECTION_TITLE_CLASS}>Places</h1>
+              {canEditContent && (
               <button
                 type="button"
                 className="rounded-full bg-[#d97b5e] px-4 py-2.5 text-sm font-medium text-white shadow-[0_2px_8px_rgba(217,123,94,0.25)] transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2"
@@ -229,6 +232,7 @@ export default function TripPlacesPage() {
               >
                 Add place
               </button>
+              )}
             </div>
             {placesLoading ? (
               <p className="mt-4 text-sm text-[#8a8a8a]">Loading places…</p>
@@ -237,6 +241,7 @@ export default function TripPlacesPage() {
                 <p className="text-sm text-[#8a8a8a]">
                   No places yet. Add your first place from Google Maps.
                 </p>
+                {canEditContent && (
                 <button
                   type="button"
                   className="mt-4 text-sm font-medium text-[#E07A5F] transition hover:underline"
@@ -247,6 +252,7 @@ export default function TripPlacesPage() {
                 >
                   Add place
                 </button>
+                )}
               </div>
             ) : (
               <ul className="mt-6 space-y-4" role="list">
@@ -262,6 +268,7 @@ export default function TripPlacesPage() {
                       <PlaceCard
                         place={place}
                         category={categoryDisplay}
+                        canEditContent={canEditContent}
                         onEdit={(p) => {
                           setEditingPlace(p);
                           setPlaceDialogOpen(true);

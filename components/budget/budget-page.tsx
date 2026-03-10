@@ -44,6 +44,8 @@ function mergeDisplayCurrencies(tripCurrencies: string[]): string[] {
 
 export interface BudgetPageProps {
   tripId: string;
+  /** When false (e.g. viewer), hide add/edit/delete and manage categories. Default true. */
+  canEditContent?: boolean;
 }
 
 function getStoredDisplayCurrency(tripId: string, displayCurrencies: string[]): string {
@@ -114,7 +116,7 @@ function TrashIcon() {
   );
 }
 
-export function BudgetPage({ tripId }: BudgetPageProps) {
+export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
   const [data, setData] = useState<BudgetData | null>(null);
   const [tripCurrencies, setTripCurrencies] = useState<string[]>([]);
   const [ratesToUSDMap, setRatesToUSDMap] = useState<Record<string, number>>(RATES_TO_USD);
@@ -240,15 +242,18 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
                   {c}
                 </option>
               ))}
+              {canEditContent && (
               <option value="__add_currency__" className="text-[#1f1f1f]">
                 Add currency…
               </option>
+              )}
             </select>
           </div>
         </div>
       </div>
 
       <div className="flex justify-end">
+        {canEditContent && (
         <button
           type="button"
           className="rounded-full bg-[#E07A5F] px-4 py-2.5 text-sm font-medium text-white shadow-[0_2px_8px_rgba(224,122,95,0.25)] transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
@@ -256,9 +261,11 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
         >
           Add Item
         </button>
+        )}
       </div>
 
       {/* Manage Categories */}
+      {canEditContent && (
       <div>
         <button
           type="button"
@@ -268,6 +275,7 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
           Manage Categories
         </button>
       </div>
+      )}
 
       {/* Category list with items */}
       <div className="space-y-8">
@@ -322,6 +330,7 @@ export function BudgetPage({ tripId }: BudgetPageProps) {
                       item={item}
                       displayCurrency={displayCurrency}
                       ratesToUSDMap={ratesToUSDMap}
+                      canEdit={canEditContent}
                       onEdit={() => {
                         setEditingItem(item);
                         setAddItemOpen(true);
@@ -376,11 +385,13 @@ function BudgetItemRow({
   item,
   displayCurrency,
   ratesToUSDMap,
+  canEdit,
   onEdit,
 }: {
   item: BudgetItemRow;
   displayCurrency: string;
   ratesToUSDMap: Record<string, number>;
+  canEdit: boolean;
   onEdit: () => void;
 }) {
   const itemCurrency = item.currency.toUpperCase();
@@ -416,6 +427,8 @@ function BudgetItemRow({
           )}
         </div>
         <div className="flex items-center gap-1">
+          {canEdit && (
+          <>
           <button
             type="button"
             className="rounded p-1.5 text-[#6B7280] transition hover:bg-[#F5F3F0] hover:text-[#4A4A4A] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
@@ -431,6 +444,8 @@ function BudgetItemRow({
           >
             <TrashIcon />
           </button>
+          </>
+          )}
         </div>
       </div>
     </li>

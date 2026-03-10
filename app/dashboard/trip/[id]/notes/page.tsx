@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
+import { useTripRole } from "@/app/lib/useTripRole";
 import TripHero from "@/components/trip/trip-hero";
 import { TripNotesSection } from "@/components/notes/trip-notes-section";
 
@@ -32,6 +33,7 @@ export default function TripNotesPage() {
 
   const { user, loading: sessionLoading } = useSession();
   const [trip, setTrip] = useState<Trip | null>(null);
+  const { canEditContent } = useTripRole(trip, user?.id ?? undefined);
   const [tripLoading, setTripLoading] = useState(true);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
@@ -152,7 +154,7 @@ export default function TripNotesPage() {
               onBack={() => router.push(`/dashboard/trip/${id}`)}
               participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
             />
-            <TripNotesSection tripId={id} />
+            <TripNotesSection tripId={id} canEditContent={canEditContent} />
           </>
         ) : (
           <div className="space-y-2">

@@ -4,12 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
+import { useTripRole } from "@/app/lib/useTripRole";
 import { getTripPhotos } from "@/lib/trip-photos/queries";
 import type { PhotoWithUrl } from "@/components/trips/photos/photos-section";
 import { PhotosPageClient } from "./photos-page-client";
 
 type Trip = {
   id: string;
+  user_id?: string;
   title: string;
   start_date: string | null;
   end_date: string | null;
@@ -33,6 +35,7 @@ export default function TripPhotosPage() {
 
   const { user, loading: sessionLoading } = useSession();
   const [trip, setTrip] = useState<Trip | null>(null);
+  const { canEditContent } = useTripRole(trip, user?.id ?? undefined);
   const [tripLoading, setTripLoading] = useState(true);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [photosWithUrls, setPhotosWithUrls] = useState<PhotoWithUrl[]>([]);
@@ -53,7 +56,7 @@ export default function TripPhotosPage() {
     let cancelled = false;
     supabase
       .from("trips")
-      .select("id, title, start_date, end_date, cover_image_url, cover_image_path")
+      .select("id, user_id, title, start_date, end_date, cover_image_url, cover_image_path")
       .eq("id", id)
       .single()
       .then(({ data, error }) => {
@@ -209,6 +212,7 @@ export default function TripPhotosPage() {
       dates={dates}
       coverImageUrl={coverImageUrl ?? trip.cover_image_url ?? null}
       photos={photosLoading ? [] : photosWithUrls}
+      canEditContent={canEditContent}
       onUploadSuccess={refetchPhotos}
     />
   );

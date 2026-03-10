@@ -28,6 +28,8 @@ export type PlaceCategoryDisplay = {
 export interface PlaceCardProps {
   place: TripPlace;
   category: PlaceCategoryDisplay;
+  /** When false (e.g. viewer), hide edit and delete buttons. Default true. */
+  canEditContent?: boolean;
   onEdit: (place: TripPlace) => void;
   onDelete: (id: string) => void;
   deletingId: string | null;
@@ -91,7 +93,7 @@ function TrashIcon() {
   );
 }
 
-export function PlaceCard({ place, category, onEdit, onDelete, deletingId }: PlaceCardProps) {
+export function PlaceCard({ place, category, canEditContent = true, onEdit, onDelete, deletingId }: PlaceCardProps) {
   const isDeleting = deletingId === place.id;
 
   return (
@@ -124,6 +126,8 @@ export function PlaceCard({ place, category, onEdit, onDelete, deletingId }: Pla
             <ExternalLinkIcon />
             Open in Google Maps
           </a>
+          {canEditContent && (
+          <>
           <button
             type="button"
             className="rounded p-1.5 text-[#8a8a8a] transition hover:bg-[#F5F3F0] hover:text-[#2d2d2d] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 disabled:opacity-50"
@@ -142,6 +146,8 @@ export function PlaceCard({ place, category, onEdit, onDelete, deletingId }: Pla
           >
             <TrashIcon />
           </button>
+          </>
+          )}
         </div>
       </div>
       {isDeleting && (

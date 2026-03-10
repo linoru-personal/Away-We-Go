@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
+import { useTripRole } from "@/app/lib/useTripRole";
 import TripHero from "@/components/trip/trip-hero";
 import { PackingList } from "@/components/packing/packing-list";
 
@@ -55,6 +56,7 @@ export default function PackingPage() {
 
   const { user, loading: sessionLoading } = useSession();
   const [trip, setTrip] = useState<Trip | null>(null);
+  const { canEditContent } = useTripRole(trip, user?.id ?? undefined);
   const [tripLoading, setTripLoading] = useState(true);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
@@ -228,6 +230,7 @@ export default function PackingPage() {
               items={items}
               participants={participants}
               loading={listLoading}
+              canEditContent={canEditContent}
               onRefresh={async () => {
                 const [catRes, itemsRes] = await Promise.all([
                   supabase
