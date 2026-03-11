@@ -72,7 +72,6 @@ export function BudgetSummaryCard({ tripId }: BudgetSummaryCardProps) {
       <div className={DASHBOARD_CARD_CONTENT_CLASS}>
         <h2 className={SECTION_TITLE_CLASS}>Budget</h2>
 
-        <p className={`${META_CLASS} text-[#6B7280]`}>Total Spent</p>
         <p className={`mt-0.5 ${NUMERIC_EMPHASIS_CLASS}`}>
           {loading ? "…" : formatUsd(totalBase ?? 0)}
         </p>

@@ -11,7 +11,6 @@ import {
   DASHBOARD_CARD_CONTENT_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
-  NUMERIC_EMPHASIS_CLASS,
   PROGRESS_TRACK_CLASS,
   PROGRESS_FILL_CLASS,
   EMPTY_STATE_CLASS,
@@ -73,7 +72,6 @@ export function TasksSummaryCard({ tripId }: TasksSummaryCardProps) {
 
   const total = tasks.length;
   const completed = tasks.filter((t) => t.status === "done").length;
-  const openCount = total - completed;
   const progressValue = total > 0 ? Math.round((completed / total) * 100) : 0;
   const displayTasks = tasks.slice(0, 4);
 
@@ -90,9 +88,6 @@ export function TasksSummaryCard({ tripId }: TasksSummaryCardProps) {
               {loading ? "…" : `${completed} of ${total} completed`}
             </p>
           </div>
-          {!loading && (
-            <span className={NUMERIC_EMPHASIS_CLASS}>{openCount}</span>
-          )}
         </div>
 
         {loading ? (

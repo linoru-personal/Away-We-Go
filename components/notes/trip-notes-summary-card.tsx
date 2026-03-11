@@ -11,7 +11,6 @@ import {
   DASHBOARD_CARD_CONTENT_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
-  NUMERIC_EMPHASIS_CLASS,
   EMPTY_STATE_CLASS,
   EMPTY_STATE_TEXT_CLASS,
   CARD_CONTENT_MT,
@@ -288,9 +287,6 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
           <h2 className={SECTION_TITLE_CLASS}>Trip Notes</h2>
           <p className={META_CLASS}>Your travel knowledge base</p>
         </div>
-        {!loading && (
-          <span className={NUMERIC_EMPHASIS_CLASS}>{total}</span>
-        )}
       </div>
 
       {loading ? (

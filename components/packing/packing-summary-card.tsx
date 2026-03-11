@@ -11,7 +11,6 @@ import {
   DASHBOARD_CARD_CONTENT_CLASS,
   SECTION_TITLE_CLASS,
   META_CLASS,
-  NUMERIC_EMPHASIS_CLASS,
   PROGRESS_TRACK_CLASS,
   PROGRESS_FILL_CLASS,
   EMPTY_STATE_CLASS,
@@ -118,14 +117,11 @@ export function PackingSummaryCard({ tripId, tripCoverImageUrl }: PackingSummary
         <div className="flex w-full flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <h2 className={SECTION_TITLE_CLASS}>Packing</h2>
-          <p className={META_CLASS}>
-            {loading ? "…" : `${packed} of ${total} packed`}
-          </p>
+            <p className={META_CLASS}>
+              {loading ? "…" : `${packed} of ${total} packed`}
+            </p>
+          </div>
         </div>
-        {!loading && (
-          <span className={NUMERIC_EMPHASIS_CLASS}>{total - packed}</span>
-        )}
-      </div>
 
       {loading ? (
         <p className={`${CARD_CONTENT_MT} text-sm text-[#8a8a8a]`}>Loading…</p>
