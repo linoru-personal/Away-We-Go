@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   Dialog,
@@ -193,11 +193,25 @@ export function PackingList({
     return result;
   }, [filteredItems, participants]);
 
-  /** When true, majority of (filtered) items are RTL; align all rows accordingly. */
+  /** Sticky direction when RTL/LTR count is equal; avoid flipping on tie. */
+  const [lastDirection, setLastDirection] = useState<"rtl" | "ltr">("ltr");
+  /** When true, (filtered) items are shown RTL; majority wins, on tie keep current. */
   const listRtl = useMemo(() => {
     if (filteredItems.length === 0) return false;
     const rtlCount = filteredItems.filter((item) => isRtlText(item.title)).length;
-    return rtlCount > filteredItems.length / 2;
+    const total = filteredItems.length;
+    const half = total / 2;
+    if (rtlCount > half) return true;
+    if (rtlCount < half) return false;
+    return lastDirection === "rtl";
+  }, [filteredItems, lastDirection]);
+  useEffect(() => {
+    if (filteredItems.length === 0) return;
+    const rtlCount = filteredItems.filter((item) => isRtlText(item.title)).length;
+    const total = filteredItems.length;
+    const half = total / 2;
+    if (rtlCount > half) setLastDirection("rtl");
+    else if (rtlCount < half) setLastDirection("ltr");
   }, [filteredItems]);
 
   async function handleTogglePacked(item: PackingItem) {
@@ -560,7 +574,7 @@ export function PackingList({
                         <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
                           <p
                             className={item.is_packed ? "text-sm text-[#9B7B6B] line-through" : "text-sm text-[#6B7280]"}
-                            dir="auto"
+                            dir={listRtl ? "rtl" : "ltr"}
                             style={{ unicodeBidi: "plaintext" }}
                           >
                             {item.title}
@@ -683,7 +697,7 @@ export function PackingList({
                     <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
                       <p
                         className={item.is_packed ? "text-sm text-[#9B7B6B] line-through" : "text-sm text-[#6B7280]"}
-                        dir="auto"
+                        dir={listRtl ? "rtl" : "ltr"}
                         style={{ unicodeBidi: "plaintext" }}
                       >
                         {item.title}

@@ -110,6 +110,18 @@ const TASK_CARD_CLASS = "bg-white rounded-[24px] p-5 shadow-[0_2px_16px_rgba(0,0
 
 const EVERYONE_LABEL = "Everyone";
 
+/** True if the string starts with a strong RTL character (e.g. Hebrew, Arabic). */
+function isRtlText(s: string): boolean {
+  if (!s || !s.trim()) return false;
+  const code = (s.trim()[0] ?? "").codePointAt(0) ?? 0;
+  return (
+    (code >= 0x0590 && code <= 0x05ff) ||
+    (code >= 0x0600 && code <= 0x06ff) ||
+    (code >= 0xfb1d && code <= 0xfdfd) ||
+    (code >= 0xfe70 && code <= 0xfeff)
+  );
+}
+
 type TripParticipant = { id: string; name: string };
 
 export function TasksSection({ tripId, canEditContent = true }: TasksSectionProps) {
@@ -212,6 +224,27 @@ export function TasksSection({ tripId, canEditContent = true }: TasksSectionProp
     }
     return list;
   }, [tasks, statusFilter, assigneeFilter, searchQuery]);
+
+  /** Sticky direction when RTL/LTR count is equal; avoid flipping on tie. */
+  const [lastDirection, setLastDirection] = useState<"rtl" | "ltr">("ltr");
+  /** When true, (filtered) tasks are shown RTL; majority wins, on tie keep current. */
+  const listRtl = useMemo(() => {
+    if (filteredTasks.length === 0) return false;
+    const rtlCount = filteredTasks.filter((t) => isRtlText(t.title)).length;
+    const total = filteredTasks.length;
+    const half = total / 2;
+    if (rtlCount > half) return true;
+    if (rtlCount < half) return false;
+    return lastDirection === "rtl";
+  }, [filteredTasks, lastDirection]);
+  useEffect(() => {
+    if (filteredTasks.length === 0) return;
+    const rtlCount = filteredTasks.filter((t) => isRtlText(t.title)).length;
+    const total = filteredTasks.length;
+    const half = total / 2;
+    if (rtlCount > half) setLastDirection("rtl");
+    else if (rtlCount < half) setLastDirection("ltr");
+  }, [filteredTasks]);
 
   const todoTasks = useMemo(() => {
     const todo = filteredTasks.filter((t) => t.status === "todo");
@@ -386,7 +419,7 @@ export function TasksSection({ tripId, canEditContent = true }: TasksSectionProp
 
     if (isEditing) {
       return (
-        <div className={`${TASK_CARD_CLASS} text-right`} dir="rtl">
+        <div className={`${TASK_CARD_CLASS} ${listRtl ? "text-right" : ""}`} dir={listRtl ? "rtl" : undefined}>
           <div className="space-y-3">
             <input
               type="text"
@@ -440,12 +473,12 @@ export function TasksSection({ tripId, canEditContent = true }: TasksSectionProp
     }
 
     return (
-      <div className={`${TASK_CARD_CLASS} text-right`} dir="rtl">
+      <div className={`${TASK_CARD_CLASS} ${listRtl ? "text-right" : ""}`} dir={listRtl ? "rtl" : undefined}>
         <div className="flex items-start gap-3">
           {canEditContent ? (
             <button
               type="button"
-              className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition [&_svg]:size-2.5"
+              className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition [&_svg]:size-2.5"
               style={{
                 borderColor: task.status === "done" ? "#E07A5F" : "#D4C5BA",
                 backgroundColor: task.status === "done" ? "#E07A5F" : "transparent",
@@ -457,7 +490,7 @@ export function TasksSection({ tripId, canEditContent = true }: TasksSectionProp
             </button>
           ) : (
             <span
-              className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2 [&_svg]:size-2.5"
+              className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 [&_svg]:size-2.5"
               style={{
                 borderColor: task.status === "done" ? "#E07A5F" : "#D4C5BA",
                 backgroundColor: task.status === "done" ? "#E07A5F" : "transparent",
@@ -475,7 +508,7 @@ export function TasksSection({ tripId, canEditContent = true }: TasksSectionProp
                   ? "text-sm font-medium text-[#9B7B6B] line-through"
                   : "text-sm font-medium text-[#4A4A4A]"
               }
-              dir="auto"
+              dir={listRtl ? "rtl" : "ltr"}
             >
               {task.title}
             </p>
@@ -488,7 +521,7 @@ export function TasksSection({ tripId, canEditContent = true }: TasksSectionProp
               <div className="mt-2">
                 {descriptionExpanded ? (
                   <>
-                    <p className="whitespace-pre-line text-sm text-[#6B7280]" dir="auto">
+                    <p className="whitespace-pre-line text-sm text-[#6B7280]" dir={listRtl ? "rtl" : "ltr"}>
                       {task.description}
                     </p>
                     <button

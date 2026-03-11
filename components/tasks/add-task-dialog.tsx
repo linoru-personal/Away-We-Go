@@ -72,7 +72,8 @@ export function AddTaskDialog({
         <DialogHeader>
           <DialogTitle className="text-[#4A4A4A]">Add Task</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-[#4A4A4A]">
               Title (required)
@@ -136,6 +137,7 @@ export function AddTaskDialog({
             >
               {adding ? "Adding…" : "Add Task"}
             </button>
+          </div>
           </div>
         </div>
       </DialogContent>
