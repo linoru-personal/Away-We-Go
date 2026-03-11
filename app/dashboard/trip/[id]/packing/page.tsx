@@ -229,6 +229,7 @@ export default function PackingPage() {
               categories={categories}
               items={items}
               participants={participants}
+              participantAvatarUrls={participantAvatarUrls}
               loading={listLoading}
               canEditContent={canEditContent}
               onRefresh={async () => {

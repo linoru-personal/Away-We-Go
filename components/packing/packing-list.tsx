@@ -45,6 +45,8 @@ export interface PackingListProps {
   categories: PackingCategory[];
   items: PackingItem[];
   participants: PackingParticipant[];
+  /** Avatar URL per participant, same order as participants. Optional; when missing or shorter, no photo is shown. */
+  participantAvatarUrls?: (string | null)[];
   loading: boolean;
   /** When false (e.g. viewer), hide add/edit/delete/toggle and show read-only list. Default true. */
   canEditContent?: boolean;
@@ -100,6 +102,7 @@ export function PackingList({
   categories,
   items,
   participants,
+  participantAvatarUrls = [],
   loading,
   canEditContent = true,
   onRefresh,
@@ -381,20 +384,38 @@ export function PackingList({
         >
           Everyone
         </button>
-        {participants.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            className={`rounded-full px-3 py-1 text-sm ${
-              assigneeFilter === p.id
-                ? "bg-[#E07A5F] text-white"
-                : "bg-[#F5F3F0] text-[#4A4A4A] hover:bg-[#E8E4E0]"
-            }`}
-            onClick={() => setAssigneeFilter(p.id)}
-          >
-            {p.name}
-          </button>
-        ))}
+        {participants.map((p, i) => {
+          const avatarUrl = participantAvatarUrls[i] ?? null;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm ${
+                assigneeFilter === p.id
+                  ? "bg-[#E07A5F] text-white"
+                  : "bg-[#F5F3F0] text-[#4A4A4A] hover:bg-[#E8E4E0]"
+              }`}
+              onClick={() => setAssigneeFilter(p.id)}
+            >
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  className="size-6 shrink-0 rounded-full object-cover"
+                  aria-hidden
+                />
+              ) : (
+                <span
+                  className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#E8E4E0] text-xs font-medium text-[#6B7280]"
+                  aria-hidden
+                >
+                  {p.name.trim().slice(0, 1).toUpperCase() || "?"}
+                </span>
+              )}
+              <span>{p.name}</span>
+            </button>
+          );
+        })}
       </div>
 
       {canEditContent && (
