@@ -700,7 +700,7 @@ export default function TripPage() {
                 <TripNotesSummaryCard tripId={trip.id} />
 
                 {/* Packing */}
-                <PackingSummaryCard tripId={trip.id} />
+                <PackingSummaryCard tripId={trip.id} tripCoverImageUrl={coverImageUrl ?? trip.cover_image_url ?? undefined} />
 
                 {/* Tasks */}
                 <TasksSummaryCard tripId={trip.id} />

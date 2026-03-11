@@ -230,6 +230,7 @@ export default function PackingPage() {
               items={items}
               participants={participants}
               participantAvatarUrls={participantAvatarUrls}
+              tripCoverImageUrl={coverImageUrl ?? trip.cover_image_url ?? null}
               loading={listLoading}
               canEditContent={canEditContent}
               onRefresh={async () => {

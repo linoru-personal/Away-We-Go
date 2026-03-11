@@ -47,6 +47,8 @@ export interface PackingListProps {
   participants: PackingParticipant[];
   /** Avatar URL per participant, same order as participants. Optional; when missing or shorter, no photo is shown. */
   participantAvatarUrls?: (string | null)[];
+  /** Cover image URL for the trip; used as the "Everyone" icon in by-participant view. Optional. */
+  tripCoverImageUrl?: string | null;
   loading: boolean;
   /** When false (e.g. viewer), hide add/edit/delete/toggle and show read-only list. Default true. */
   canEditContent?: boolean;
@@ -103,6 +105,7 @@ export function PackingList({
   items,
   participants,
   participantAvatarUrls = [],
+  tripCoverImageUrl,
   loading,
   canEditContent = true,
   onRefresh,
@@ -598,9 +601,34 @@ export function PackingList({
           ))}
 
         {viewMode === "participant" &&
-          itemsByParticipant.map(({ label, items: partItems }) => (
-            <div key={label} className={CARD_CLASS}>
-              <h3 className="mb-3 text-base font-semibold text-[#4A4A4A]">{label}</h3>
+          itemsByParticipant.map(({ label, participantId, items: partItems }) => {
+            const avatarUrl =
+              participantId === null
+                ? tripCoverImageUrl ?? null
+                : (() => {
+                    const idx = participants.findIndex((p) => p.id === participantId);
+                    return idx >= 0 ? participantAvatarUrls[idx] ?? null : null;
+                  })();
+            return (
+            <div key={participantId ?? "__everyone__"} className={CARD_CLASS}>
+              <div className="mb-3 flex items-center gap-2">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt=""
+                    className="size-8 shrink-0 rounded-full object-cover"
+                    aria-hidden
+                  />
+                ) : (
+                  <span
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#E8E4E0] text-sm font-medium text-[#6B7280]"
+                    aria-hidden
+                  >
+                    {label.trim().slice(0, 1).toUpperCase() || "?"}
+                  </span>
+                )}
+                <h3 className="text-base font-semibold text-[#4A4A4A]">{label}</h3>
+              </div>
               <ul className="space-y-3">
                 {partItems.map((item) => (
                   <li key={item.id} className="flex items-center gap-3">
@@ -677,7 +705,8 @@ export function PackingList({
                 ))}
               </ul>
             </div>
-          ))}
+            );
+          })}
       </div>
 
       {filteredItems.length === 0 && (

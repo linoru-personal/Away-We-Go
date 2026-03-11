@@ -24,54 +24,90 @@ type PackingItemRow = {
   trip_id: string;
   title: string;
   is_packed: boolean;
+  assigned_to_participant_id: string | null;
+};
+
+type ParticipantRow = {
+  id: string;
+  name: string;
 };
 
 export interface PackingSummaryCardProps {
   tripId: string;
+  /** Optional trip cover image URL for the "Everyone" row icon. */
+  tripCoverImageUrl?: string | null;
 }
 
-function CheckIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="white"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="size-2.5"
-    >
-      <path d="M20 6L9 17l-5-5" />
-    </svg>
-  );
-}
-
-export function PackingSummaryCard({ tripId }: PackingSummaryCardProps) {
+export function PackingSummaryCard({ tripId, tripCoverImageUrl }: PackingSummaryCardProps) {
   const [items, setItems] = useState<PackingItemRow[]>([]);
+  const [participants, setParticipants] = useState<ParticipantRow[]>([]);
+  const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!tripId) return;
-    supabase
-      .from("packing_items")
-      .select("id, trip_id, title, is_packed")
-      .eq("trip_id", tripId)
-      .then(({ data, error }) => {
-        if (error) {
-          console.error(error);
-          setLoading(false);
-          return;
-        }
-        setItems((data ?? []) as PackingItemRow[]);
-        setLoading(false);
-      });
+    let cancelled = false;
+
+    (async () => {
+      const [itemsRes, partRes] = await Promise.all([
+        supabase
+          .from("packing_items")
+          .select("id, trip_id, title, is_packed, assigned_to_participant_id")
+          .eq("trip_id", tripId),
+        supabase
+          .from("trip_participants")
+          .select("id, name, avatar_path, sort_order")
+          .eq("trip_id", tripId)
+          .order("sort_order", { ascending: true }),
+      ]);
+
+      if (cancelled) return;
+      if (!itemsRes.error && itemsRes.data) setItems((itemsRes.data ?? []) as PackingItemRow[]);
+      if (!partRes.error && partRes.data) {
+        const rows = (partRes.data ?? []) as { id: string; name: string; avatar_path: string | null }[];
+        setParticipants(rows.map((r) => ({ id: r.id, name: r.name })));
+        const urls = await Promise.all(
+          rows.map(async (r) => {
+            if (!r.avatar_path) return null;
+            const { data: signed } = await supabase.storage
+              .from("avatars")
+              .createSignedUrl(r.avatar_path, 3600);
+            return signed?.signedUrl ?? null;
+          })
+        );
+        if (!cancelled) setParticipantAvatarUrls(urls);
+      }
+      setLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [tripId]);
 
   const total = items.length;
   const packed = items.filter((i) => i.is_packed).length;
   const progressValue = total > 0 ? Math.round((packed / total) * 100) : 0;
-  const displayItems = items.slice(0, 4);
+
+  const everyoneItems = items.filter((i) => !i.assigned_to_participant_id);
+  const byParticipant = participants.map((p) => {
+    const assigned = items.filter((i) => i.assigned_to_participant_id === p.id);
+    return { participant: p, assigned, packed: assigned.filter((i) => i.is_packed).length };
+  });
+  const participantStats: { key: string; label: string; avatarUrl: string | null; total: number; packed: number }[] = [
+    ...(everyoneItems.length > 0
+      ? [{ key: "__everyone__", label: "Everyone", avatarUrl: (tripCoverImageUrl ?? null) as string | null, total: everyoneItems.length, packed: everyoneItems.filter((i) => i.is_packed).length }]
+      : []),
+    ...byParticipant
+      .filter((x) => x.assigned.length > 0)
+      .map((x, i) => ({
+        key: x.participant.id,
+        label: x.participant.name,
+        avatarUrl: participantAvatarUrls[i] ?? null,
+        total: x.assigned.length,
+        packed: x.packed,
+      })),
+  ];
 
   return (
     <Link
@@ -102,30 +138,31 @@ export function PackingSummaryCard({ tripId }: PackingSummaryCardProps) {
             />
           </div>
 
-          {displayItems.length > 0 ? (
-            <ul className={`${CARD_CONTENT_MT} space-y-3`}>
-              {displayItems.map((item) => (
-                <li key={item.id} className="flex items-start gap-3">
-                  <span
-                    className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                      item.is_packed
-                        ? "border-[#E07A5F] bg-[#E07A5F]"
-                        : "border-[#D4C5BA] bg-white"
-                    }`}
-                  >
-                    {item.is_packed && <CheckIcon />}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={
-                        item.is_packed
-                          ? "text-sm text-[#9B7B6B] line-through"
-                          : "text-sm text-[#6B7280]"
-                      }
+          {participantStats.length > 0 ? (
+            <ul className={`${CARD_CONTENT_MT} space-y-2`}>
+              {participantStats.map((stat) => (
+                <li key={stat.key} className="flex items-center gap-2">
+                  {stat.avatarUrl ? (
+                    <img
+                      src={stat.avatarUrl}
+                      alt=""
+                      className="size-6 shrink-0 rounded-full object-cover"
+                      aria-hidden
+                    />
+                  ) : (
+                    <span
+                      className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#E8E4E0] text-xs font-medium text-[#6B7280]"
+                      aria-hidden
                     >
-                      {item.title}
-                    </p>
-                  </div>
+                      {stat.label.trim().slice(0, 1).toUpperCase() || "?"}
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-sm text-[#2d2d2d]">
+                    {stat.label}
+                  </span>
+                  <span className="shrink-0 text-xs tabular-nums text-[#8a8a8a]">
+                    {stat.packed}/{stat.total}
+                  </span>
                 </li>
               ))}
             </ul>
