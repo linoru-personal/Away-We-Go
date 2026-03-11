@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/app/lib/supabaseClient";
 import { DestinationImageCropDialog } from "@/components/trips/destination-image-crop-dialog";
+import { AvatarCropDialog } from "@/components/trips/avatar-crop-dialog";
 
 export type TripForForm = {
   id: string;
@@ -62,6 +63,9 @@ export default function TripFormModal({
   const [existingDestinationSignedUrl, setExistingDestinationSignedUrl] = useState<string | null>(null);
   const [destinationCropOpen, setDestinationCropOpen] = useState(false);
   const [destinationImageSrcForCrop, setDestinationImageSrcForCrop] = useState<string | null>(null);
+  const [avatarCropOpen, setAvatarCropOpen] = useState(false);
+  const [avatarImageSrcForCrop, setAvatarImageSrcForCrop] = useState<string | null>(null);
+  const [participantIdForAvatarCrop, setParticipantIdForAvatarCrop] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -267,6 +271,40 @@ export default function TripFormModal({
         };
       })
     );
+  };
+
+  const handleParticipantPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>, participantId: string) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file?.type.startsWith("image/")) {
+      const url = URL.createObjectURL(file);
+      setAvatarImageSrcForCrop(url);
+      setParticipantIdForAvatarCrop(participantId);
+      setAvatarCropOpen(true);
+    }
+  };
+
+  const handleAvatarCropClose = (open: boolean) => {
+    setAvatarCropOpen(open);
+    if (!open) {
+      const src = avatarImageSrcForCrop;
+      setAvatarImageSrcForCrop(null);
+      setParticipantIdForAvatarCrop(null);
+      // Only revoke if this URL was created for crop (file select); don't revoke when user opened recrop from existing avatar
+      if (src?.startsWith("blob:") && !participants.some((p) => p.previewUrl === src)) {
+        URL.revokeObjectURL(src);
+      }
+    }
+  };
+
+  const handleAvatarCropComplete = (blob: Blob) => {
+    const participantId = participantIdForAvatarCrop;
+    if (!participantId) return;
+    const file = new File([blob], "avatar.jpg", { type: "image/jpeg" });
+    setParticipantPhoto(participantId, file);
+    if (avatarImageSrcForCrop?.startsWith("blob:")) URL.revokeObjectURL(avatarImageSrcForCrop);
+    setAvatarImageSrcForCrop(null);
+    setParticipantIdForAvatarCrop(null);
   };
 
   const validate = (): boolean => {
@@ -609,11 +647,22 @@ export default function TripFormModal({
                   >
                     <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#e0d9d2] bg-[#f6f2ed]">
                       {p.previewUrl ? (
-                        <img
-                          src={p.previewUrl}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAvatarImageSrcForCrop(p.previewUrl!);
+                            setParticipantIdForAvatarCrop(p.id);
+                            setAvatarCropOpen(true);
+                          }}
+                          className="h-full w-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/50 focus:ring-inset"
+                          title="View full size and recrop"
+                        >
+                          <img
+                            src={p.previewUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        </button>
                       ) : (
                         <span className="text-lg font-medium text-[#8a8a8a]">
                           {p.name.trim().slice(0, 1).toUpperCase() || "?"}
@@ -634,11 +683,7 @@ export default function TripFormModal({
                       className="hidden"
                       aria-hidden
                       id={`participant-photo-${p.id}`}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        e.target.value = "";
-                        if (file?.type.startsWith("image/")) setParticipantPhoto(p.id, file);
-                      }}
+                      onChange={(e) => handleParticipantPhotoSelect(e, p.id)}
                     />
                     <label
                       htmlFor={`participant-photo-${p.id}`}
@@ -703,6 +748,15 @@ export default function TripFormModal({
                 .createSignedUrl(path, 3600);
               if (data?.signedUrl) setExistingDestinationSignedUrl(data.signedUrl);
             }}
+          />
+        )}
+
+        {avatarImageSrcForCrop && (
+          <AvatarCropDialog
+            open={avatarCropOpen}
+            onOpenChange={handleAvatarCropClose}
+            imageSrc={avatarImageSrcForCrop}
+            onCropComplete={handleAvatarCropComplete}
           />
         )}
       </DialogContent>
