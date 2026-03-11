@@ -99,6 +99,18 @@ function getCategoryIcon(categoryId: string, categories: PackingCategory[]): str
   return categories.find((c) => c.id === categoryId)?.icon ?? null;
 }
 
+/** True if the string starts with a strong RTL character (e.g. Hebrew, Arabic). */
+function isRtlText(s: string): boolean {
+  if (!s || !s.trim()) return false;
+  const code = (s.trim()[0] ?? "").codePointAt(0) ?? 0;
+  return (
+    (code >= 0x0590 && code <= 0x05ff) ||
+    (code >= 0x0600 && code <= 0x06ff) ||
+    (code >= 0xfb1d && code <= 0xfdfd) ||
+    (code >= 0xfe70 && code <= 0xfeff)
+  );
+}
+
 export function PackingList({
   tripId,
   categories,
@@ -180,6 +192,13 @@ export function PackingList({
     }
     return result;
   }, [filteredItems, participants]);
+
+  /** When true, majority of (filtered) items are RTL; align all rows accordingly. */
+  const listRtl = useMemo(() => {
+    if (filteredItems.length === 0) return false;
+    const rtlCount = filteredItems.filter((item) => isRtlText(item.title)).length;
+    return rtlCount > filteredItems.length / 2;
+  }, [filteredItems]);
 
   async function handleTogglePacked(item: PackingItem) {
     setToggleErrorId(null);
@@ -456,7 +475,11 @@ export function PackingList({
               </div>
               <ul className="space-y-3">
                 {catItems.map((item) => (
-                  <li key={item.id} className="flex items-center gap-3">
+                  <li
+                    key={item.id}
+                    className="flex items-center gap-3"
+                    dir={listRtl ? "rtl" : undefined}
+                  >
                     {canEditContent ? (
                       <button
                         type="button"
@@ -534,7 +557,7 @@ export function PackingList({
                       </div>
                     ) : (
                       <>
-                        <div className="min-w-0 flex-1">
+                        <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
                           <p
                             className={item.is_packed ? "text-sm text-[#9B7B6B] line-through" : "text-sm text-[#6B7280]"}
                             dir="auto"
@@ -631,7 +654,11 @@ export function PackingList({
               </div>
               <ul className="space-y-3">
                 {partItems.map((item) => (
-                  <li key={item.id} className="flex items-center gap-3">
+                  <li
+                    key={item.id}
+                    className="flex items-center gap-3"
+                    dir={listRtl ? "rtl" : undefined}
+                  >
                     {canEditContent ? (
                       <button
                         type="button"
@@ -653,7 +680,7 @@ export function PackingList({
                         {item.is_packed && <CheckIcon />}
                       </span>
                     )}
-                    <div className="min-w-0 flex-1">
+                    <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
                       <p
                         className={item.is_packed ? "text-sm text-[#9B7B6B] line-through" : "text-sm text-[#6B7280]"}
                         dir="auto"
