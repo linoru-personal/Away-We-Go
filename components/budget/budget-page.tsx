@@ -209,7 +209,7 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
         <p className="mt-0.5 text-sm text-[#9B7B6B]">Track your trip expenses</p>
       </div>
 
-      {/* Total Budget card (large orange rounded) */}
+      {/* Total Budget card (large orange rounded) + Spending Breakdown */}
       <div className="rounded-[24px] bg-[#E07A5F] p-6 text-white shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -250,6 +250,58 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
             </select>
           </div>
         </div>
+
+        {/* Spending Breakdown (only categories with expenses) */}
+        {(() => {
+          const withExpenses = budget.itemsGrouped.filter((group) => {
+            const totalBase = group.category?.total_base ?? group.items.reduce((s, i) => s + Number(i.amount_base), 0);
+            return totalBase > 0;
+          });
+          return withExpenses.length > 0 && budget.total_base > 0 ? (
+            <div className="mt-6">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wider opacity-90">
+                Spending Breakdown
+              </p>
+              <div className="-mx-6 overflow-x-auto px-6 pb-1">
+                <div className="flex gap-3" style={{ minWidth: "min-content" }}>
+                  {withExpenses.map((group) => {
+                    const totalBase = group.category?.total_base ?? group.items.reduce((s, i) => s + Number(i.amount_base), 0);
+                    const percent = Math.round((totalBase / budget.total_base) * 100);
+                    const amountDisplay = formatMoney(
+                      usdToDisplay(totalBase, displayCurrency, ratesToUSDMap),
+                      displayCurrency
+                    );
+                    const label = group.category?.name ?? "General";
+                    return (
+                      <div
+                        key={group.category?.id ?? "uncategorized"}
+                        className="flex w-[140px] shrink-0 flex-col rounded-xl bg-white/20 p-4 backdrop-blur-sm"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex size-8 shrink-0 items-center justify-center">
+                            <CategoryIcon
+                              iconKey={getIconKey(group.category?.icon, BUDGET_DEFAULT_ICON)}
+                              size={20}
+                              className="text-white"
+                            />
+                          </div>
+                          <span className="text-lg font-bold">{percent}%</span>
+                        </div>
+                        <p className="mt-2 line-clamp-2 text-sm font-medium">{label}</p>
+                        <p className="mt-1 text-sm font-medium opacity-95">{amountDisplay}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              {withExpenses.length > 3 && (
+                <p className="mt-2 text-center text-xs opacity-80">
+                  ← Swipe to see all categories →
+                </p>
+              )}
+            </div>
+          ) : null;
+        })()}
       </div>
 
       <div className="flex justify-end">
