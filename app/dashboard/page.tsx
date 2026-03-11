@@ -35,6 +35,15 @@ function getEmptyMessage(tab: "all" | "upcoming" | "past"): string {
   }
 }
 
+/** Greeting phrase by local hour: morning 5–11, afternoon 12–16, evening 17–20, night 21–4. */
+function getTimeBasedGreeting(date: Date): string {
+  const hour = date.getHours();
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 17) return "Good afternoon";
+  if (hour >= 17 && hour < 21) return "Good evening";
+  return "Good night";
+}
+
 /**
  * DashboardPage: useSession + redirect logic + early returns only.
  * No useProfile here; it runs inside DashboardInner when user exists.
@@ -215,7 +224,7 @@ function DashboardInner({ user }: { user: User }) {
         <div className="relative mb-8">
           <div className="pr-24">
             <h1 className="text-3xl font-bold text-neutral-900 sm:text-4xl">
-              Good morning, {displayName}
+              {getTimeBasedGreeting(new Date())}, {displayName}
             </h1>
             <p className="mt-1 text-neutral-600">
               Where would you like to go next?
@@ -303,7 +312,7 @@ function DashboardInner({ user }: { user: User }) {
                   title={t.title}
                   startDate={t.start_date ?? "—"}
                   endDate={t.end_date ?? "—"}
-                  coverImageUrl={destinationSignedUrls[t.id] ?? coverSignedUrls[t.id] ?? t.cover_image_url ?? undefined}
+                  coverImageUrl={coverSignedUrls[t.id] ?? destinationSignedUrls[t.id] ?? t.cover_image_url ?? undefined}
                   onClick={() => router.push(`/dashboard/trip/${t.id}`)}
                   participantAvatarUrls={tripParticipantAvatars[t.id] ?? []}
                 />
