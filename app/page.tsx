@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "./lib/supabaseClient";
+
+/** Safe redirect: only allow relative path starting with / (e.g. /invite?token=...) */
+function getSafeRedirect(redirect: string | null): string | null {
+  if (!redirect || typeof redirect !== "string") return null;
+  const s = redirect.trim();
+  if (s === "" || !s.startsWith("/") || s.startsWith("//")) return null;
+  return s;
+}
 
 export default function Home() {
   const [email, setEmail] = useState("");
@@ -13,16 +21,18 @@ export default function Home() {
 
   const [trips, setTrips] = useState<any[]>([]);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = getSafeRedirect(searchParams.get("redirect"));
 
   useEffect(() => {
     const checkUser = async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
-        router.push("/dashboard");
+        router.push(redirectTo ?? "/dashboard");
       }
     };
     checkUser();
-  }, [router]);
+  }, [router, redirectTo]);
 
   useEffect(() => {
     const fetchTrips = async () => {
@@ -48,7 +58,7 @@ export default function Home() {
       setError(err.message);
       return;
     }
-    router.push("/dashboard");
+    router.push(redirectTo ?? "/dashboard");
   };
 
   const handleSignup = async (e: React.MouseEvent) => {
@@ -61,7 +71,7 @@ export default function Home() {
       setError(err.message);
       return;
     }
-    router.push("/dashboard");
+    router.push(redirectTo ?? "/dashboard");
   };
 
   return (

@@ -58,6 +58,16 @@ type Trip = {
   created_at: string | null;
 };
 
+/** Pending invitation row from trip_invitations (status = 'pending'). */
+type PendingInvitationRow = {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  created_at: string;
+  expires_at: string | null;
+};
+
 function formatDates(start: string | null, end: string | null): string {
   if (!start && !end) return "—";
   if (start && end) return `${start} → ${end}`;
@@ -127,6 +137,10 @@ export default function TripPage() {
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [changingRoleUserId, setChangingRoleUserId] = useState<string | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitationRow[]>([]);
+  const [pendingInvitationsLoading, setPendingInvitationsLoading] = useState(false);
+  const [resendingInvitationId, setResendingInvitationId] = useState<string | null>(null);
+  const [revokingInvitationId, setRevokingInvitationId] = useState<string | null>(null);
 
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [destinationImageUrl, setDestinationImageUrl] = useState<string | null>(null);
@@ -181,6 +195,7 @@ export default function TripPage() {
     if (shareModalOpen && trip?.id && canManageSharing) {
       let cancelled = false;
       setMembersLoading(true);
+      setPendingInvitationsLoading(true);
       supabase
         .rpc("get_trip_members", { p_trip_id: trip.id })
         .then(({ data, error }) => {
@@ -193,38 +208,72 @@ export default function TripPage() {
           }
           setMembersLoading(false);
         });
+      supabase
+        .from("trip_invitations")
+        .select("id, email, role, status, created_at, expires_at")
+        .eq("trip_id", trip.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false })
+        .then(({ data, error }) => {
+          if (cancelled) return;
+          if (error) {
+            console.error(error);
+            setPendingInvitations([]);
+          } else {
+            setPendingInvitations((data ?? []) as PendingInvitationRow[]);
+          }
+          setPendingInvitationsLoading(false);
+        });
       return () => {
         cancelled = true;
       };
     }
-    if (!shareModalOpen) setMembers([]);
+    if (!shareModalOpen) {
+      setMembers([]);
+      setPendingInvitations([]);
+    }
   }, [shareModalOpen, trip?.id, canManageSharing]);
 
   const handleShare = async () => {
     if (!id || !trip || !shareEmail.trim()) return;
     setShareError(null);
     setShareLoading(true);
-    const { data, error } = await supabase.rpc("share_trip", {
-      p_trip_id: trip.id,
-      p_email: shareEmail,
-      p_role: shareRole,
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch("/api/trip-invitations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({
+        trip_id: trip.id,
+        email: shareEmail.trim(),
+        role: shareRole,
+      }),
     });
+    const result = (await res.json()) as { success?: boolean; message?: string };
     setShareLoading(false);
-    const result = data as { ok?: boolean; message?: string } | null;
-    if (error) {
-      setShareError(error.message);
+    if (!res.ok) {
+      setShareError(result.message ?? "Something went wrong. Try again.");
       return;
     }
-    if (result?.ok) {
+    if (result.success) {
       setShareEmail("");
       setShareSuccess(true);
-      const { data: memberData } = await supabase.rpc("get_trip_members", {
-        p_trip_id: trip.id,
-      });
+      const [{ data: memberData }, { data: pendingData }] = await Promise.all([
+        supabase.rpc("get_trip_members", { p_trip_id: trip.id }),
+        supabase
+          .from("trip_invitations")
+          .select("id, email, role, status, created_at, expires_at")
+          .eq("trip_id", trip.id)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false }),
+      ]);
       setMembers((memberData ?? []) as { user_id: string; email: string | null; role: string }[]);
+      setPendingInvitations((pendingData ?? []) as PendingInvitationRow[]);
       setTimeout(() => setShareSuccess(false), 3000);
     } else {
-      setShareError(result?.message ?? "Could not share.");
+      setShareError(result.message ?? "Something went wrong. Try again.");
     }
   };
 
@@ -246,6 +295,55 @@ export default function TripPage() {
       return;
     }
     setMembers((prev) => prev.filter((m) => m.user_id !== memberUserId));
+  };
+
+  const handleResendInvitation = async (inv: PendingInvitationRow) => {
+    if (!trip?.id) return;
+    setResendingInvitationId(inv.id);
+    setShareError(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch("/api/trip-invitations", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+      },
+      body: JSON.stringify({ trip_id: trip.id, email: inv.email, role: inv.role }),
+    });
+    const result = (await res.json()) as { success?: boolean; message?: string };
+    setResendingInvitationId(null);
+    if (!res.ok) {
+      setShareError(result.message ?? "Something went wrong. Try again.");
+      return;
+    }
+    if (result.success) {
+      const { data } = await supabase
+        .from("trip_invitations")
+        .select("id, email, role, status, created_at, expires_at")
+        .eq("trip_id", trip.id)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+      setPendingInvitations((data ?? []) as PendingInvitationRow[]);
+    } else {
+      setShareError(result.message ?? "Something went wrong. Try again.");
+    }
+  };
+
+  const handleRevokeInvitation = async (inv: PendingInvitationRow) => {
+    if (!trip?.id) return;
+    setRevokingInvitationId(inv.id);
+    setShareError(null);
+    const { error } = await supabase
+      .from("trip_invitations")
+      .update({ status: "revoked", revoked_at: new Date().toISOString() })
+      .eq("id", inv.id)
+      .eq("trip_id", trip.id);
+    setRevokingInvitationId(null);
+    if (error) {
+      setShareError(error.message);
+      return;
+    }
+    setPendingInvitations((prev) => prev.filter((p) => p.id !== inv.id));
   };
 
   const handleChangeRole = async (memberUserId: string, newRole: "admin" | "editor" | "viewer") => {
@@ -634,7 +732,7 @@ export default function TripPage() {
                 Share this trip
               </DialogTitle>
               <p className="mt-1 text-[15px] leading-relaxed text-[#6b6b6b]">
-                Invite someone by email to collaborate on this trip.
+                Share this trip by email. Existing users get access right away. New users will receive an invitation email.
               </p>
             </DialogHeader>
             <div className="min-h-0 flex-1 overflow-y-auto">
@@ -700,7 +798,7 @@ export default function TripPage() {
                 )}
                 {shareSuccess && (
                   <p id="share-success" className="mt-1.5 text-sm text-[#16a34a]" role="status">
-                    Added.
+                    Done.
                   </p>
                 )}
                 <p id="share-helper" className="mt-1.5 text-xs text-[#8a8a8a]">
@@ -771,6 +869,78 @@ export default function TripPage() {
                         </li>
                       ))
                     )}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-[#1f1f1f]">
+                  Pending invitations
+                </h3>
+                {pendingInvitationsLoading ? (
+                  <div className="mt-2 space-y-2">
+                    {[1, 2].map((i) => (
+                      <div
+                        key={i}
+                        className="h-11 rounded-[20px] bg-[#f0ebe6] animate-pulse"
+                      />
+                    ))}
+                  </div>
+                ) : pendingInvitations.length === 0 ? (
+                  <p className="mt-2 py-2 text-sm text-[#8a8a8a]">
+                    No pending invitations.
+                  </p>
+                ) : (
+                  <ul className="mt-2 space-y-2" role="list">
+                    {pendingInvitations.map((inv) => {
+                      const isExpired =
+                        inv.expires_at &&
+                        new Date(inv.expires_at) < new Date();
+                      const displayStatus = isExpired ? "expired" : "pending";
+                      const sentDate = inv.created_at
+                        ? new Date(inv.created_at).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })
+                        : "—";
+                      return (
+                        <li
+                          key={inv.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-[20px] bg-[#f6f2ed] px-3 py-2.5 text-sm shadow-[0_1px_4px_rgba(0,0,0,0.04)]"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate font-medium text-[#1f1f1f]">
+                              {inv.email}
+                            </span>
+                            <span className="mt-0.5 block text-xs text-[#6b6b6b]">
+                              {inv.role.charAt(0).toUpperCase() + inv.role.slice(1)} · {displayStatus} · sent {sentDate}
+                            </span>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <button
+                              type="button"
+                              className="rounded-full px-3 py-1.5 text-xs font-medium text-[#d97b5e] transition hover:bg-[#d97b5e]/10 focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 disabled:opacity-50"
+                              onClick={() => handleResendInvitation(inv)}
+                              disabled={resendingInvitationId === inv.id}
+                            >
+                              {resendingInvitationId === inv.id
+                                ? "Sending…"
+                                : "Resend"}
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-full px-3 py-1.5 text-xs font-medium text-[#6b6b6b] transition hover:bg-[#e0d9d2] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 disabled:opacity-50"
+                              onClick={() => handleRevokeInvitation(inv)}
+                              disabled={revokingInvitationId === inv.id}
+                            >
+                              {revokingInvitationId === inv.id
+                                ? "Revoking…"
+                                : "Revoke"}
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
