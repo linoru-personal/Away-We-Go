@@ -544,7 +544,7 @@ export function PackingList({
                           </p>
                           <p className="text-xs text-[#9B7B6B]">
                             <span dir="ltr">
-                              {getCategoryName(item.category_id, categories)} · {getAssigneeLabel(item, participants)}
+                              {getAssigneeLabel(item, participants)}
                             </span>
                             {item.quantity > 1 && (
                               <span dir="ltr" className="ms-1">× {item.quantity}</span>
@@ -663,7 +663,7 @@ export function PackingList({
                       </p>
                       <p className="text-xs text-[#9B7B6B]">
                         <span dir="ltr">
-                          {getCategoryName(item.category_id, categories)} · {getAssigneeLabel(item, participants)}
+                          {getCategoryName(item.category_id, categories)}
                         </span>
                         {item.quantity > 1 && (
                           <span dir="ltr" className="ms-1">× {item.quantity}</span>
