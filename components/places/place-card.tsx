@@ -7,7 +7,6 @@ import {
   CTA_LINK_CLASS,
 } from "@/components/trip/dashboard-card-styles";
 import { LinkFavicon } from "@/components/ui/link-favicon";
-import { CategoryIcon, PLACES_DEFAULT_ICON, getIconKey } from "@/components/ui/category-icons";
 
 export type TripPlace = {
   id: string;
@@ -101,14 +100,6 @@ export function PlaceCard({ place, category, canEditContent = true, onEdit, onDe
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className={SECTION_TITLE_CLASS}>{place.title}</h3>
-          {category && (
-            <p className={`${META_CLASS} mt-0.5 flex items-center gap-1.5 text-[#8a8a8a]`}>
-              <span className="shrink-0" aria-hidden>
-                <CategoryIcon iconKey={getIconKey(category.icon, PLACES_DEFAULT_ICON)} size={18} />
-              </span>
-              {category.name}
-            </p>
-          )}
           {place.notes?.trim() && (
             <p className={`${META_CLASS} mt-1.5 text-[#2d2d2d]`}>
               {place.notes}

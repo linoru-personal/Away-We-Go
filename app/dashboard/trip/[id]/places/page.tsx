@@ -8,7 +8,8 @@ import { useTripRole } from "@/app/lib/useTripRole";
 import TripHero from "@/components/trip/trip-hero";
 import { AddPlaceDialog, type PlaceCategory } from "@/components/places/add-place-dialog";
 import { PlaceCard, type TripPlace } from "@/components/places/place-card";
-import { SECTION_TITLE_CLASS } from "@/components/trip/dashboard-card-styles";
+import { ManagePlaceCategoriesDialog } from "@/components/places/manage-place-categories-dialog";
+import { CategoryIcon, getIconKey, PLACES_DEFAULT_ICON } from "@/components/ui/category-icons";
 
 type Trip = {
   id: string;
@@ -45,6 +46,7 @@ export default function TripPlacesPage() {
   const [placeDialogOpen, setPlaceDialogOpen] = useState(false);
   const [editingPlace, setEditingPlace] = useState<TripPlace | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
 
   useEffect(() => {
     if (!trip?.cover_image_path) {
@@ -219,18 +221,29 @@ export default function TripPlacesPage() {
               onBack={() => router.push(`/dashboard/trip/${id}`)}
               participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
             />
-            <div className="mt-8 flex flex-wrap items-center justify-between gap-4">
-              <h1 className={SECTION_TITLE_CLASS}>Places</h1>
+            <div className="mt-8">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h1 className="text-lg font-semibold text-[#4A4A4A]">Places</h1>
+                {canEditContent && (
+                <button
+                  type="button"
+                  className="rounded-full bg-[#d97b5e] px-4 py-2.5 text-sm font-medium text-white shadow-[0_2px_8px_rgba(217,123,94,0.25)] transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2"
+                  onClick={() => {
+                    setEditingPlace(null);
+                    setPlaceDialogOpen(true);
+                  }}
+                >
+                  Add place
+                </button>
+                )}
+              </div>
               {canEditContent && (
               <button
                 type="button"
-                className="rounded-full bg-[#d97b5e] px-4 py-2.5 text-sm font-medium text-white shadow-[0_2px_8px_rgba(217,123,94,0.25)] transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2"
-                onClick={() => {
-                  setEditingPlace(null);
-                  setPlaceDialogOpen(true);
-                }}
+                className="mt-1 text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
+                onClick={() => setManageCategoriesOpen(true)}
               >
-                Add place
+                Manage Categories
               </button>
               )}
             </div>
@@ -255,32 +268,71 @@ export default function TripPlacesPage() {
                 )}
               </div>
             ) : (
-              <ul className="mt-6 space-y-4" role="list">
-                {places.map((place) => {
-                  const categoryDisplay = place.category_id
-                    ? (() => {
-                        const cat = categories.find((c) => c.id === place.category_id);
-                        return cat ? { name: cat.name, icon: cat.icon } : null;
-                      })()
-                    : null;
-                  return (
-                    <li key={place.id}>
-                      <PlaceCard
-                        place={place}
-                        category={categoryDisplay}
-                        canEditContent={canEditContent}
-                        onEdit={(p) => {
-                          setEditingPlace(p);
-                          setPlaceDialogOpen(true);
-                        }}
-                        onDelete={handleDelete}
-                        deletingId={deletingId}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="mt-6 space-y-8">
+                {(() => {
+                  const uncategorized = places.filter((p) => !p.category_id);
+                  const byCategory = categories.map((cat) => ({
+                    category: cat,
+                    places: places.filter((p) => p.category_id === cat.id),
+                  })).filter((g) => g.places.length > 0);
+                  const sections: { label: string; icon: string | null; places: TripPlace[] }[] = [];
+                  if (uncategorized.length > 0) {
+                    sections.push({ label: "General", icon: null, places: uncategorized });
+                  }
+                  byCategory.forEach((g) => {
+                    sections.push({ label: g.category.name, icon: g.category.icon, places: g.places });
+                  });
+                  return sections.map((section) => (
+                    <section key={section.label}>
+                      <div className="mb-3 flex items-center gap-2">
+                        <span className="shrink-0 text-[#4A4A4A]">
+                          <CategoryIcon
+                            iconKey={getIconKey(section.icon, PLACES_DEFAULT_ICON)}
+                            size={20}
+                          />
+                        </span>
+                        <h2 className="text-base font-semibold text-[#4A4A4A]">{section.label}</h2>
+                      </div>
+                      <ul className="space-y-4" role="list">
+                        {section.places.map((place) => {
+                          const categoryDisplay = place.category_id
+                            ? (() => {
+                                const cat = categories.find((c) => c.id === place.category_id);
+                                return cat ? { name: cat.name, icon: cat.icon } : null;
+                              })()
+                            : null;
+                          return (
+                            <li key={place.id}>
+                              <PlaceCard
+                                place={place}
+                                category={categoryDisplay}
+                                canEditContent={canEditContent}
+                                onEdit={(p) => {
+                                  setEditingPlace(p);
+                                  setPlaceDialogOpen(true);
+                                }}
+                                onDelete={handleDelete}
+                                deletingId={deletingId}
+                              />
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+                  ));
+                })()}
+              </div>
             )}
+            <ManagePlaceCategoriesDialog
+              open={manageCategoriesOpen}
+              onOpenChange={setManageCategoriesOpen}
+              tripId={id}
+              categories={categories}
+              onSuccess={() => {
+                fetchCategories();
+                fetchPlaces();
+              }}
+            />
             <AddPlaceDialog
               mode={editingPlace ? "edit" : "create"}
               tripId={id}
