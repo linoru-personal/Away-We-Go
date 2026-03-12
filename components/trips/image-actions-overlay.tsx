@@ -7,8 +7,8 @@
  * Parent must be position: relative. For showOnHover, parent needs class "group".
  */
 
-/** Pencil icon – same as packing-list PencilIcon (edit). */
-function PencilIcon({ className }: { className?: string }) {
+/** Pencil icon – same as packing-list PencilIcon (edit). Exported for inline use (e.g. participant row). */
+export function PencilIcon({ className }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -26,8 +26,8 @@ function PencilIcon({ className }: { className?: string }) {
   );
 }
 
-/** Trash icon – same as packing-list / trip-notes-section TrashIcon. */
-function TrashIcon({ className }: { className?: string }) {
+/** Trash icon – same as packing-list / trip-notes-section TrashIcon. Exported for inline use. */
+export function TrashIcon({ className }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -49,8 +49,8 @@ function TrashIcon({ className }: { className?: string }) {
   );
 }
 
-/** Image-plus style icon for replace/change (monochrome). */
-function ImagePlusIcon({ className }: { className?: string }) {
+/** Image-plus style icon for replace/change (monochrome). Exported for inline use. */
+export function ImagePlusIcon({ className }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

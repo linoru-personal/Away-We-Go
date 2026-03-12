@@ -11,7 +11,12 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { DestinationImageCropDialog } from "@/components/trips/destination-image-crop-dialog";
 import { CoverImageCropDialog } from "@/components/trips/cover-image-crop-dialog";
 import { AvatarCropDialog } from "@/components/trips/avatar-crop-dialog";
-import { ImageActionsOverlay } from "@/components/trips/image-actions-overlay";
+import {
+  ImageActionsOverlay,
+  PencilIcon,
+  TrashIcon,
+  ImagePlusIcon,
+} from "@/components/trips/image-actions-overlay";
 import type { CropMetadata } from "@/lib/editable-image-assets";
 import { getEditableImageSource } from "@/lib/editable-image-assets/get-source";
 import {
@@ -89,6 +94,10 @@ export default function TripFormModal({
   const [avatarImageSrcForCrop, setAvatarImageSrcForCrop] = useState<string | null>(null);
   const [participantIdForAvatarCrop, setParticipantIdForAvatarCrop] = useState<string | null>(null);
   const [destinationSourceLoading, setDestinationSourceLoading] = useState(false);
+  const [destinationPendingOriginalFile, setDestinationPendingOriginalFile] = useState<File | null>(null);
+  const [destinationPendingCroppedBlob, setDestinationPendingCroppedBlob] = useState<Blob | null>(null);
+  const [destinationPendingCropMetadata, setDestinationPendingCropMetadata] = useState<CropMetadata | null>(null);
+  const [destinationPreviewUrl, setDestinationPreviewUrl] = useState<string | null>(null);
   const avatarOriginalFileRef = useRef<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -201,6 +210,10 @@ export default function TripFormModal({
       setCoverPreviewUrl(null);
       setExistingCoverSignedUrl(null);
       setExistingDestinationSignedUrl(null);
+      setDestinationPendingOriginalFile(null);
+      setDestinationPendingCroppedBlob(null);
+      setDestinationPendingCropMetadata(null);
+      setDestinationPreviewUrl(null);
       setCoverCropOpen(false);
       setCoverImageSrcForCrop(null);
       setError(null);
@@ -296,7 +309,7 @@ export default function TripFormModal({
   const handleDestinationImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (file && file.type.startsWith("image/") && trip?.id) {
+    if (file && file.type.startsWith("image/")) {
       destinationFileForCropRef.current = file;
       const url = URL.createObjectURL(file);
       setDestinationImageSrcForCrop(url);
@@ -368,6 +381,25 @@ export default function TripFormModal({
     onSuccess?.();
   };
 
+  const clearDestinationPending = () => {
+    if (destinationPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(destinationPreviewUrl);
+    setDestinationPendingOriginalFile(null);
+    setDestinationPendingCroppedBlob(null);
+    setDestinationPendingCropMetadata(null);
+    setDestinationPreviewUrl(null);
+  };
+
+  const handleEditDestinationCropCreate = () => {
+    if (!destinationPendingOriginalFile) return;
+    const url = URL.createObjectURL(destinationPendingOriginalFile);
+    setDestinationImageSrcForCrop(url);
+    destinationRecropContextRef.current = {
+      existingAssetId: null,
+      cropMetadata: destinationPendingCropMetadata,
+    };
+    setDestinationCropOpen(true);
+  };
+
   const addParticipant = () => {
     setParticipants((prev) => [
       ...prev,
@@ -390,6 +422,25 @@ export default function TripFormModal({
       if (p?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
       return prev.filter((x) => x.id !== id);
     });
+  };
+
+  /** Clear participant photo only (keep participant in list). */
+  const clearParticipantPhoto = (participantId: string) => {
+    setParticipants((prev) =>
+      prev.map((p) => {
+        if (p.id !== participantId) return p;
+        if (p.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+        return {
+          ...p,
+          avatarPath: null,
+          avatarFile: null,
+          previewUrl: null,
+          avatarOriginalFile: null,
+          avatarCroppedBlob: null,
+          avatarCropMetadata: null,
+        };
+      })
+    );
   };
 
   const setParticipantName = (id: string, name: string) => {
@@ -627,6 +678,24 @@ export default function TripFormModal({
           }
         }
 
+        if (
+          destinationPendingOriginalFile &&
+          destinationPendingCroppedBlob &&
+          destinationPendingCropMetadata
+        ) {
+          try {
+            await saveEditableImageAsset(supabase, {
+              tripId,
+              ownerType: "destination_cover",
+              originalFile: destinationPendingOriginalFile,
+              croppedBlob: destinationPendingCroppedBlob,
+              cropMetadata: destinationPendingCropMetadata,
+            });
+          } catch (err) {
+            console.error("Destination image upload error", err);
+          }
+        }
+
         for (let i = 0; i < participants.length; i++) {
           const p = participants[i];
           const name = p.name.trim();
@@ -791,33 +860,48 @@ export default function TripFormModal({
               </div>
             </div>
 
-            {mode === "edit" && trip && (
-              <div>
-                <label className={LABEL_CLASS}>Destination cover image</label>
-                <input
-                  ref={destinationFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  aria-hidden
-                  onChange={handleDestinationImageSelect}
-                />
-                {existingDestinationSignedUrl ? (
-                  <div className="relative mt-1.5 w-full max-w-[280px]">
-                    <img
-                      src={existingDestinationSignedUrl}
-                      alt="Destination cover"
-                      className="aspect-[16/6] w-full rounded-[12px] object-cover"
-                    />
-                    <ImageActionsOverlay
-                      onEditCrop={handleEditDestinationCrop}
-                      onReplace={() => destinationFileInputRef.current?.click()}
-                      onRemove={removeDestinationImage}
-                      disabled={saving}
-                      editLoading={destinationSourceLoading}
-                    />
-                  </div>
-                ) : (
+            <div>
+              <label className={LABEL_CLASS}>Destination cover image</label>
+              <input
+                ref={destinationFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                aria-hidden
+                onChange={handleDestinationImageSelect}
+              />
+              {(() => {
+                const hasDestinationImage =
+                  (mode === "edit" && !!existingDestinationSignedUrl) ||
+                  (mode === "create" && !!destinationPreviewUrl);
+                const destinationImageUrl = existingDestinationSignedUrl ?? destinationPreviewUrl;
+                if (hasDestinationImage && destinationImageUrl) {
+                  return (
+                    <div className="relative mt-1.5 w-full max-w-[280px]">
+                      <img
+                        src={destinationImageUrl}
+                        alt="Destination cover"
+                        className="aspect-[16/6] w-full rounded-[12px] object-cover"
+                      />
+                      <ImageActionsOverlay
+                        onEditCrop={
+                          mode === "edit" && trip
+                            ? handleEditDestinationCrop
+                            : handleEditDestinationCropCreate
+                        }
+                        onReplace={() => destinationFileInputRef.current?.click()}
+                        onRemove={
+                          mode === "edit" && trip
+                            ? removeDestinationImage
+                            : clearDestinationPending
+                        }
+                        disabled={saving}
+                        editLoading={destinationSourceLoading}
+                      />
+                    </div>
+                  );
+                }
+                return (
                   <button
                     type="button"
                     onClick={() => destinationFileInputRef.current?.click()}
@@ -826,9 +910,9 @@ export default function TripFormModal({
                   >
                     Upload destination cover image
                   </button>
-                )}
-              </div>
-            )}
+                );
+              })()}
+            </div>
 
             <div>
               <label htmlFor="trip-form-title" className={LABEL_CLASS}>
@@ -905,54 +989,36 @@ export default function TripFormModal({
                 {participants.map((p) => (
                   <div
                     key={p.id}
-                    className="flex items-center gap-3 rounded-[20px] border border-[#e0d9d2] bg-[#fbf7f2] p-3"
+                    className="flex items-center gap-2 rounded-[20px] border border-[#e0d9d2] bg-[#fbf7f2] p-3"
                   >
-                    <div className="group relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#e0d9d2] bg-[#f6f2ed]">
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById(`participant-photo-${p.id}`)?.click()}
+                      className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#e0d9d2] bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/50 focus:ring-inset"
+                      title="Change photo"
+                    >
                       {p.previewUrl ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (p.avatarPath) {
-                                handleEditAvatarCrop(p.id);
-                              } else {
-                                setAvatarImageSrcForCrop(p.previewUrl!);
-                                setParticipantIdForAvatarCrop(p.id);
-                                setAvatarCropOpen(true);
-                              }
-                            }}
-                            className="h-full w-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/50 focus:ring-inset"
-                            title="View full size and recrop"
-                          >
-                            <img
-                              src={p.previewUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          </button>
-                          <ImageActionsOverlay
-                            showOnHover
-                            compact
-                            onEditCrop={p.avatarPath ? () => handleEditAvatarCrop(p.id) : undefined}
-                            onReplace={() => document.getElementById(`participant-photo-${p.id}`)?.click()}
-                            onRemove={() => removeParticipant(p.id)}
-                            disabled={saving}
-                          />
-                        </>
+                        <img
+                          src={p.previewUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
                         <span className="text-lg font-medium text-[#8a8a8a]">
                           {p.name.trim().slice(0, 1).toUpperCase() || "?"}
                         </span>
                       )}
+                    </button>
+                    <div className="flex min-w-0 flex-1">
+                      <input
+                        type="text"
+                        value={p.name}
+                        onChange={(e) => setParticipantName(p.id, e.target.value)}
+                        placeholder="Name"
+                        className={`w-full min-w-0 truncate ${INPUT_CLASS} py-2`}
+                        disabled={saving}
+                      />
                     </div>
-                    <input
-                      type="text"
-                      value={p.name}
-                      onChange={(e) => setParticipantName(p.id, e.target.value)}
-                      placeholder="Name"
-                      className={`flex-1 ${INPUT_CLASS} py-2`}
-                      disabled={saving}
-                    />
                     <input
                       type="file"
                       accept="image/*"
@@ -961,12 +1027,50 @@ export default function TripFormModal({
                       id={`participant-photo-${p.id}`}
                       onChange={(e) => handleParticipantPhotoSelect(e, p.id)}
                     />
-                    <label
-                      htmlFor={`participant-photo-${p.id}`}
-                      className="cursor-pointer rounded-full px-3 py-2 text-xs font-medium text-[#6b6b6b] transition hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30"
-                    >
-                      {p.previewUrl || p.avatarPath ? "Change photo" : "Add photo"}
-                    </label>
+                    <div className="flex shrink-0 items-center gap-1.5 text-[#1f1f1f] opacity-70">
+                      {(p.previewUrl || p.avatarPath) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (p.avatarPath) {
+                              handleEditAvatarCrop(p.id);
+                            } else {
+                              setAvatarImageSrcForCrop(p.previewUrl!);
+                              setParticipantIdForAvatarCrop(p.id);
+                              setAvatarCropOpen(true);
+                            }
+                          }}
+                          disabled={saving}
+                          className="flex size-7 shrink-0 items-center justify-center rounded-sm transition hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-[#1f1f1f]/25 focus:ring-offset-0 disabled:opacity-50 sm:size-8"
+                          aria-label="Edit crop"
+                          title="Edit crop"
+                        >
+                          <PencilIcon className="size-3 sm:size-3.5" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById(`participant-photo-${p.id}`)?.click()}
+                        disabled={saving}
+                        className="flex size-7 shrink-0 items-center justify-center rounded-sm transition hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-[#1f1f1f]/25 focus:ring-offset-0 disabled:opacity-50 sm:size-8"
+                        aria-label="Change photo"
+                        title="Change photo"
+                      >
+                        <ImagePlusIcon className="size-3 sm:size-3.5" />
+                      </button>
+                      {(p.previewUrl || p.avatarPath) ? (
+                        <button
+                          type="button"
+                          onClick={() => clearParticipantPhoto(p.id)}
+                          disabled={saving}
+                          className="flex size-7 shrink-0 items-center justify-center rounded-sm transition hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-[#1f1f1f]/25 focus:ring-offset-0 disabled:opacity-50 sm:size-8"
+                          aria-label="Remove photo"
+                          title="Remove photo"
+                        >
+                          <TrashIcon className="size-3 sm:size-3.5" />
+                        </button>
+                      ) : null}
+                    </div>
                     <button
                       type="button"
                       onClick={() => removeParticipant(p.id)}
@@ -1009,7 +1113,7 @@ export default function TripFormModal({
           </div>
         </form>
 
-        {trip?.id && destinationImageSrcForCrop && (
+        {destinationImageSrcForCrop && (
           <DestinationImageCropDialog
             open={destinationCropOpen}
             onOpenChange={handleDestinationCropClose}
@@ -1025,50 +1129,64 @@ export default function TripFormModal({
               if (srcUrl?.startsWith("blob:")) URL.revokeObjectURL(srcUrl);
               destinationFileForCropRef.current = null;
 
-              if (!trip?.id) return;
-              try {
-                if (recrop) {
-                  if (recrop.existingAssetId) {
-                    await updateEditableImageAssetCrop(supabase, {
-                      existingAssetId: recrop.existingAssetId,
-                      tripId: trip.id,
-                      ownerType: "destination_cover",
-                      croppedBlob: blob,
-                      cropMetadata,
-                    });
+              if (trip?.id) {
+                try {
+                  if (recrop) {
+                    if (recrop.existingAssetId) {
+                      await updateEditableImageAssetCrop(supabase, {
+                        existingAssetId: recrop.existingAssetId,
+                        tripId: trip.id,
+                        ownerType: "destination_cover",
+                        croppedBlob: blob,
+                        cropMetadata,
+                      });
+                    } else {
+                      const res = await fetch(srcUrl!);
+                      const legacyBlob = await res.blob();
+                      const originalFile = new File([legacyBlob], "original.jpg", { type: "image/jpeg" });
+                      await saveEditableImageAsset(supabase, {
+                        tripId: trip.id,
+                        ownerType: "destination_cover",
+                        originalFile,
+                        croppedBlob: blob,
+                        cropMetadata,
+                      });
+                    }
                   } else {
-                    const res = await fetch(srcUrl!);
-                    const legacyBlob = await res.blob();
-                    const originalFile = new File([legacyBlob], "original.jpg", { type: "image/jpeg" });
+                    if (!file) return;
+                    const existingId = await getExistingEditableAssetId(supabase, trip.id, "destination_cover");
                     await saveEditableImageAsset(supabase, {
                       tripId: trip.id,
                       ownerType: "destination_cover",
-                      originalFile,
+                      originalFile: file,
                       croppedBlob: blob,
                       cropMetadata,
+                      existingAssetId: existingId,
                     });
                   }
-                } else {
-                  if (!file) return;
-                  const existingId = await getExistingEditableAssetId(supabase, trip.id, "destination_cover");
-                  await saveEditableImageAsset(supabase, {
-                    tripId: trip.id,
-                    ownerType: "destination_cover",
-                    originalFile: file,
-                    croppedBlob: blob,
-                    cropMetadata,
-                    existingAssetId: existingId,
-                  });
+                  onSuccess?.();
+                  hasJustUploadedDestinationRef.current = true;
+                  const path = `${trip.id}/destination.jpg`;
+                  const { data } = await supabase.storage
+                    .from("trip-covers")
+                    .createSignedUrl(path, 3600);
+                  if (data?.signedUrl) setExistingDestinationSignedUrl(data.signedUrl);
+                } catch (err) {
+                  console.error("Destination image save failed", err);
                 }
-                onSuccess?.();
-                hasJustUploadedDestinationRef.current = true;
-                const path = `${trip.id}/destination.jpg`;
-                const { data } = await supabase.storage
-                  .from("trip-covers")
-                  .createSignedUrl(path, 3600);
-                if (data?.signedUrl) setExistingDestinationSignedUrl(data.signedUrl);
-              } catch (err) {
-                console.error("Destination image save failed", err);
+                return;
+              }
+
+              if (mode === "create") {
+                if (file) {
+                  setDestinationPendingOriginalFile(file);
+                }
+                setDestinationPendingCroppedBlob(blob);
+                setDestinationPendingCropMetadata(cropMetadata);
+                setDestinationPreviewUrl((prev) => {
+                  if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+                  return URL.createObjectURL(blob);
+                });
               }
             }}
           />
