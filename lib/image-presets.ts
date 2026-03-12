@@ -15,21 +15,21 @@ export type ImagePreset = {
   label: string;
 };
 
-/** Trip and destination hero: wide banner matching dashboard TripHero (280–300px height, full width). 16:6 keeps one consistent crop. */
+/** Trip cover: crop aspect matches TripHero on dashboard (full width × 280px; 1024/280 ≈ 3.66). */
 export const TRIP_HERO_PRESET: ImagePreset = {
   key: "trip_hero",
-  aspect: 16 / 6,
+  aspect: 1024 / 280,
   outputWidth: 960,
-  outputHeight: 360,
+  outputHeight: Math.round(960 / (1024 / 280)),
   label: "Trip cover",
 };
 
-/** Same aspect as trip hero; used for destination cover in hero/cards. */
+/** Short wide banner for destination (Places & map card). Crop matches display height. */
 export const DESTINATION_HERO_PRESET: ImagePreset = {
   key: "destination_hero",
-  aspect: 16 / 6,
+  aspect: 6,
   outputWidth: 960,
-  outputHeight: 360,
+  outputHeight: 160,
   label: "Destination cover",
 };
 

@@ -612,7 +612,7 @@ export default function TripPage() {
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 {/* Destination / Places & map (prominent: full-width, links to places page) */}
                 <article
-                  className={`md:col-span-2 cursor-pointer transition hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] overflow-hidden rounded-2xl border border-[#ebe5df] shadow-[0_2px_12px_rgba(0,0,0,0.04)] ${destinationImageUrl ? "min-h-[140px]" : DASHBOARD_CARD_CLASS}`}
+                  className={`md:col-span-2 cursor-pointer transition hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] overflow-hidden rounded-2xl border border-[#ebe5df] shadow-[0_2px_12px_rgba(0,0,0,0.04)] ${destinationImageUrl ? "min-h-[160px]" : DASHBOARD_CARD_CLASS}`}
                   role="button"
                   tabIndex={0}
                   onClick={() => router.push(`/dashboard/trip/${trip.id}/places`)}
@@ -625,7 +625,8 @@ export default function TripPage() {
                 >
                   {destinationImageUrl ? (
                     <>
-                      <div className="relative h-[140px] w-full overflow-hidden rounded-2xl bg-neutral-200">
+                      {/* Fixed height matches destination crop aspect (6:1) so crop = display */}
+                      <div className="relative h-[160px] w-full overflow-hidden rounded-2xl bg-neutral-200">
                         <img
                           src={destinationImageUrl}
                           alt=""
