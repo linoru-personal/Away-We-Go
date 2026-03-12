@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/app/lib/supabaseClient";
-import { SegmentedControl, type TasksStatusFilter } from "@/components/tasks/segmented-control";
 import { AddTaskDialog } from "@/components/tasks/add-task-dialog";
 
 export type TaskStatus = "todo" | "done";
@@ -26,8 +25,6 @@ export interface TasksSectionProps {
   participantAvatarUrls?: (string | null)[];
 }
 
-const STATUS_FILTER_ALL = "all" as const;
-type StatusFilterValue = TaskStatus | typeof STATUS_FILTER_ALL;
 
 const DESCRIPTION_PREVIEW_LENGTH = 60;
 
@@ -131,9 +128,8 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
   const [participants, setParticipants] = useState<TripParticipant[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(STATUS_FILTER_ALL);
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
-  const [completedSectionCollapsed, setCompletedSectionCollapsed] = useState(true);
+  const [completedSectionCollapsed, setCompletedSectionCollapsed] = useState(false);
 
   const [addModalOpen, setAddModalOpen] = useState(false);
 
@@ -205,9 +201,6 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
 
   const filteredTasks = useMemo(() => {
     let list = tasks;
-    if (statusFilter !== STATUS_FILTER_ALL) {
-      list = list.filter((t) => t.status === statusFilter);
-    }
     if (assigneeFilter !== "all") {
       list = list.filter((t) => {
         const a = t.assignee?.trim() || "";
@@ -216,7 +209,7 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
       });
     }
     return list;
-  }, [tasks, statusFilter, assigneeFilter]);
+  }, [tasks, assigneeFilter]);
 
   /** Sticky direction when RTL/LTR count is equal; avoid flipping on tie. */
   const [lastDirection, setLastDirection] = useState<"rtl" | "ltr">("ltr");
@@ -263,10 +256,7 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
     totalTaskCount > 0
       ? Math.round((completedCountAll / totalTaskCount) * 100)
       : 0;
-  const openCount = tasks.filter((t) => t.status === "todo").length;
-
-  const hasFilters =
-    statusFilter !== STATUS_FILTER_ALL || assigneeFilter !== "all";
+  const hasFilters = assigneeFilter !== "all";
   const emptyStateMessage = useMemo(() => {
     if (tasks.length === 0) return "No tasks yet. Add your first one.";
     if (filteredTasks.length === 0 && hasFilters) return "No tasks match this filter.";
@@ -595,52 +585,27 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
         </div>
       </div>
 
-      {/* Filters card */}
-      <div className={`mt-6 ${CARD_CLASS}`}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 flex-1" />
-          <div className="flex items-center gap-3">
-            {openCount > 0 && (
-              <span className="text-2xl font-semibold text-[#E07A5F]">
-                {openCount}
-              </span>
-            )}
-            {canEditContent && (
-            <button
-              type="button"
-              className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
-              onClick={() => setAddModalOpen(true)}
-            >
-              Add Task
-            </button>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-5 flex flex-col gap-4">
-          <SegmentedControl
-            value={statusFilter as TasksStatusFilter}
-            onChange={(v) => setStatusFilter(v)}
-          />
-          {/* Assignee filter: pill buttons (same design as packing page – All, Everyone, then participants with avatar) */}
+      {/* Participant filter + Add Task (no card background) */}
+      <div className="mt-6 flex flex-col gap-4">
+          {/* Assignee filter: pill chips (same as design – unselected = white + border, selected = coral) */}
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm ${
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition ${
                 assigneeFilter === "all"
-                  ? "bg-[#E07A5F] text-white"
-                  : "bg-[#F5F3F0] text-[#4A4A4A] hover:bg-[#E8E4E0]"
+                  ? "border-[#E07A5F] bg-[#E07A5F] text-white"
+                  : "border-[#D4C5BA] bg-white text-[#4A4A4A] hover:bg-[#F5F3F0]"
               }`}
               onClick={() => setAssigneeFilter("all")}
             >
-              <span>All</span>
+              <span>All Tasks</span>
             </button>
             <button
               type="button"
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm ${
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition ${
                 assigneeFilter === EVERYONE_LABEL
-                  ? "bg-[#E07A5F] text-white"
-                  : "bg-[#F5F3F0] text-[#4A4A4A] hover:bg-[#E8E4E0]"
+                  ? "border-[#E07A5F] bg-[#E07A5F] text-white"
+                  : "border-[#D4C5BA] bg-white text-[#4A4A4A] hover:bg-[#F5F3F0]"
               }`}
               onClick={() => setAssigneeFilter(EVERYONE_LABEL)}
             >
@@ -652,10 +617,10 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
                 <button
                   key={p.id}
                   type="button"
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm ${
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium transition ${
                     assigneeFilter === p.name
-                      ? "bg-[#E07A5F] text-white"
-                      : "bg-[#F5F3F0] text-[#4A4A4A] hover:bg-[#E8E4E0]"
+                      ? "border-[#E07A5F] bg-[#E07A5F] text-white"
+                      : "border-[#D4C5BA] bg-white text-[#4A4A4A] hover:bg-[#F5F3F0]"
                   }`}
                   onClick={() => setAssigneeFilter(p.name)}
                 >
@@ -674,12 +639,24 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
                       {p.name.trim().slice(0, 1).toUpperCase() || "?"}
                     </span>
                   )}
-                  <span>{p.name}</span>
+                  <span>{p.name}              </span>
                 </button>
               );
             })}
           </div>
-        </div>
+
+          {/* Add Task below participant filter (same layout as packing: button on right) */}
+          {canEditContent && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
+                onClick={() => setAddModalOpen(true)}
+              >
+                Add Task
+              </button>
+            </div>
+          )}
       </div>
 
       <AddTaskDialog
@@ -693,48 +670,66 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
         <p className="mt-4 text-sm text-[#E07A5F]">Saved.</p>
       )}
 
-      {/* Empty state */}
+      {/* Empty state when no tasks at all or no tasks match assignee filter */}
       {emptyStateMessage && (
         <div className="mt-6 rounded-xl border border-dashed border-[#D4C5BA] py-8 text-center text-sm text-[#6B7280]">
           {emptyStateMessage}
         </div>
       )}
 
-      {/* To do section */}
-      {!emptyStateMessage && todoTasks.length > 0 && (
-        <div className="mt-6">
-          <h3 className="mb-3 text-sm font-semibold text-[#4A4A4A]">To do</h3>
-          <ul className="space-y-3">
-            {todoTasks.map((t) => (
-              <li key={t.id}>{renderTaskCard(t)}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Category-style sections: To do (always open), Completed (collapsible, open by default) */}
+      {!emptyStateMessage && (
+        <div className="mt-8 space-y-8">
+          {/* To do – always visible */}
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="font-semibold text-[#4A4A4A]">To do</span>
+              <span className="text-sm text-[#6B7280]">
+                {todoTasks.length} task{todoTasks.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className={`rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)] ${todoTasks.length === 0 ? "py-6" : ""}`}>
+              {todoTasks.length === 0 ? (
+                <p className="text-center text-sm text-[#6B7280]">No items</p>
+              ) : (
+                <ul className="space-y-3">
+                  {todoTasks.map((t) => (
+                    <li key={t.id}>{renderTaskCard(t)}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
 
-      {/* Completed accordion */}
-      {!emptyStateMessage && completedTasks.length > 0 && (
-        <div className="mt-6">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-lg py-2 text-left text-sm font-semibold text-[#4A4A4A] hover:bg-[#F5F3F0]/80"
-            onClick={() => setCompletedSectionCollapsed((c) => !c)}
-          >
-            <span>Completed</span>
-            <span className="flex items-center gap-2 font-normal text-[#9B7B6B]">
-              {completedTasks.length} task{completedTasks.length !== 1 ? "s" : ""}
-              <ChevronDownIcon
-                className={`size-4 text-[#6B7280] transition ${completedSectionCollapsed ? "" : "rotate-180"}`}
-              />
-            </span>
-          </button>
-          {!completedSectionCollapsed && (
-            <ul className="mt-3 space-y-3">
-              {completedTasks.map((t) => (
-                <li key={t.id}>{renderTaskCard(t)}</li>
-              ))}
-            </ul>
-          )}
+          {/* Completed – collapsible, open by default */}
+          <section>
+            <button
+              type="button"
+              className="mb-3 flex w-full items-center justify-between gap-2 text-left"
+              onClick={() => setCompletedSectionCollapsed((c) => !c)}
+            >
+              <span className="font-semibold text-[#4A4A4A]">Completed</span>
+              <span className="flex items-center gap-2 text-sm text-[#6B7280]">
+                {completedTasks.length} task{completedTasks.length !== 1 ? "s" : ""}
+                <ChevronDownIcon
+                  className={`size-4 text-[#6B7280] transition ${completedSectionCollapsed ? "" : "rotate-180"}`}
+                />
+              </span>
+            </button>
+            {!completedSectionCollapsed && (
+              <div className={`rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)] ${completedTasks.length === 0 ? "py-6" : ""}`}>
+                {completedTasks.length === 0 ? (
+                  <p className="text-center text-sm text-[#6B7280]">No items</p>
+                ) : (
+                  <ul className="space-y-3">
+                    {completedTasks.map((t) => (
+                      <li key={t.id}>{renderTaskCard(t)}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </section>
         </div>
       )}
     </>
