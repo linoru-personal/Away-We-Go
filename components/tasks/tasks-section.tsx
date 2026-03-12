@@ -22,6 +22,8 @@ export interface TasksSectionProps {
   tripId: string;
   /** When false (e.g. viewer), hide add/edit/delete/toggle. Default true. */
   canEditContent?: boolean;
+  /** Avatar URL per participant, same order as participants. Optional; when missing, initials are shown in assignee pills. */
+  participantAvatarUrls?: (string | null)[];
 }
 
 const STATUS_FILTER_ALL = "all" as const;
@@ -124,14 +126,13 @@ function isRtlText(s: string): boolean {
 
 type TripParticipant = { id: string; name: string };
 
-export function TasksSection({ tripId, canEditContent = true }: TasksSectionProps) {
+export function TasksSection({ tripId, canEditContent = true, participantAvatarUrls = [] }: TasksSectionProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [participants, setParticipants] = useState<TripParticipant[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(STATUS_FILTER_ALL);
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState("");
   const [completedSectionCollapsed, setCompletedSectionCollapsed] = useState(true);
 
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -214,16 +215,8 @@ export function TasksSection({ tripId, canEditContent = true }: TasksSectionProp
         return label === assigneeFilter;
       });
     }
-    const q = searchQuery.trim().toLowerCase();
-    if (q) {
-      list = list.filter(
-        (t) =>
-          t.title.toLowerCase().includes(q) ||
-          (t.description ?? "").toLowerCase().includes(q)
-      );
-    }
     return list;
-  }, [tasks, statusFilter, assigneeFilter, searchQuery]);
+  }, [tasks, statusFilter, assigneeFilter]);
 
   /** Sticky direction when RTL/LTR count is equal; avoid flipping on tie. */
   const [lastDirection, setLastDirection] = useState<"rtl" | "ltr">("ltr");
@@ -272,18 +265,13 @@ export function TasksSection({ tripId, canEditContent = true }: TasksSectionProp
       : 0;
   const openCount = tasks.filter((t) => t.status === "todo").length;
 
-  const hasFiltersOrSearch =
-    statusFilter !== STATUS_FILTER_ALL ||
-    assigneeFilter !== "all" ||
-    searchQuery.trim() !== "";
+  const hasFilters =
+    statusFilter !== STATUS_FILTER_ALL || assigneeFilter !== "all";
   const emptyStateMessage = useMemo(() => {
     if (tasks.length === 0) return "No tasks yet. Add your first one.";
-    if (filteredTasks.length === 0 && hasFiltersOrSearch) {
-      if (searchQuery.trim()) return "No tasks found.";
-      return "No tasks match this filter.";
-    }
+    if (filteredTasks.length === 0 && hasFilters) return "No tasks match this filter.";
     return null;
-  }, [tasks.length, filteredTasks.length, hasFiltersOrSearch, searchQuery]);
+  }, [tasks.length, filteredTasks.length, hasFilters]);
 
   async function handleAddTask(params: {
     title: string;
@@ -629,42 +617,67 @@ export function TasksSection({ tripId, canEditContent = true }: TasksSectionProp
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
-          <div className="flex flex-col gap-4">
-            <SegmentedControl
-              value={statusFilter as TasksStatusFilter}
-              onChange={(v) => setStatusFilter(v)}
-            />
-            <div className="md:mt-0">
-              <label className="mb-1 block text-xs font-medium text-[#6B7280]">
-                Assignee
-              </label>
-              <select
-                value={assigneeFilter}
-                onChange={(e) => setAssigneeFilter(e.target.value)}
-                className="w-full rounded-lg border border-[#D4C5BA] bg-white px-3 py-2 text-sm text-[#4A4A4A]"
-              >
-                <option value="all">All assignees</option>
-                <option value={EVERYONE_LABEL}>{EVERYONE_LABEL}</option>
-                {participants.map((p) => (
-                  <option key={p.id} value={p.name}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="flex flex-col justify-end">
-            <label className="mb-1 block text-xs font-medium text-[#6B7280]">
-              Search
-            </label>
-            <input
-              type="search"
-              placeholder="Search title or description…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-[#D4C5BA] bg-white px-3 py-2 text-sm text-[#4A4A4A] placeholder:text-[#6B7280]"
-            />
+        <div className="mt-5 flex flex-col gap-4">
+          <SegmentedControl
+            value={statusFilter as TasksStatusFilter}
+            onChange={(v) => setStatusFilter(v)}
+          />
+          {/* Assignee filter: pill buttons (same design as packing page – All, Everyone, then participants with avatar) */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm ${
+                assigneeFilter === "all"
+                  ? "bg-[#E07A5F] text-white"
+                  : "bg-[#F5F3F0] text-[#4A4A4A] hover:bg-[#E8E4E0]"
+              }`}
+              onClick={() => setAssigneeFilter("all")}
+            >
+              <span>All</span>
+            </button>
+            <button
+              type="button"
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm ${
+                assigneeFilter === EVERYONE_LABEL
+                  ? "bg-[#E07A5F] text-white"
+                  : "bg-[#F5F3F0] text-[#4A4A4A] hover:bg-[#E8E4E0]"
+              }`}
+              onClick={() => setAssigneeFilter(EVERYONE_LABEL)}
+            >
+              <span>Everyone</span>
+            </button>
+            {participants.map((p, i) => {
+              const avatarUrl = participantAvatarUrls[i] ?? null;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm ${
+                    assigneeFilter === p.name
+                      ? "bg-[#E07A5F] text-white"
+                      : "bg-[#F5F3F0] text-[#4A4A4A] hover:bg-[#E8E4E0]"
+                  }`}
+                  onClick={() => setAssigneeFilter(p.name)}
+                >
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt=""
+                      className="size-6 shrink-0 rounded-full object-cover"
+                      aria-hidden
+                    />
+                  ) : (
+                    <span
+                      className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#E8E4E0] text-xs font-medium text-[#6B7280]"
+                      aria-hidden
+                    >
+                      {p.name.trim().slice(0, 1).toUpperCase() || "?"}
+                    </span>
+                  )}
+                  <span>{p.name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

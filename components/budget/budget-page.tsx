@@ -22,7 +22,7 @@ import {
 import { AddBudgetItemDialog } from "@/components/budget/add-budget-item-dialog";
 import { AddCurrencyDialog } from "@/components/budget/add-currency-dialog";
 import { ManageCategoriesDialog } from "@/components/budget/manage-categories-dialog";
-import { CategoryIcon, BUDGET_DEFAULT_ICON, getIconKey } from "@/components/ui/category-icons";
+import { CategoryIcon, BUDGET_DEFAULT_ICON, getIconKey, type CategoryIconKey } from "@/components/ui/category-icons";
 import {
   Dialog,
   DialogContent,
@@ -79,6 +79,62 @@ function formatDate(dateStr: string | null): string {
   }
 }
 
+/** Short label for day separator in date view (e.g. "Dec 19" or "Dec 29, 2025" if different year). */
+function formatDayLabel(dateStr: string): string {
+  try {
+    const d = new Date(dateStr + "T12:00:00");
+    const y = d.getFullYear();
+    const sameYear = y === new Date().getFullYear();
+    return sameYear
+      ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
+}
+
+type DateGroup = {
+  dateKey: string;
+  dateLabel: string;
+  iconKey: CategoryIconKey;
+  items: BudgetItemRow[];
+  total_base: number;
+};
+
+/** Group items by date (and "No date"), sorted by date; each group has label and total for section header. */
+function itemsGroupedByDate(itemsGrouped: BudgetData["itemsGrouped"]): DateGroup[] {
+  const flat: BudgetItemRow[] = [];
+  for (const g of itemsGrouped) flat.push(...g.items);
+  const byDate = new Map<string | null, BudgetItemRow[]>();
+  for (const item of flat) {
+    const key = item.date ?? null;
+    const list = byDate.get(key) ?? [];
+    list.push(item);
+    byDate.set(key, list);
+  }
+  const withDate: DateGroup[] = Array.from(byDate.entries())
+    .filter(([date]) => date != null)
+    .sort(([a], [b]) => a!.localeCompare(b!))
+    .map(([date, items]) => ({
+      dateKey: date!,
+      dateLabel: formatDayLabel(date!),
+      iconKey: "calendar" as CategoryIconKey,
+      items,
+      total_base: items.reduce((s, i) => s + Number(i.amount_base), 0),
+    }));
+  const noDateItems = byDate.get(null) ?? [];
+  if (noDateItems.length > 0) {
+    withDate.push({
+      dateKey: "__no_date__",
+      dateLabel: "No date",
+      iconKey: BUDGET_DEFAULT_ICON,
+      items: noDateItems,
+      total_base: noDateItems.reduce((s, i) => s + Number(i.amount_base), 0),
+    });
+  }
+  return withDate;
+}
+
 function EditIcon() {
   return (
     <svg
@@ -128,6 +184,7 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
   const [editingItem, setEditingItem] = useState<BudgetItemRow | null>(null);
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [displayCurrency, setDisplayCurrency] = useState<string>("ILS");
+  const [listView, setListView] = useState<"category" | "date">("category");
 
   const displayCurrencies = mergeDisplayCurrencies(tripCurrencies);
 
@@ -317,9 +374,35 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
         )}
       </div>
 
+      {/* View toggle: same style as packing page (By Category / By Participant) */}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+            listView === "category"
+              ? "border-[#E07A5F] bg-[#E07A5F] text-white"
+              : "border-[#D4C5BA] bg-white text-[#4A4A4A] hover:bg-[#F5F3F0]"
+          }`}
+          onClick={() => setListView("category")}
+        >
+          By category
+        </button>
+        <button
+          type="button"
+          className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+            listView === "date"
+              ? "border-[#E07A5F] bg-[#E07A5F] text-white"
+              : "border-[#D4C5BA] bg-white text-[#4A4A4A] hover:bg-[#F5F3F0]"
+          }`}
+          onClick={() => setListView("date")}
+        >
+          By date
+        </button>
+      </div>
+
       {/* Manage Categories */}
       {canEditContent && (
-      <div>
+      <div className="mt-2">
         <button
           type="button"
           className="text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
@@ -330,7 +413,8 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
       </div>
       )}
 
-      {/* Category list with items */}
+      {/* Category list with items (default) */}
+      {listView === "category" && (
       <div className="space-y-8">
         {budget.itemsGrouped.map((group) => (
           <section key={group.category?.id ?? "uncategorized"}>
@@ -400,6 +484,73 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
           </section>
         ))}
       </div>
+      )}
+
+      {/* Date view: sections like category view (date header + card per day) */}
+      {listView === "date" && (() => {
+        const groupsByDate = itemsGroupedByDate(budget.itemsGrouped);
+        const categoryNameById = new Map(budget.categories.map((c) => [c.id, c.name]));
+        if (groupsByDate.length === 0) {
+          return (
+            <div className="rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+              <p className="py-2 text-sm text-[#6B7280]">No items</p>
+            </div>
+          );
+        }
+        return (
+          <div className="space-y-8">
+            {groupsByDate.map((group) => (
+              <section key={group.dateKey}>
+                {/* Date header: icon, label, total (same layout as category) */}
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl text-[#1f1f1f]">
+                    <CategoryIcon iconKey={getIconKey(group.iconKey, BUDGET_DEFAULT_ICON)} size={22} />
+                  </div>
+                  <span className="flex-1 font-semibold text-[#4A4A4A]">
+                    {group.dateLabel}
+                  </span>
+                  <span className="text-right font-medium text-[#4A4A4A]">
+                    {formatMoney(
+                      usdToDisplay(group.total_base, displayCurrency, ratesToUSDMap),
+                      displayCurrency
+                    )}
+                  </span>
+                </div>
+                {/* Item rows in same card as category view */}
+                <div className="rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+                  <ul className="divide-y divide-[#F5F3F0]" role="list">
+                    {group.items.map((item) => {
+                      const categoryName = item.category_id
+                        ? categoryNameById.get(item.category_id) ?? null
+                        : null;
+                      return (
+                        <BudgetItemRow
+                          key={item.id}
+                          item={item}
+                          displayCurrency={displayCurrency}
+                          ratesToUSDMap={ratesToUSDMap}
+                          canEdit={canEditContent}
+                          showCategoryLabel={categoryName != null}
+                          categoryLabel={categoryName ?? undefined}
+                          hideDateInRow
+                          onEdit={() => {
+                            setEditingItem(item);
+                            setAddItemOpen(true);
+                          }}
+                          onDelete={async () => {
+                            await deleteBudgetItem(item.id);
+                            refetchBudget();
+                          }}
+                        />
+                      );
+                    })}
+                  </ul>
+                </div>
+              </section>
+            ))}
+          </div>
+        );
+      })()}
 
       <AddBudgetItemDialog
         open={addItemOpen}
@@ -445,6 +596,10 @@ function BudgetItemRow({
   canEdit,
   onEdit,
   onDelete,
+  showCategoryLabel,
+  categoryLabel,
+  hideDateInRow,
+  as: Wrapper = "li",
 }: {
   item: BudgetItemRow;
   displayCurrency: string;
@@ -452,6 +607,11 @@ function BudgetItemRow({
   canEdit: boolean;
   onEdit: () => void;
   onDelete: () => void | Promise<void>;
+  showCategoryLabel?: boolean;
+  categoryLabel?: string;
+  /** When true (e.g. in "by date" view), do not show date in the row subtitle; section header is enough. */
+  hideDateInRow?: boolean;
+  as?: "li" | "div";
 }) {
   const itemCurrency = item.currency.toUpperCase();
   const amountDisplay = formatMoney(item.amount, item.currency);
@@ -466,14 +626,18 @@ function BudgetItemRow({
   const convertedAmount = showConverted
     ? convertViaUSD(item.amount, item.currency, displayCurrency, ratesToUSDMap)
     : 0;
-  const dateStr = formatDate(item.date);
+  const dateStr = hideDateInRow ? null : formatDate(item.date);
 
   return (
-    <li className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+    <Wrapper className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
       <div className="min-w-0 flex-1">
         <p className="font-medium text-[#4A4A4A]">{item.name}</p>
-        {dateStr ? (
-          <p className="mt-0.5 text-xs text-[#6B7280]">{dateStr}</p>
+        {(showCategoryLabel && categoryLabel) || dateStr ? (
+          <p className="mt-0.5 text-xs text-[#6B7280]">
+            {[showCategoryLabel && categoryLabel ? categoryLabel : null, dateStr]
+              .filter(Boolean)
+              .join(" · ") || null}
+          </p>
         ) : null}
       </div>
       <div className="flex items-center gap-3">
@@ -508,6 +672,6 @@ function BudgetItemRow({
           )}
         </div>
       </div>
-    </li>
+    </Wrapper>
   );
 }

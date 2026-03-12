@@ -141,7 +141,11 @@ export default function ManageTasksPage() {
               onBack={() => router.push(`/dashboard/trip/${id}`)}
               participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
             />
-            <TasksSection tripId={id} canEditContent={canEditContent} />
+            <TasksSection
+              tripId={id}
+              canEditContent={canEditContent}
+              participantAvatarUrls={participantAvatarUrls}
+            />
           </>
         ) : (
           <div className="space-y-2">
