@@ -38,6 +38,7 @@ export default function TripPhotosPage() {
   const { canEditContent } = useTripRole(trip, user?.id ?? undefined);
   const [tripLoading, setTripLoading] = useState(true);
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
   const [photosWithUrls, setPhotosWithUrls] = useState<PhotoWithUrl[]>([]);
   const [photosLoading, setPhotosLoading] = useState(true);
 
@@ -79,6 +80,41 @@ export default function TripPhotosPage() {
       cancelled = true;
     };
   }, [id, user]);
+
+  useEffect(() => {
+    if (!id) {
+      setParticipantAvatarUrls([]);
+      return;
+    }
+    let cancelled = false;
+    supabase
+      .from("trip_participants")
+      .select("avatar_path, sort_order")
+      .eq("trip_id", id)
+      .order("sort_order", { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) {
+          setParticipantAvatarUrls([]);
+          return;
+        }
+        const rows = (data ?? []) as { avatar_path: string | null }[];
+        Promise.all(
+          rows.map(async (r) => {
+            if (!r.avatar_path) return null;
+            const { data: signed } = await supabase.storage
+              .from("avatars")
+              .createSignedUrl(r.avatar_path, 3600);
+            return signed?.signedUrl ?? null;
+          })
+        ).then((urls) => {
+          if (!cancelled) setParticipantAvatarUrls(urls);
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   useEffect(() => {
     if (!id) {
@@ -211,6 +247,7 @@ export default function TripPhotosPage() {
       title={trip.title}
       dates={dates}
       coverImageUrl={coverImageUrl ?? trip.cover_image_url ?? null}
+      participantAvatarUrls={participantAvatarUrls}
       photos={photosLoading ? [] : photosWithUrls}
       canEditContent={canEditContent}
       onUploadSuccess={refetchPhotos}

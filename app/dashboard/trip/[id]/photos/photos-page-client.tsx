@@ -11,6 +11,8 @@ export interface PhotosPageClientProps {
   title: string;
   dates: string;
   coverImageUrl: string | null;
+  /** Signed avatar URLs for trip participants (order preserved). */
+  participantAvatarUrls?: (string | null)[];
   photos: PhotoWithUrl[];
   /** When false (e.g. viewer), hide upload and delete. Default true. */
   canEditContent?: boolean;
@@ -22,6 +24,7 @@ export function PhotosPageClient({
   title,
   dates,
   coverImageUrl,
+  participantAvatarUrls = [],
   photos,
   canEditContent = true,
   onUploadSuccess,
@@ -55,6 +58,7 @@ export function PhotosPageClient({
           dates={dates}
           imageUrl={coverImageUrl ?? undefined}
           onBack={() => router.push(`/dashboard/trip/${tripId}`)}
+          participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
         />
         <div className="mt-8">
           <PhotosSection tripId={tripId} photos={photos} canEditContent={canEditContent} onUploadSuccess={onUploadSuccess} />

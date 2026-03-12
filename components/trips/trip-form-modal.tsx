@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { supabase } from "@/app/lib/supabaseClient";
 import { DestinationImageCropDialog } from "@/components/trips/destination-image-crop-dialog";
+import { CoverImageCropDialog } from "@/components/trips/cover-image-crop-dialog";
 import { AvatarCropDialog } from "@/components/trips/avatar-crop-dialog";
 
 export type TripForForm = {
@@ -63,6 +64,8 @@ export default function TripFormModal({
   const [existingDestinationSignedUrl, setExistingDestinationSignedUrl] = useState<string | null>(null);
   const [destinationCropOpen, setDestinationCropOpen] = useState(false);
   const [destinationImageSrcForCrop, setDestinationImageSrcForCrop] = useState<string | null>(null);
+  const [coverCropOpen, setCoverCropOpen] = useState(false);
+  const [coverImageSrcForCrop, setCoverImageSrcForCrop] = useState<string | null>(null);
   const [avatarCropOpen, setAvatarCropOpen] = useState(false);
   const [avatarImageSrcForCrop, setAvatarImageSrcForCrop] = useState<string | null>(null);
   const [participantIdForAvatarCrop, setParticipantIdForAvatarCrop] = useState<string | null>(null);
@@ -170,6 +173,8 @@ export default function TripFormModal({
       setCoverPreviewUrl(null);
       setExistingCoverSignedUrl(null);
       setExistingDestinationSignedUrl(null);
+      setCoverCropOpen(false);
+      setCoverImageSrcForCrop(null);
       setError(null);
       setParticipants([]);
     }
@@ -196,8 +201,25 @@ export default function TripFormModal({
     const file = e.target.files?.[0];
     e.target.value = "";
     if (file && file.type.startsWith("image/")) {
-      setCoverFile(file);
+      const url = URL.createObjectURL(file);
+      setCoverImageSrcForCrop(url);
+      setCoverCropOpen(true);
     }
+  };
+
+  const handleEditCoverCrop = () => {
+    if (existingCoverSignedUrl) {
+      setCoverImageSrcForCrop(existingCoverSignedUrl);
+      setCoverCropOpen(true);
+    }
+  };
+
+  const handleCoverCropClose = (open: boolean) => {
+    if (!open && coverImageSrcForCrop?.startsWith("blob:")) {
+      URL.revokeObjectURL(coverImageSrcForCrop);
+    }
+    setCoverCropOpen(open);
+    if (!open) setCoverImageSrcForCrop(null);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -497,25 +519,37 @@ export default function TripFormModal({
                 aria-hidden
                 onChange={handleFileChange}
               />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-                className="mt-1.5 flex h-[180px] w-full flex-col items-center justify-center rounded-[20px] border-2 border-dashed border-[#e0d9d2] bg-[#fbf7f2] transition hover:border-[#d97b5e]/50 hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30"
-              >
-                {displayCoverUrl ? (
-                  <img
-                    src={displayCoverUrl}
-                    alt="Cover preview"
-                    className="h-full w-full rounded-[18px] object-cover"
-                  />
-                ) : (
-                  <span className="text-sm text-[#8a8a8a]">
-                    Drop an image or click to upload
-                  </span>
+              <div className="mt-1.5 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  className="flex h-[180px] w-full flex-col items-center justify-center rounded-[20px] border-2 border-dashed border-[#e0d9d2] bg-[#fbf7f2] transition hover:border-[#d97b5e]/50 hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30"
+                >
+                  {displayCoverUrl ? (
+                    <img
+                      src={displayCoverUrl}
+                      alt="Cover preview"
+                      className="h-full w-full rounded-[18px] object-cover"
+                    />
+                  ) : (
+                    <span className="text-sm text-[#8a8a8a]">
+                      Drop an image or click to upload
+                    </span>
+                  )}
+                </button>
+                {mode === "edit" && existingCoverSignedUrl && (
+                  <button
+                    type="button"
+                    onClick={handleEditCoverCrop}
+                    disabled={saving}
+                    className="text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2 disabled:opacity-50"
+                  >
+                    Edit crop
+                  </button>
                 )}
-              </button>
+              </div>
             </div>
 
             {mode === "edit" && trip && (
@@ -748,6 +782,35 @@ export default function TripFormModal({
                 .createSignedUrl(path, 3600);
               if (data?.signedUrl) setExistingDestinationSignedUrl(data.signedUrl);
             }}
+          />
+        )}
+
+        {coverImageSrcForCrop && (
+          <CoverImageCropDialog
+            open={coverCropOpen}
+            onOpenChange={handleCoverCropClose}
+            imageSrc={coverImageSrcForCrop}
+            tripId={mode === "edit" && trip ? trip.id : null}
+            onSuccess={async () => {
+              onSuccess?.();
+              if (trip?.cover_image_path) {
+                const { data } = await supabase.storage
+                  .from("trip-covers")
+                  .createSignedUrl(trip.cover_image_path, 3600);
+                if (data?.signedUrl) setExistingCoverSignedUrl(data.signedUrl);
+              }
+              setCoverImageSrcForCrop(null);
+              setCoverCropOpen(false);
+            }}
+            onCropComplete={mode === "create" ? (blob) => {
+              setCoverFile(new File([blob], "cover.jpg", { type: "image/jpeg" }));
+              setCoverPreviewUrl(URL.createObjectURL(blob));
+              if (coverImageSrcForCrop?.startsWith("blob:")) {
+                URL.revokeObjectURL(coverImageSrcForCrop);
+              }
+              setCoverImageSrcForCrop(null);
+              setCoverCropOpen(false);
+            } : undefined}
           />
         )}
 
