@@ -5,6 +5,7 @@ import {
   fetchBudgetData,
   fetchTripCurrencies,
   fetchTripExchangeRates,
+  deleteBudgetItem,
   type BudgetData,
   type BudgetCategorySummary,
   type BudgetItemRow,
@@ -387,6 +388,10 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
                         setEditingItem(item);
                         setAddItemOpen(true);
                       }}
+                      onDelete={async () => {
+                        await deleteBudgetItem(item.id);
+                        refetchBudget();
+                      }}
                     />
                   ))}
                 </ul>
@@ -439,12 +444,14 @@ function BudgetItemRow({
   ratesToUSDMap,
   canEdit,
   onEdit,
+  onDelete,
 }: {
   item: BudgetItemRow;
   displayCurrency: string;
   ratesToUSDMap: Record<string, number>;
   canEdit: boolean;
   onEdit: () => void;
+  onDelete: () => void | Promise<void>;
 }) {
   const itemCurrency = item.currency.toUpperCase();
   const amountDisplay = formatMoney(item.amount, item.currency);
@@ -493,6 +500,7 @@ function BudgetItemRow({
             type="button"
             className="rounded p-1.5 text-[#6B7280] transition hover:bg-[#F5F3F0] hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
             aria-label="Delete item"
+            onClick={() => onDelete()}
           >
             <TrashIcon />
           </button>

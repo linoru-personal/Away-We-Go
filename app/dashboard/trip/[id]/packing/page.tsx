@@ -6,6 +6,7 @@ import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
 import { useTripRole } from "@/app/lib/useTripRole";
 import TripHero from "@/components/trip/trip-hero";
+import { formatTripDateRange } from "@/lib/format-trip-dates";
 import { PackingList } from "@/components/packing/packing-list";
 
 type Trip = {
@@ -43,11 +44,6 @@ export type PackingParticipant = {
   name: string;
 };
 
-function formatDates(start: string | null, end: string | null): string {
-  if (!start && !end) return "—";
-  if (start && end) return `${start} → ${end}`;
-  return start ?? end ?? "—";
-}
 
 export default function PackingPage() {
   const params = useParams();
@@ -219,7 +215,7 @@ export default function PackingPage() {
           <>
             <TripHero
               title={trip.title}
-              dates={formatDates(trip.start_date, trip.end_date)}
+              dates={formatTripDateRange(trip.start_date, trip.end_date)}
               imageUrl={coverImageUrl ?? trip.cover_image_url ?? undefined}
               onBack={() => router.push(`/dashboard/trip/${id}`)}
               participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}

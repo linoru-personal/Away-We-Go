@@ -197,7 +197,7 @@ export default function TripFormModal({
     };
   }, [open, trip?.id, mode]);
 
-  // Reset when opening create modal
+  // Reset when opening create modal (revoke blob URLs before clearing)
   useEffect(() => {
     if (open && mode === "create") {
       setTitle("");
@@ -207,13 +207,19 @@ export default function TripFormModal({
       setCoverFile(null);
       setCoverCroppedBlob(null);
       setCoverCropMetadata(null);
-      setCoverPreviewUrl(null);
+      setCoverPreviewUrl((prev) => {
+        if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+        return null;
+      });
       setExistingCoverSignedUrl(null);
       setExistingDestinationSignedUrl(null);
       setDestinationPendingOriginalFile(null);
       setDestinationPendingCroppedBlob(null);
       setDestinationPendingCropMetadata(null);
-      setDestinationPreviewUrl(null);
+      setDestinationPreviewUrl((prev) => {
+        if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+        return null;
+      });
       setCoverCropOpen(false);
       setCoverImageSrcForCrop(null);
       setError(null);
@@ -364,11 +370,22 @@ export default function TripFormModal({
       .update({ cover_image_path: null })
       .eq("id", trip.id);
     setExistingCoverSignedUrl(null);
-    setCoverPreviewUrl(null);
+    setCoverPreviewUrl((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return null;
+    });
     setCoverFile(null);
     setCoverCroppedBlob(null);
     setCoverCropMetadata(null);
     onSuccess?.();
+  };
+
+  const clearCoverState = () => {
+    if (coverPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(coverPreviewUrl);
+    setCoverPreviewUrl(null);
+    setCoverFile(null);
+    setCoverCroppedBlob(null);
+    setCoverCropMetadata(null);
   };
 
   const removeDestinationImage = async () => {
@@ -847,11 +864,19 @@ export default function TripFormModal({
                       </span>
                     )}
                   </button>
-                  {mode === "edit" && existingCoverSignedUrl && (
+                  {displayCoverUrl && (
                     <ImageActionsOverlay
-                      onEditCrop={handleEditCoverCrop}
+                      onEditCrop={
+                        mode === "edit" && existingCoverSignedUrl
+                          ? handleEditCoverCrop
+                          : undefined
+                      }
                       onReplace={() => fileInputRef.current?.click()}
-                      onRemove={removeCoverImage}
+                      onRemove={
+                        mode === "edit" && existingCoverSignedUrl
+                          ? removeCoverImage
+                          : clearCoverState
+                      }
                       disabled={saving}
                       editLoading={coverSourceLoading}
                     />

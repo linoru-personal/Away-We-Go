@@ -8,6 +8,7 @@ import { useTripRole } from "@/app/lib/useTripRole";
 import { getTripPhotos } from "@/lib/trip-photos/queries";
 import type { PhotoWithUrl } from "@/components/trips/photos/photos-section";
 import { PhotosPageClient } from "./photos-page-client";
+import { formatTripDateRange } from "@/lib/format-trip-dates";
 
 type Trip = {
   id: string;
@@ -21,12 +22,6 @@ type Trip = {
 
 const PHOTOS_BUCKET = "trip-photos";
 const TRIP_COVERS_BUCKET = "trip-covers";
-
-function formatDates(start: string | null, end: string | null): string {
-  if (!start && !end) return "—";
-  if (start && end) return `${start} → ${end}`;
-  return start ?? end ?? "—";
-}
 
 export default function TripPhotosPage() {
   const params = useParams();
@@ -239,7 +234,7 @@ export default function TripPhotosPage() {
     );
   }
 
-  const dates = formatDates(trip.start_date, trip.end_date);
+  const dates = formatTripDateRange(trip.start_date, trip.end_date);
 
   return (
     <PhotosPageClient
