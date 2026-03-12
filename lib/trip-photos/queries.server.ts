@@ -7,17 +7,19 @@ export type TripPhotoRow = {
   image_path: string;
   caption: string | null;
   created_at: string;
+  taken_at: string | null;
+  sort_at: string;
 };
 
 /**
- * Returns all trip_photos for a trip, newest first. Server-only.
+ * Returns all trip_photos for a trip, oldest first (by sort_at). Server-only.
  */
 export async function getTripPhotos(tripId: string): Promise<TripPhotoRow[]> {
   const { data, error } = await supabase
     .from("trip_photos")
     .select("*")
     .eq("trip_id", tripId)
-    .order("created_at", { ascending: false });
+    .order("sort_at", { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as TripPhotoRow[];
 }

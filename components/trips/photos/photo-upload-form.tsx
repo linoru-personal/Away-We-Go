@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
+import { getTakenAtFromFile } from "@/lib/trip-photos/exif";
 
 const BUCKET = "trip-photos";
 
@@ -63,10 +64,13 @@ export function PhotoUploadForm({ tripId, userId, onUploadSuccess }: PhotoUpload
           throw new Error(uploadError.message);
         }
 
+        const takenAt = await getTakenAtFromFile(file);
+
         const { error: insertError } = await supabase.from("trip_photos").insert({
           trip_id: tripId,
           added_by_user_id: userId,
           image_path: path,
+          taken_at: takenAt ?? null,
         });
 
         if (insertError) {
