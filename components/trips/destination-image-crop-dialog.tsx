@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
 import "react-easy-crop/react-easy-crop.css";
@@ -18,19 +18,46 @@ export interface DestinationImageCropDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   imageSrc: string;
+  /** When provided (re-crop), initializes crop and zoom from stored metadata. */
+  initialCropMetadata?: CropMetadata | null;
   /** Called with cropped blob and metadata; parent decides when to persist. */
   onCropComplete: (blob: Blob, cropMetadata: CropMetadata) => void;
+}
+
+function cropFromMetadata(m: CropMetadata): { x: number; y: number; width: number; height: number } {
+  const { sourceWidth, sourceHeight } = m;
+  return {
+    x: (m.x / sourceWidth) * 100,
+    y: (m.y / sourceHeight) * 100,
+    width: (m.width / sourceWidth) * 100,
+    height: (m.height / sourceHeight) * 100,
+  };
 }
 
 export function DestinationImageCropDialog({
   open,
   onOpenChange,
   imageSrc,
+  initialCropMetadata,
   onCropComplete,
 }: DestinationImageCropDialogProps) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+
+  useEffect(() => {
+    if (open && initialCropMetadata) {
+      const pct = cropFromMetadata(initialCropMetadata);
+      setCrop({ x: pct.x, y: pct.y });
+      setZoom(initialCropMetadata.zoom);
+      setCroppedAreaPixels({
+        x: initialCropMetadata.x,
+        y: initialCropMetadata.y,
+        width: initialCropMetadata.width,
+        height: initialCropMetadata.height,
+      });
+    }
+  }, [open, initialCropMetadata]);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

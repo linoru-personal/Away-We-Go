@@ -172,6 +172,67 @@ export async function saveEditableImageAsset(
   return { assetId, legacyPath: paths.legacyPath };
 }
 
+export type UpdateEditableImageAssetCropParams = {
+  existingAssetId: string;
+  tripId: string;
+  ownerType: EditableImageOwnerType;
+  participantId?: string | null;
+  croppedBlob: Blob;
+  cropMetadata: CropMetadata;
+};
+
+/**
+ * Re-crop only: updates cropped image and metadata, keeps original_path unchanged.
+ */
+export async function updateEditableImageAssetCrop(
+  supabase: SupabaseClient,
+  params: UpdateEditableImageAssetCropParams
+): Promise<{ legacyPath: string }> {
+  const { existingAssetId, tripId, ownerType, participantId, croppedBlob, cropMetadata } = params;
+  const paths = getStoragePaths(ownerType, tripId, existingAssetId, "jpg", participantId);
+
+  const { error: cropErr } = await supabase.storage
+    .from(EDITABLE_IMAGES_BUCKET)
+    .upload(paths.croppedPath, croppedBlob, { upsert: true, contentType: "image/jpeg" });
+  if (cropErr) throw new Error(cropErr.message);
+
+  const { error: legacyErr } = await supabase.storage
+    .from(paths.legacyBucket)
+    .upload(paths.legacyPath, croppedBlob, { upsert: true, contentType: "image/jpeg" });
+  if (legacyErr) throw new Error(legacyErr.message);
+
+  const { error: updateErr } = await supabase
+    .from("editable_image_assets")
+    .update({
+      cropped_path: paths.croppedPath,
+      crop_metadata: cropMetadata as unknown as Record<string, unknown>,
+    })
+    .eq("id", existingAssetId);
+  if (updateErr) throw new Error(updateErr.message);
+
+  if (ownerType === "trip_cover") {
+    const { error: tripErr } = await supabase
+      .from("trips")
+      .update({ cover_image_path: paths.legacyPath })
+      .eq("id", tripId);
+    if (tripErr) throw new Error(tripErr.message);
+  } else if (ownerType === "destination_cover") {
+    const { error: tripErr } = await supabase
+      .from("trips")
+      .update({ destination_image_url: paths.legacyPath })
+      .eq("id", tripId);
+    if (tripErr) throw new Error(tripErr.message);
+  } else if (ownerType === "participant_avatar" && participantId) {
+    const { error: partErr } = await supabase
+      .from("trip_participants")
+      .update({ avatar_path: paths.legacyPath })
+      .eq("id", participantId);
+    if (partErr) throw new Error(partErr.message);
+  }
+
+  return { legacyPath: paths.legacyPath };
+}
+
 /**
  * Fetch existing editable_image_assets row id for trip + owner (and optional participant).
  */
