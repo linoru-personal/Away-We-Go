@@ -1,0 +1,5 @@
+-- Integrity fix: for participant_avatar rows, ensure trip_id matches the participant's trip.
+-- Superseded by 20260222211001: that migration adds required UNIQUE(trip_id, id) on trip_participants
+-- and then adds this FK. This file is left as a no-op to preserve migration history; do not re-add
+-- the FK here (would fail: no unique constraint on trip_participants(trip_id, id)).
+-- See: 20260222211001_trip_participants_unique_trip_id_id_and_avatar_fk.sql

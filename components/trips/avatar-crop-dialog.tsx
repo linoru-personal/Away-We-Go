@@ -10,47 +10,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-const AVATAR_ASPECT = 1;
-
-function createImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.crossOrigin = "anonymous";
-    image.addEventListener("load", () => resolve(image));
-    image.addEventListener("error", (e) => reject(e));
-    image.src = url;
-  });
-}
-
-async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<Blob | null> {
-  const image = await createImage(imageSrc);
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return null;
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
-  ctx.drawImage(
-    image,
-    pixelCrop.x,
-    pixelCrop.y,
-    pixelCrop.width,
-    pixelCrop.height,
-    0,
-    0,
-    pixelCrop.width,
-    pixelCrop.height
-  );
-  return new Promise((resolve) => {
-    canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.9);
-  });
-}
+import type { CropMetadata } from "@/lib/editable-image-assets";
+import { AVATAR_SQUARE_PRESET } from "@/lib/image-presets";
+import { getCroppedImageWithMetadata } from "@/lib/crop-utils";
 
 export interface AvatarCropDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   imageSrc: string;
-  onCropComplete: (blob: Blob) => void;
+  /** Called with cropped blob and metadata; parent decides when to persist. */
+  onCropComplete: (blob: Blob, cropMetadata: CropMetadata) => void;
 }
 
 export function AvatarCropDialog({
@@ -74,13 +43,13 @@ export function AvatarCropDialog({
     setError(null);
     setProcessing(true);
     try {
-      const blob = await getCroppedImg(imageSrc, croppedAreaPixels);
-      if (!blob) {
+      const result = await getCroppedImageWithMetadata(imageSrc, croppedAreaPixels, zoom);
+      if (!result) {
         setError("Could not crop image.");
         setProcessing(false);
         return;
       }
-      onCropComplete(blob);
+      onCropComplete(result.blob, result.cropMetadata);
       onOpenChange(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -99,7 +68,7 @@ export function AvatarCropDialog({
                 Crop participant photo
               </DialogTitle>
               <p className="mt-1 text-[15px] leading-relaxed text-[#6b6b6b]">
-                Adjust the crop (square for best results). Then confirm.
+                Adjust the crop (square for {AVATAR_SQUARE_PRESET.label}). Then confirm.
               </p>
             </DialogHeader>
           </div>
@@ -109,7 +78,7 @@ export function AvatarCropDialog({
                 image={imageSrc}
                 crop={crop}
                 zoom={zoom}
-                aspect={AVATAR_ASPECT}
+                aspect={AVATAR_SQUARE_PRESET.aspect}
                 onCropChange={setCrop}
                 onCropComplete={onCropCompleteCallback}
                 onZoomChange={setZoom}
