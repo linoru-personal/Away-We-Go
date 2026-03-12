@@ -9,6 +9,7 @@ import React, {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { cn } from "@/lib/utils";
 
 type DialogContextValue = {
   open: boolean;
@@ -111,12 +112,21 @@ export function DialogContent({ children }: DialogContentProps) {
   return createPortal(modal, document.body);
 }
 
-export interface DialogHeaderProps {
+export interface DialogHeaderProps
+  extends React.HTMLAttributes<HTMLDivElement> {
   children?: ReactNode;
 }
 
-export function DialogHeader({ children }: DialogHeaderProps) {
-  return <div className="mb-4">{children}</div>;
+export function DialogHeader({
+  className,
+  children,
+  ...rest
+}: DialogHeaderProps) {
+  return (
+    <div className={cn("mb-4", className)} {...rest}>
+      {children}
+    </div>
+  );
 }
 
 export type DialogTitleProps = React.ComponentPropsWithoutRef<"div">;
