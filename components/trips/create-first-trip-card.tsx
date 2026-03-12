@@ -3,7 +3,7 @@
 import { Card } from "@/components/ui/card";
 
 const DEFAULT_SUBTITLE =
-  "Start planning your next family adventure with all the tools you need";
+  "Start planning your next adventure with all the tools you need";
 
 export interface CreateFirstTripCardProps {
   variant: "large" | "small";
@@ -71,9 +71,17 @@ export default function CreateFirstTripCard({
         >
           {titleText}
         </h3>
-        {isLarge && (
-          <p className="text-sm text-neutral-500 max-w-xs">{subtitle}</p>
-        )}
+        {subtitle ? (
+          <p
+            className={
+              isLarge
+                ? "text-sm text-neutral-500 max-w-xs"
+                : "text-xs text-neutral-500 max-w-[240px]"
+            }
+          >
+            {subtitle}
+          </p>
+        ) : null}
       </div>
     </Card>
   );

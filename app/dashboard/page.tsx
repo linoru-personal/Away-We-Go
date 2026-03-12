@@ -303,6 +303,7 @@ function DashboardInner({ user }: { user: User }) {
                 <CreateFirstTripCard
                   variant="small"
                   titleText="Create New Trip"
+                  subtitle="Start planning your next adventure"
                   onClick={() => setIsCreateOpen(true)}
                 />
               )}
@@ -336,6 +337,7 @@ function DashboardInner({ user }: { user: User }) {
               <CreateFirstTripCard
                 variant="large"
                 titleText="Create Your First Trip"
+                subtitle="Start planning your next adventure with all the tools you need"
                 onClick={() => setIsCreateOpen(true)}
               />
             </div>
