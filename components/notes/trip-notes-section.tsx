@@ -108,10 +108,18 @@ function truncateUrl(url: string, maxLen: number): string {
   return url.slice(0, maxLen - 1) + "…";
 }
 
+/** Hebrew Unicode range (letters and marks). Returns true if the first character is Hebrew. */
+function startsWithHebrew(s: string): boolean {
+  const trimmed = (s ?? "").trim();
+  if (trimmed.length === 0) return false;
+  const code = trimmed.charCodeAt(0);
+  return (code >= 0x0590 && code <= 0x05ff) || (code >= 0xfb1d && code <= 0xfb4f);
+}
+
+/** Compact text-based link preview: domain, title, optional description. No preview image. */
 function LinkPreviewBlock({ href }: { href: string }) {
   const [preview, setPreview] = useState<LinkPreviewData | null>(null);
   const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
-  const [imageError, setImageError] = useState(false);
   const fetched = useRef(false);
 
   useEffect(() => {
@@ -156,70 +164,55 @@ function LinkPreviewBlock({ href }: { href: string }) {
   }, [href]);
 
   const domain = getDomain(href);
-  const displayUrl = truncateUrl(href, 50);
-  const fallback = (
-    <div className="flex items-start gap-2">
-      <LinkFavicon url={href} size={24} className="mt-0.5 shrink-0" />
-      <div className="min-w-0 flex-1">
-        <span className="font-medium text-[#4A4A4A]">{domain}</span>
-        <span className="mt-1 block truncate text-[#6B7280]">{displayUrl}</span>
-      </div>
-    </div>
-  );
-
-  if (status === "error" || status === "loading" || !preview) {
-    return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block rounded-lg border border-[#D4C5BA] bg-[#FAFAF8] p-3 text-start text-sm transition hover:bg-[#F5F3F0]"
-      >
-        {fallback}
-      </a>
-    );
-  }
-
-  const showPreviewImage = preview.image && !imageError;
+  const title = preview?.title || preview?.domain || domain;
+  const description = preview?.description?.trim();
+  const maxDescLen = 120;
 
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="block overflow-hidden rounded-lg border border-[#D4C5BA] bg-[#FAFAF8] text-start text-sm transition hover:bg-[#F5F3F0]"
+      dir="ltr"
+      className="block rounded-lg border border-[#D4C5BA] bg-[#FAFAF8] p-3 text-left text-sm transition hover:bg-[#F5F3F0]"
     >
-      {showPreviewImage && (
-        <div className="aspect-video max-h-48 w-full overflow-hidden rounded-t-lg bg-[#F5F3F0]">
-          <img
-            src={preview.image!}
-            alt=""
-            className="h-full w-full object-cover"
-            onError={() => setImageError(true)}
-          />
-        </div>
-      )}
-      <div className="p-3">
-        <div className="flex items-center gap-2">
-          <LinkFavicon url={href} size={24} className="shrink-0" />
-          <span className="min-w-0 truncate font-medium text-[#4A4A4A]">
-            {preview.title || preview.domain}
+      <div className="flex items-start gap-2">
+        <LinkFavicon url={href} size={20} className="mt-0.5 shrink-0" />
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <span className="block text-xs font-medium uppercase tracking-wide text-[#9B7B6B]">
+            {domain}
           </span>
+          <span className="block font-medium text-[#4A4A4A] line-clamp-2">
+            {status === "loading" ? "…" : title}
+          </span>
+          {description && description.length > 0 && (
+            <span className="block text-[#6B7280] line-clamp-2">
+              {description.length > maxDescLen
+                ? description.slice(0, maxDescLen) + "…"
+                : description}
+            </span>
+          )}
         </div>
-        <span className="mt-0.5 block text-xs text-[#6B7280]">
-          {preview.domain}
-        </span>
       </div>
     </a>
   );
 }
 
+const NOTE_IMAGE_THUMB_CLASS =
+  "max-h-36 w-full max-w-[240px] rounded-lg object-cover";
+const NOTE_IMAGE_GRID_CLASS = "h-full w-full rounded-lg object-cover";
+
 function NoteImageBlock({
   path,
   bucket,
+  onImageClick,
+  grid,
 }: {
   path: string;
   bucket: string;
+  onImageClick?: (url: string) => void;
+  /** When true, render as a cell in the image grid (aspect-square, fill). */
+  grid?: boolean;
 }) {
   const [src, setSrc] = useState<string | null>(null);
 
@@ -238,96 +231,197 @@ function NoteImageBlock({
   }, [bucket, path]);
 
   if (!src) return null;
+
+  const img = (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={src}
+      alt="Note image"
+      className={grid ? NOTE_IMAGE_GRID_CLASS : NOTE_IMAGE_THUMB_CLASS}
+    />
+  );
+
+  if (onImageClick) {
+    return (
+      <button
+        type="button"
+        onClick={() => onImageClick(src)}
+        className={
+          grid
+            ? "aspect-square w-full overflow-hidden rounded-lg text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1"
+            : "overflow-hidden rounded-lg text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1"
+        }
+        aria-label="View image full size"
+      >
+        {img}
+      </button>
+    );
+  }
+
   return (
-    <div className="overflow-hidden rounded-lg">
-      <a href={src} target="_blank" rel="noopener noreferrer" className="block">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          alt=""
-          className="max-h-64 w-full object-cover"
-        />
+    <div
+      className={
+        grid ? "aspect-square w-full overflow-hidden rounded-lg" : "overflow-hidden rounded-lg"
+      }
+    >
+      <a href={src} target="_blank" rel="noopener noreferrer" className="block size-full">
+        {img}
       </a>
     </div>
   );
 }
 
-function NoteCardContent({ content }: { content: unknown }) {
+/** Renders a single image block as a grid thumbnail (storage or URL). */
+function NoteImageThumbnail({
+  blockKey,
+  path,
+  bucket,
+  url,
+  onImageClick,
+}: {
+  blockKey: string;
+  path?: string;
+  bucket?: string;
+  url?: string;
+  onImageClick?: (url: string) => void;
+}) {
+  if (path && bucket) {
+    return (
+      <NoteImageBlock
+        key={blockKey}
+        path={path}
+        bucket={bucket}
+        onImageClick={onImageClick}
+        grid
+      />
+    );
+  }
+  if (!url) return null;
+  const thumb = (
+    <img
+      src={url}
+      alt="Note image"
+      className="h-full w-full rounded-lg object-cover"
+    />
+  );
+  if (onImageClick) {
+    return (
+      <button
+        key={blockKey}
+        type="button"
+        onClick={() => onImageClick(url)}
+        className="aspect-square w-full overflow-hidden rounded-lg text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1"
+        aria-label="View image full size"
+      >
+        {thumb}
+      </button>
+    );
+  }
+  return (
+    <div key={blockKey} className="aspect-square w-full overflow-hidden rounded-lg">
+      {thumb}
+    </div>
+  );
+}
+
+function NoteCardContent({
+  content,
+  onImageClick,
+}: {
+  content: unknown;
+  onImageClick?: (url: string) => void;
+}) {
   if (content == null) return null;
   if (typeof content === "string") {
-    return <p className="text-start text-sm text-[#6B7280]">{content.trim() || null}</p>;
+    return <p className="mt-2 text-start text-sm text-[#6B7280]">{content.trim() || null}</p>;
   }
   const blocks = getBlocks(content);
   if (!blocks || blocks.length === 0) {
     const obj = content as Record<string, unknown>;
     const text = (obj.text ?? obj.value ?? obj.content) as string | undefined;
-    if (typeof text === "string") return <p className="text-start text-sm text-[#6B7280]">{text}</p>;
+    if (typeof text === "string") return <p className="mt-2 text-start text-sm text-[#6B7280]">{text}</p>;
     return null;
   }
+
+  const textBlocks: React.ReactNode[] = [];
+  const linkBlocks: React.ReactNode[] = [];
+  const imageBlocks: { key: string; path?: string; bucket?: string; url?: string }[] = [];
+
+  blocks.forEach((block, i) => {
+    if (!block || typeof block !== "object") return;
+    const b = block as ContentBlock & Record<string, unknown>;
+    const key = `block-${i}`;
+    switch (b.type) {
+      case "text":
+      case "paragraph": {
+        const text = (b.text ?? b.content) as string | undefined;
+        if (typeof text !== "string") return;
+        textBlocks.push(
+          <p key={key} className="whitespace-pre-line text-start text-sm text-[#6B7280]">
+            {text}
+          </p>
+        );
+        break;
+      }
+      case "list": {
+        const items = (b.items ?? []) as string[];
+        if (!Array.isArray(items) || items.length === 0) return;
+        textBlocks.push(
+          <ul key={key} className="list-disc space-y-1 ps-4 text-start text-sm text-[#6B7280] marker:text-[#E07A5F]">
+            {items.map((item, j) => (
+              <li key={j}>{typeof item === "string" ? item : String(item)}</li>
+            ))}
+          </ul>
+        );
+        break;
+      }
+      case "image": {
+        const path = (b as { path?: string }).path;
+        const bucket = (b as { bucket?: string }).bucket;
+        const url = (b.url ?? b.src) as string | undefined;
+        if (path && bucket) imageBlocks.push({ key, path, bucket });
+        else if (url) imageBlocks.push({ key, url });
+        break;
+      }
+      case "link": {
+        const href = (b.url ?? b.href) as string | undefined;
+        if (!href) return;
+        linkBlocks.push(<LinkPreviewBlock key={key} href={href} />);
+        break;
+      }
+      default:
+        break;
+    }
+  });
+
+  const hasText = textBlocks.length > 0;
+  const hasLinks = linkBlocks.length > 0;
+  const hasImages = imageBlocks.length > 0;
+
   return (
-    <div className="mt-2 space-y-3 text-start">
-      {blocks.map((block, i) => {
-        if (!block || typeof block !== "object") return null;
-        const b = block as ContentBlock & Record<string, unknown>;
-        switch (b.type) {
-          case "text":
-          case "paragraph": {
-            const text = (b.text ?? b.content) as string | undefined;
-            if (typeof text !== "string") return null;
-            return (
-              <p
-                key={i}
-                className="whitespace-pre-line text-start text-sm text-[#6B7280]"
-              >
-                {text}
-              </p>
-            );
-          }
-          case "list": {
-            const items = (b.items ?? []) as string[];
-            if (!Array.isArray(items) || items.length === 0) return null;
-            return (
-              <ul key={i} className="list-disc space-y-1 ps-4 text-start text-sm text-[#6B7280]">
-                {items.map((item, j) => (
-                  <li key={j}>{typeof item === "string" ? item : String(item)}</li>
-                ))}
-              </ul>
-            );
-          }
-          case "image": {
-            const path = (b as { path?: string }).path;
-            const bucket = (b as { bucket?: string }).bucket;
-            const url = (b.url ?? b.src) as string | undefined;
-            if (path && bucket) {
-              return (
-                <NoteImageBlock
-                  key={i}
-                  path={path}
-                  bucket={bucket}
-                />
-              );
-            }
-            if (!url) return null;
-            return (
-              <div key={i} className="overflow-hidden rounded-lg">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={url}
-                  alt=""
-                  className="max-h-64 w-full rounded-lg object-cover"
-                />
-              </div>
-            );
-          }
-          case "link": {
-            const href = (b.url ?? b.href) as string | undefined;
-            if (!href) return null;
-            return <LinkPreviewBlock key={i} href={href} />;
-          }
-          default:
-            return null;
-        }
-      })}
+    <div className="mt-2 space-y-4 text-start">
+      {hasText && <div className="space-y-3">{textBlocks}</div>}
+      {hasLinks && (
+        <div className="space-y-2">
+          {linkBlocks}
+        </div>
+      )}
+      {hasImages && (
+        <div
+          className={`grid gap-2 ${imageBlocks.length === 1 ? "grid-cols-1 max-w-[200px]" : "grid-cols-2"}`}
+        >
+          {imageBlocks.map((img) => (
+            <NoteImageThumbnail
+              key={img.key}
+              blockKey={img.key}
+              path={img.path}
+              bucket={img.bucket}
+              url={img.url}
+              onImageClick={onImageClick}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -336,11 +430,13 @@ function NoteCard({
   note,
   onEditRequest,
   onDeleteRequest,
+  onImageClick,
   isDeleting,
 }: {
   note: TripNote;
   onEditRequest?: (note: TripNote) => void;
   onDeleteRequest?: (noteId: string) => void;
+  onImageClick?: (url: string) => void;
   isDeleting?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -358,9 +454,13 @@ function NoteCard({
   }, [menuOpen]);
 
   const showMenu = onEditRequest || onDeleteRequest;
+  const isRtl = startsWithHebrew(note.title ?? "");
 
   return (
-    <article className={`${CARD_CLASS} relative text-start`}>
+    <article
+      className={`${CARD_CLASS} relative text-start`}
+      dir={isRtl ? "rtl" : "ltr"}
+    >
       {showMenu && (
         <div className="absolute end-4 top-4" ref={menuRef}>
           <button
@@ -405,7 +505,7 @@ function NoteCard({
         </div>
       )}
       <h3 className="pe-10 text-base font-semibold text-[#4A4A4A]">{note.title}</h3>
-      <NoteCardContent content={note.content} />
+      <NoteCardContent content={note.content} onImageClick={onImageClick} />
       {note.tags && note.tags.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {note.tags.map((tag, i) => (
@@ -430,6 +530,64 @@ function fetchNotes(tripId: string) {
     .order("sort_order", { ascending: true });
 }
 
+function ImageLightbox({
+  src,
+  onClose,
+}: {
+  src: string;
+  onClose: () => void;
+}) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-30 flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Image preview"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <button
+        ref={closeRef}
+        type="button"
+        onClick={onClose}
+        className="absolute right-4 top-4 flex size-10 items-center justify-center rounded-full bg-white/90 text-[#4A4A4A] shadow transition hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/50"
+        aria-label="Close image"
+      >
+        ✕
+      </button>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        className="max-h-[90vh] max-w-full object-contain"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
 export function TripNotesSection({ tripId, canEditContent = true }: TripNotesSectionProps) {
   const [notes, setNotes] = useState<TripNote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -438,6 +596,7 @@ export function TripNotesSection({ tripId, canEditContent = true }: TripNotesSec
   const [confirmNoteId, setConfirmNoteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tripId) return;
@@ -535,11 +694,19 @@ export function TripNotesSection({ tripId, canEditContent = true }: TripNotesSec
                   note={note}
                   onEditRequest={canEditContent ? handleEditRequest : undefined}
                   onDeleteRequest={canEditContent ? handleDeleteRequest : undefined}
+                  onImageClick={setLightboxUrl}
                   isDeleting={deletingId === note.id}
                 />
               </li>
             ))}
           </ul>
+
+          {lightboxUrl && (
+            <ImageLightbox
+              src={lightboxUrl}
+              onClose={() => setLightboxUrl(null)}
+            />
+          )}
 
           {confirmNoteId && (
             <div
