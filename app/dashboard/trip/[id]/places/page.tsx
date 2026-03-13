@@ -10,6 +10,7 @@ import { formatTripDateRange } from "@/lib/format-trip-dates";
 import { AddPlaceDialog, type PlaceCategory } from "@/components/places/add-place-dialog";
 import { PlaceCard, type TripPlace } from "@/components/places/place-card";
 import { ManagePlaceCategoriesDialog } from "@/components/places/manage-place-categories-dialog";
+import { PlacesMapView } from "@/components/places/places-map-view";
 import { CategoryIcon, getIconKey, PLACES_DEFAULT_ICON } from "@/components/ui/category-icons";
 
 type Trip = {
@@ -43,6 +44,7 @@ export default function TripPlacesPage() {
   const [editingPlace, setEditingPlace] = useState<TripPlace | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
 
   useEffect(() => {
     if (!trip?.cover_image_path) {
@@ -148,7 +150,7 @@ export default function TripPlacesPage() {
     setPlacesLoading(true);
     supabase
       .from("trip_places")
-      .select("id, trip_id, title, google_maps_url, notes, category_id, created_at, sort_order")
+      .select("id, trip_id, title, google_maps_url, notes, category_id, created_at, sort_order, lat, lng")
       .eq("trip_id", id)
       .order("sort_order", { ascending: true })
       .then(({ data, error }) => {
@@ -219,7 +221,27 @@ export default function TripPlacesPage() {
             />
             <div className="mt-8">
               <div className="flex flex-wrap items-center justify-between gap-4">
-                <h1 className="text-lg font-semibold text-[#4A4A4A]">Places</h1>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-lg font-semibold text-[#4A4A4A]">Places</h1>
+                  {!placesLoading && places.length > 0 && (
+                    <div className="flex rounded-full border border-[#e0d9d2] bg-[#faf8f6] p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setViewMode("list")}
+                        className={`rounded-full px-3 py-1.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0 ${viewMode === "list" ? "bg-white text-[#1f1f1f] shadow-sm" : "text-[#6b6b6b] hover:text-[#1f1f1f]"}`}
+                      >
+                        List
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewMode("map")}
+                        className={`rounded-full px-3 py-1.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0 ${viewMode === "map" ? "bg-white text-[#1f1f1f] shadow-sm" : "text-[#6b6b6b] hover:text-[#1f1f1f]"}`}
+                      >
+                        Map
+                      </button>
+                    </div>
+                  )}
+                </div>
                 {canEditContent && (
                 <button
                   type="button"
@@ -262,6 +284,10 @@ export default function TripPlacesPage() {
                   Add place
                 </button>
                 )}
+              </div>
+            ) : viewMode === "map" ? (
+              <div className="mt-6">
+                <PlacesMapView places={places} categories={categories} className="mt-0" />
               </div>
             ) : (
               <div className="mt-6 space-y-8">

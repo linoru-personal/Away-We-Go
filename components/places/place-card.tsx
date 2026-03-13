@@ -17,6 +17,9 @@ export type TripPlace = {
   category_id: string | null;
   created_at: string;
   sort_order: number;
+  /** Present when place was added via Google Places search. Used for map view. */
+  lat?: number | null;
+  lng?: number | null;
 };
 
 /** Resolved category for display (name + icon). */
