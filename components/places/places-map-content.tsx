@@ -18,14 +18,15 @@ export type PlaceWithCoordsAndColor = {
 
 type LeafletMarker = { openPopup: () => void };
 
-function createCircleIcon(color: string) {
+function createPinIcon(color: string) {
   if (typeof window === "undefined") return undefined;
   const L = require("leaflet");
+  const escaped = color.replace(/"/g, "'");
   return L.divIcon({
-    html: `<div style="width:24px;height:24px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
+    html: `<div style="width:28px;height:36px;position:relative;"><svg viewBox="0 0 24 36" width="28" height="36" style="display:block;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.35));"><path d="M12 2C7.58 2 4 5.58 4 10c0 6 8 14 8 14s8-8 8-14c0-4.42-3.58-8-8-8z" fill="${escaped}" stroke="white" stroke-width="1.5" stroke-linejoin="round"/></svg></div>`,
     className: "",
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
+    iconSize: [28, 36],
+    iconAnchor: [14, 36],
   });
 }
 
@@ -81,7 +82,7 @@ export function PlacesMapContent({ placesWithCoords, selectedPlaceId }: PlacesMa
           key={place.id}
           position={[place.lat, place.lng]}
           title={place.title}
-          icon={createCircleIcon(place.color)}
+          icon={createPinIcon(place.color)}
           ref={(m) => {
             if (m) (markerRefs.current[place.id] = m as unknown as LeafletMarker);
           }}

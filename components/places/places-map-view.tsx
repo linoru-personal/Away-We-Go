@@ -4,6 +4,7 @@ import { useMemo, useEffect, useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import type { TripPlace } from "@/components/places/place-card";
 import type { PlaceCategory } from "@/components/places/add-place-dialog";
+import { CategoryIcon, getIconKey, PLACES_DEFAULT_ICON } from "@/components/ui/category-icons";
 import { parseCoordsFromGoogleMapsUrl } from "@/lib/parse-google-maps-url";
 
 import "leaflet/dist/leaflet.css";
@@ -64,6 +65,7 @@ export type MapViewCategoryGroup = {
   key: string;
   label: string;
   color: string;
+  icon: string | null;
   places: PlaceWithCoords[];
 };
 
@@ -77,6 +79,16 @@ export interface PlacesMapViewProps {
 export function PlacesMapView({ places, categories, className = "" }: PlacesMapViewProps) {
   useLeafletIconFix();
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [collapsedCategoryKeys, setCollapsedCategoryKeys] = useState<Set<string>>(new Set());
+
+  const toggleCollapsed = useCallback((key: string) => {
+    setCollapsedCategoryKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   const placesWithCoords = useMemo(() => {
     const resolved: PlaceWithCoords[] = [];
@@ -104,6 +116,7 @@ export function PlacesMapView({ places, categories, className = "" }: PlacesMapV
         key: GENERAL_KEY,
         label: "General",
         color: categoryKeyToColor.get(GENERAL_KEY)!,
+        icon: null,
         places: uncategorized,
       });
     }
@@ -115,6 +128,7 @@ export function PlacesMapView({ places, categories, className = "" }: PlacesMapV
           key: cat.id,
           label: cat.name,
           color: categoryKeyToColor.get(cat.id)!,
+          icon: cat.icon,
           places: catPlaces,
         });
       }
@@ -209,51 +223,88 @@ export function PlacesMapView({ places, categories, className = "" }: PlacesMapV
           )}
         </div>
         <ul className="min-h-0 flex-1 overflow-y-auto py-2" role="list">
-          {groups.map((group) => (
-            <li key={group.key} className="mb-4">
-              <div className="flex items-center gap-2 px-4 py-1.5">
-                <button
-                  type="button"
-                  onClick={() => toggleCategory(group.key)}
-                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-[#c4b8ab] bg-white focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30"
-                  aria-checked={selectedCategoryKeys.has(group.key)}
-                  role="checkbox"
-                >
-                  {selectedCategoryKeys.has(group.key) && (
-                    <span className="text-[10px] text-[#2d2d2d]" aria-hidden>✓</span>
-                  )}
-                </button>
-                <span
-                  className="h-3 w-3 shrink-0 rounded-full border border-white shadow-sm"
-                  style={{ backgroundColor: group.color }}
-                  aria-hidden
-                />
-                <span className="text-sm font-medium text-[#4A4A4A]">{group.label}</span>
-              </div>
-              <ul className="mt-0.5" role="list">
-                {group.places.map((place) => (
-                  <li key={place.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedPlaceId(place.id)}
-                      className={`flex w-full items-center gap-2 px-4 py-2 pl-8 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-inset ${
-                        selectedPlaceId === place.id
-                          ? "bg-[#d97b5e]/15 font-medium text-[#c46950]"
-                          : "text-[#2d2d2d] hover:bg-[#f0ebe6]"
-                      }`}
+          {groups.map((group) => {
+            const isCollapsed = collapsedCategoryKeys.has(group.key);
+            return (
+              <li key={group.key} className="mb-4">
+                <div className="flex items-center gap-2 px-4 py-1.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleCollapsed(group.key)}
+                    className="shrink-0 rounded p-0.5 text-[#6b6b6b] hover:text-[#2d2d2d] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-inset"
+                    aria-expanded={!isCollapsed}
+                    aria-label={isCollapsed ? "Expand category" : "Collapse category"}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={`shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
                     >
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: group.color }}
-                        aria-hidden
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleCategory(group.key)}
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-[#c4b8ab] bg-white focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30"
+                    aria-checked={selectedCategoryKeys.has(group.key)}
+                    role="checkbox"
+                  >
+                    {selectedCategoryKeys.has(group.key) && (
+                      <span className="text-[10px] text-[#2d2d2d]" aria-hidden>✓</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleCollapsed(group.key)}
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded text-left focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-inset"
+                  >
+                    <span className="shrink-0 text-[#4A4A4A]">
+                      <CategoryIcon
+                        iconKey={getIconKey(group.icon, PLACES_DEFAULT_ICON)}
+                        size={18}
                       />
-                      {place.title}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
+                    </span>
+                    <span className="truncate text-sm font-medium text-[#4A4A4A]">{group.label}</span>
+                    {group.places.length > 0 && (
+                      <span className="shrink-0 text-xs text-[#8a8a8a]">({group.places.length})</span>
+                    )}
+                  </button>
+                </div>
+                {!isCollapsed && (
+                  <ul className="mt-0.5" role="list">
+                    {group.places.map((place) => (
+                      <li key={place.id}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPlaceId(place.id)}
+                          className={`flex w-full items-center gap-2 px-4 py-2 pl-16 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-inset ${
+                            selectedPlaceId === place.id
+                              ? "bg-[#d97b5e]/15 font-medium text-[#c46950]"
+                              : "text-[#2d2d2d] hover:bg-[#f0ebe6]"
+                          }`}
+                        >
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: group.color }}
+                            aria-hidden
+                          />
+                          {place.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </div>
       <div className="min-w-0 flex-1 [&_.leaflet-container]:rounded-r-2xl [&_.leaflet-container]:h-full">
