@@ -146,6 +146,14 @@ export function PlacesMapView({ places, categories, className = "" }: PlacesMapV
     }
   }, [allCategoryKeys]);
 
+  const hasInitializedCollapsed = useRef(false);
+  useEffect(() => {
+    if (allCategoryKeys.length > 0 && !hasInitializedCollapsed.current) {
+      hasInitializedCollapsed.current = true;
+      setCollapsedCategoryKeys(new Set(allCategoryKeys));
+    }
+  }, [allCategoryKeys]);
+
   const toggleCategory = useCallback((key: string) => {
     setSelectedCategoryKeys((prev) => {
       const next = new Set(prev);
