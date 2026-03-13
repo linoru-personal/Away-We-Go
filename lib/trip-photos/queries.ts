@@ -29,8 +29,12 @@ export type TripPhotosPreview = {
   totalCount: number;
 };
 
+/** Max photos to fetch for dashboard preview (5 visible slots + rotation pool). */
+const PREVIEW_PHOTO_LIMIT = 20;
+
 /**
- * Returns the latest 3 photos (by sort_at) and the total count for a trip.
+ * Returns the latest photos (by sort_at) for dashboard preview and the total count.
+ * Fetches up to PREVIEW_PHOTO_LIMIT so the card can show 5 thumbnails and rotate through more.
  */
 export async function getTripPhotosPreview(
   tripId: string
@@ -40,7 +44,7 @@ export async function getTripPhotosPreview(
     .select("*", { count: "exact" })
     .eq("trip_id", tripId)
     .order("sort_at", { ascending: false })
-    .range(0, 2);
+    .range(0, PREVIEW_PHOTO_LIMIT - 1);
   if (error) throw new Error(error.message);
   return {
     photos: (data ?? []) as TripPhotoRow[],
