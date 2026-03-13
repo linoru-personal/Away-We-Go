@@ -19,7 +19,9 @@ import {
 } from "@/components/trip/dashboard-card-styles";
 
 const PHOTOS_BUCKET = "trip-photos";
-const SLOT_COUNT = 5;
+/** Total slots (desktop). On mobile, only the first 5 are visible via CSS. */
+const SLOT_COUNT = 7;
+const SLOT_COUNT_MOBILE = 5;
 const ROTATION_INTERVAL_MS = 5000;
 const FADE_DURATION_MS = 1800;
 
@@ -204,7 +206,7 @@ export function PhotosSummaryCard({ tripId }: PhotosSummaryCardProps) {
             {urlsForSlots.map((url, i) => (
               <div
                 key={i}
-                className="relative aspect-square w-full max-w-[120px] overflow-hidden rounded-lg bg-neutral-100"
+                className={`relative aspect-square w-full max-w-[120px] overflow-hidden rounded-lg bg-neutral-100 ${i >= SLOT_COUNT_MOBILE ? "hidden md:block" : ""}`}
               >
                 {url ? <FadeThumbnail url={url} /> : null}
               </div>
