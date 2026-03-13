@@ -17,6 +17,7 @@ import {
   verticalListSortingStrategy,
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
+import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 
 /** Item must have id and sort_order for reorder persistence. */
@@ -24,9 +25,9 @@ export type SortableItem = { id: string; sort_order: number };
 
 export type SortableGroupListSortableProps = {
   setNodeRef: (element: HTMLElement | null) => void;
-  /** Spread onto the sortable element (from useSortable). */
+  /** Spread onto the drag handle only (from useSortable) so drag starts from handle. */
   attributes: Record<string, unknown>;
-  /** Spread onto the sortable element for drag (from useSortable). */
+  /** Spread onto the drag handle only (from useSortable). */
   listeners: Record<string, unknown>;
   style: React.CSSProperties;
   isDragging: boolean;
@@ -37,7 +38,7 @@ export interface SortableGroupListProps<T extends SortableItem> {
   items: T[];
   /** Called with items in new order after a drag. Parent should update local state and persist. */
   onReorder: (newOrderedItems: T[]) => void | Promise<void>;
-  /** Render each item. Row can spread listeners for drag (e.g. on the whole row or a handle). */
+  /** Render each item. Put listeners on the drag handle only. */
   children: (item: T, sortableProps: SortableGroupListSortableProps) => React.ReactNode;
   /** When true, dragging is disabled (e.g. read-only). */
   disabled?: boolean;
@@ -88,7 +89,7 @@ function SortableRow<T extends SortableItem>({
 
 /**
  * Renders a single group's list as sortable. One DndContext per group so drag is limited to this list.
- * Use in each grouped section (e.g. one per category, one per date, one per participant).
+ * Vertical axis and parent element restricted. Use a drag handle for drag start.
  */
 export function SortableGroupList<T extends SortableItem>({
   items,
@@ -128,6 +129,7 @@ export function SortableGroupList<T extends SortableItem>({
       id={dndId}
       sensors={sensors}
       collisionDetection={closestCenter}
+      modifiers={[restrictToVerticalAxis, restrictToParentElement]}
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>

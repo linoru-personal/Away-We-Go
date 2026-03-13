@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/app/lib/supabaseClient";
 import { LinkFavicon } from "@/components/ui/link-favicon";
+import { SortableGroupList } from "@/components/ui/sortable-group-list";
+import { DragHandle } from "@/components/ui/drag-handle";
 import { AddTripNoteDialog } from "@/components/notes/add-trip-note-dialog";
 
 type LinkPreviewData = {
@@ -462,7 +464,11 @@ function NoteCard({
       dir={isRtl ? "rtl" : "ltr"}
     >
       {showMenu && (
-        <div className="absolute end-4 top-4" ref={menuRef}>
+        <div
+          className="absolute end-4 top-4"
+          ref={menuRef}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           <button
             type="button"
             className="flex size-8 items-center justify-center rounded-full text-[#6B7280] transition hover:bg-[#F5F3F0] hover:text-[#4A4A4A] disabled:opacity-50"
@@ -685,17 +691,105 @@ export function TripNotesSection({ tripId, canEditContent = true }: TripNotesSec
         <div className="mt-6 rounded-xl border border-dashed border-[#D4C5BA] py-8 text-start text-sm text-[#6B7280]">
           No notes yet. Start adding tips and insights for this trip.
         </div>
+      ) : canEditContent ? (
+        <>
+          <SortableGroupList<TripNote>
+            items={notes}
+            onReorder={async (newOrderedItems) => {
+              const minOrder = Math.min(...notes.map((n) => n.sort_order));
+              const updated = newOrderedItems.map((note, i) => ({
+                ...note,
+                sort_order: minOrder + i,
+              }));
+              setNotes(updated);
+              await Promise.all(
+                updated.map((note) =>
+                  supabase.from("trip_notes").update({ sort_order: note.sort_order }).eq("id", note.id)
+                )
+              );
+            }}
+            className="mt-6 space-y-5 list-none"
+          >
+            {(note, { setNodeRef, style, attributes, listeners, isDragging }) => (
+              <li
+                ref={setNodeRef}
+                style={style}
+                className="group relative rounded-[24px] transition-shadow duration-150"
+              >
+                <div className={`relative ps-10 rounded-[24px] transition-all duration-150 ${isDragging ? "shadow-lg scale-[1.01]" : ""}`}>
+                  <span className="absolute start-4 top-4 z-[1] transition-opacity">
+                    <DragHandle listeners={listeners} attributes={attributes} aria-label="Drag to reorder note" />
+                  </span>
+                  <NoteCard
+                    note={note}
+                    onEditRequest={handleEditRequest}
+                    onDeleteRequest={handleDeleteRequest}
+                    onImageClick={setLightboxUrl}
+                    isDeleting={deletingId === note.id}
+                  />
+                </div>
+              </li>
+            )}
+          </SortableGroupList>
+
+          {lightboxUrl && (
+            <ImageLightbox
+              src={lightboxUrl}
+              onClose={() => setLightboxUrl(null)}
+            />
+          )}
+
+          {confirmNoteId && (
+            <div
+              className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4"
+              aria-modal="true"
+              role="dialog"
+            >
+              <div className="w-full max-w-sm rounded-[24px] border border-[#D4C5BA] bg-white p-6 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+                <h3 className="text-lg font-semibold text-[#4A4A4A]">
+                  Delete this note?
+                </h3>
+                {deleteError && (
+                  <p className="mt-2 text-sm text-red-600" role="alert">
+                    {deleteError}
+                  </p>
+                )}
+                <div className="mt-6 flex gap-3">
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg border border-[#D4C5BA] px-4 py-2 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-50"
+                    onClick={() => {
+                      setConfirmNoteId(null);
+                      setDeleteError(null);
+                    }}
+                    disabled={!!deletingId}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg bg-[#E07A5F] px-4 py-2 text-sm font-medium text-white hover:bg-[#c46950] disabled:opacity-50"
+                    onClick={handleDeleteConfirm}
+                    disabled={!!deletingId}
+                  >
+                    {deletingId ? "Deleting…" : "Delete"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       ) : (
         <>
-          <ul className="mt-6 space-y-5">
+          <ul className="mt-6 space-y-5 list-none">
             {notes.map((note) => (
               <li key={note.id}>
                 <NoteCard
                   note={note}
-                  onEditRequest={canEditContent ? handleEditRequest : undefined}
-                  onDeleteRequest={canEditContent ? handleDeleteRequest : undefined}
+                  onEditRequest={undefined}
+                  onDeleteRequest={undefined}
                   onImageClick={setLightboxUrl}
-                  isDeleting={deletingId === note.id}
+                  isDeleting={false}
                 />
               </li>
             ))}

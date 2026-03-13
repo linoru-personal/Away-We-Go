@@ -192,7 +192,7 @@ function LinkIcon() {
 
 export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
   const [total, setTotal] = useState(0);
-  const [latestNote, setLatestNote] = useState<TripNote | null>(null);
+  const [firstNote, setFirstNote] = useState<TripNote | null>(null);
   const [loading, setLoading] = useState(true);
   const [thumbnailSignedUrl, setThumbnailSignedUrl] = useState<string | null>(null);
   const [linkFaviconError, setLinkFaviconError] = useState(false);
@@ -204,26 +204,26 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
         .from("trip_notes")
         .select("id, trip_id, title, content, tags, created_at, updated_at, sort_order")
         .eq("trip_id", tripId)
-        .order("created_at", { ascending: false })
+        .order("sort_order", { ascending: true })
         .limit(1),
       supabase
         .from("trip_notes")
         .select("id", { count: "exact", head: true })
         .eq("trip_id", tripId),
-    ]).then(([latestRes, countRes]) => {
-      if (latestRes.error) {
-        setLatestNote(null);
+    ]).then(([firstRes, countRes]) => {
+      if (firstRes.error) {
+        setFirstNote(null);
       } else {
-        const list = (latestRes.data ?? []) as TripNote[];
-        setLatestNote(list[0] ?? null);
+        const list = (firstRes.data ?? []) as TripNote[];
+        setFirstNote(list[0] ?? null);
       }
       setTotal(countRes.count ?? 0);
       setLoading(false);
     });
   }, [tripId]);
 
-  const previewImage = latestNote ? getPreviewImage(latestNote.content) : null;
-  const previewLinkUrl = latestNote ? getPreviewLinkUrl(latestNote.content) : null;
+  const previewImage = firstNote ? getPreviewImage(firstNote.content) : null;
+  const previewLinkUrl = firstNote ? getPreviewLinkUrl(firstNote.content) : null;
   const needsSignedUrl =
     previewImage != null && "path" in previewImage && previewImage.path;
   const pathForSign =
@@ -269,8 +269,8 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
     thumbnailSignedUrl ??
     (previewImage && "directUrl" in previewImage ? previewImage.directUrl : null);
 
-  const previewText = latestNote
-    ? getPreviewFromBlocks(latestNote.content)
+  const previewText = firstNote
+    ? getPreviewFromBlocks(firstNote.content)
     : "";
   const showLinkPreview =
     !previewImage && previewLinkUrl && previewText.length > 0;
@@ -292,10 +292,10 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
 
       {loading ? (
         <p className={`${CARD_CONTENT_MT} text-start text-sm text-[#8a8a8a]`}>Loading…</p>
-      ) : latestNote ? (
+      ) : firstNote ? (
         <>
           <p className={`${CARD_CONTENT_MT} text-start text-sm font-medium text-[#2d2d2d]`}>
-            {latestNote.title}
+            {firstNote.title}
           </p>
           <div className="mt-1 flex items-start gap-2">
             {previewImage &&

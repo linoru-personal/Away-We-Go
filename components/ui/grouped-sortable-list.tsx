@@ -18,6 +18,7 @@ import {
   verticalListSortingStrategy,
   sortableKeyboardCoordinates,
 } from "@dnd-kit/sortable";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import type { SortableItem } from "./sortable-group-list";
 import type { SortableGroupListSortableProps } from "./sortable-group-list";
@@ -53,7 +54,7 @@ export interface GroupedSortableListProps<T extends SortableItem> {
   onMove: (item: T, fromGroupKey: string, toGroupKey: string, insertIndex: number) => void | Promise<void>;
   /** Render the group header (title, icon, etc.). */
   renderGroupHeader: (groupKey: string) => React.ReactNode;
-  /** Render each item; receives sortable props for drag. */
+  /** Render each item; receives sortable props for drag. Put listeners on the drag handle only. */
   renderItem: (item: T, sortableProps: SortableGroupListSortableProps) => React.ReactNode;
   /** Optional footer per group (e.g. "Add item" link). */
   renderGroupFooter?: (groupKey: string) => React.ReactNode;
@@ -129,7 +130,7 @@ function GroupColumn<T extends SortableItem>({
   return (
     <div
       ref={setNodeRef}
-      className={`${groupClassName ?? ""} transition-[box-shadow,background-color] duration-150 ${isOver ? "ring-2 ring-dashed ring-[#D4C5BA] ring-offset-2 bg-[#F5F3F0]/40" : ""}`}
+      className={`${groupClassName ?? ""} transition-[box-shadow,background-color] duration-150 ${isOver ? "shadow-lg bg-[#F5F3F0]/40" : ""}`}
       data-droppable-group={group.groupKey}
     >
       {renderGroupHeader(group.groupKey)}
@@ -161,7 +162,7 @@ function GroupColumn<T extends SortableItem>({
 
 /**
  * Renders multiple groups in a single DndContext so items can be reordered within a group
- * or moved to another group. Each group is a droppable; items are sortable.
+ * or moved to another group. Vertical axis and parent element restricted. Use a drag handle for drag start.
  */
 export function GroupedSortableList<T extends SortableItem>({
   groups,
@@ -252,6 +253,7 @@ export function GroupedSortableList<T extends SortableItem>({
       id={dndId}
       sensors={sensors}
       collisionDetection={closestCenter}
+      modifiers={[restrictToVerticalAxis]}
       onDragEnd={handleDragEnd}
     >
       <div className="space-y-6">

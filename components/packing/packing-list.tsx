@@ -18,6 +18,7 @@ import {
 import { ManagePackingCategoriesDialog } from "@/components/packing/manage-packing-categories-dialog";
 import { SortableGroupList } from "@/components/ui/sortable-group-list";
 import { GroupedSortableList } from "@/components/ui/grouped-sortable-list";
+import { DragHandle } from "@/components/ui/drag-handle";
 import { getPackingGroupingMode, PACKING_GROUP_KEY_EVERYONE } from "@/lib/list-grouping";
 
 export type PackingCategory = {
@@ -530,22 +531,22 @@ export function PackingList({
               <li
                 ref={setNodeRef}
                 style={style}
-                className={`flex items-center gap-3 rounded-sm py-0.5 transition-opacity duration-150 ${isDragging ? "opacity-50" : ""} cursor-grab active:cursor-grabbing touch-none hover:bg-[#F5F3F0]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/25 focus-visible:ring-inset`}
+                className="group relative flex items-center gap-2 rounded-sm py-0.5 transition-shadow duration-150 hover:bg-[#F5F3F0]/60"
                 dir={listRtl ? "rtl" : undefined}
-                {...attributes}
-                {...listeners}
               >
-                <button
-                  type="button"
-                  className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                    item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                  }`}
-                  onClick={(e) => { e.stopPropagation(); handleTogglePacked(item); }}
-                  disabled={!!toggleErrorId}
-                >
-                  {item.is_packed && <CheckIcon />}
-                </button>
-                {editingId === item.id ? (
+                <div className={`flex min-w-0 flex-1 items-center gap-2 rounded-sm transition-all duration-150 ${isDragging ? "shadow-lg scale-[1.01]" : ""}`}>
+                  <DragHandle listeners={listeners} attributes={attributes} />
+                  <button
+                    type="button"
+                    className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
+                      item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
+                    }`}
+                    onClick={(e) => { e.stopPropagation(); handleTogglePacked(item); }}
+                    disabled={!!toggleErrorId}
+                  >
+                    {item.is_packed && <CheckIcon />}
+                  </button>
+                  {editingId === item.id ? (
                   <div className="flex flex-1 flex-wrap items-center gap-2">
                     <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} dir="auto" style={{ unicodeBidi: "plaintext" }} className="min-w-[120px] rounded border border-[#D4C5BA] px-2 py-1 text-sm" />
                     <input type="number" min={1} value={editQuantity} onChange={(e) => setEditQuantity(parseInt(e.target.value, 10) || 1)} className="w-14 rounded border border-[#D4C5BA] px-2 py-1 text-sm" />
@@ -575,6 +576,7 @@ export function PackingList({
                     </div>
                   </>
                 )}
+                </div>
               </li>
             )}
             listTag="ul"
@@ -616,33 +618,33 @@ export function PackingList({
                     <li
                       ref={setNodeRef}
                       style={style}
-                      className={`flex items-center gap-3 rounded-sm py-0.5 transition-opacity duration-150 ${isDragging ? "opacity-50" : ""} ${canEditContent ? "cursor-grab active:cursor-grabbing touch-none hover:bg-[#F5F3F0]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/25 focus-visible:ring-inset" : ""}`}
+                      className={`group relative flex items-center gap-2 rounded-sm py-0.5 transition-shadow duration-150 ${canEditContent ? "hover:bg-[#F5F3F0]/60" : ""}`}
                       dir={listRtl ? "rtl" : undefined}
-                      {...attributes}
-                      {...listeners}
                     >
-                      {canEditContent ? (
-                        <button
-                          type="button"
-                          className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                            item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                          }`}
-                          onClick={(e) => { e.stopPropagation(); handleTogglePacked(item); }}
-                          disabled={!!toggleErrorId}
-                        >
-                          {item.is_packed && <CheckIcon />}
-                        </button>
-                      ) : (
-                        <span
-                          className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 ${
-                            item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                          }`}
-                          aria-hidden
-                        >
-                          {item.is_packed && <CheckIcon />}
-                        </span>
-                      )}
-                      {editingId === item.id && canEditContent ? (
+                      <div className={`flex min-w-0 flex-1 items-center gap-2 rounded-sm transition-all duration-150 ${isDragging ? "shadow-lg scale-[1.01]" : ""}`}>
+                        {canEditContent && <DragHandle listeners={listeners} attributes={attributes} />}
+                        {canEditContent ? (
+                          <button
+                            type="button"
+                            className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
+                              item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
+                            }`}
+                            onClick={(e) => { e.stopPropagation(); handleTogglePacked(item); }}
+                            disabled={!!toggleErrorId}
+                          >
+                            {item.is_packed && <CheckIcon />}
+                          </button>
+                        ) : (
+                          <span
+                            className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 ${
+                              item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
+                            }`}
+                            aria-hidden
+                          >
+                            {item.is_packed && <CheckIcon />}
+                          </span>
+                        )}
+                        {editingId === item.id && canEditContent ? (
                         <div className="flex flex-1 flex-wrap items-center gap-2">
                           <input
                             type="text"
@@ -758,6 +760,7 @@ export function PackingList({
                           )}
                         </>
                       )}
+                      </div>
                     </li>
                   )}
                 </SortableGroupList>
@@ -961,32 +964,33 @@ export function PackingList({
               <li
                 ref={setNodeRef}
                 style={style}
-                className={`flex items-center gap-3 rounded-sm py-0.5 transition-opacity duration-150 ${isDragging ? "opacity-50" : ""} cursor-grab active:cursor-grabbing touch-none hover:bg-[#F5F3F0]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/25 focus-visible:ring-inset`}
+                className="group relative flex items-center gap-2 rounded-sm py-0.5 transition-shadow duration-150 hover:bg-[#F5F3F0]/60"
                 dir={listRtl ? "rtl" : undefined}
-                {...attributes}
-                {...listeners}
               >
-                <button
-                  type="button"
-                  className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                    item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                  }`}
-                  onClick={(e) => { e.stopPropagation(); handleTogglePacked(item); }}
-                  disabled={!!toggleErrorId}
-                >
-                  {item.is_packed && <CheckIcon />}
-                </button>
-                <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
-                  <p className={item.is_packed ? "text-sm text-[#9B7B6B] line-through" : "text-sm text-[#6B7280]"} dir={listRtl ? "rtl" : "ltr"} style={{ unicodeBidi: "plaintext" }}>{item.title}</p>
-                  <p className="text-xs text-[#9B7B6B]"><span dir="ltr">{getCategoryName(item.category_id, categories)}</span>{item.quantity > 1 && <span dir="ltr" className="ms-1">× {item.quantity}</span>}</p>
-                </div>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <button type="button" className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]" onClick={() => openEdit(item)} aria-label="Edit"><PencilIcon /></button>
-                  {deleteConfirmId === item.id ? (
-                    <button type="button" className="text-xs text-red-600" onClick={() => handleDelete(item.id)} disabled={deleteLoading}>Yes</button>
-                  ) : (
-                    <button type="button" className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]" onClick={() => setDeleteConfirmId(item.id)} aria-label="Delete"><TrashIcon /></button>
-                  )}
+                <div className={`flex min-w-0 flex-1 items-center gap-2 rounded-sm transition-all duration-150 ${isDragging ? "shadow-lg scale-[1.01]" : ""}`}>
+                  <DragHandle listeners={listeners} attributes={attributes} />
+                  <button
+                    type="button"
+                    className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
+                      item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
+                    }`}
+                    onClick={(e) => { e.stopPropagation(); handleTogglePacked(item); }}
+                    disabled={!!toggleErrorId}
+                  >
+                    {item.is_packed && <CheckIcon />}
+                  </button>
+                  <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
+                    <p className={item.is_packed ? "text-sm text-[#9B7B6B] line-through" : "text-sm text-[#6B7280]"} dir={listRtl ? "rtl" : "ltr"} style={{ unicodeBidi: "plaintext" }}>{item.title}</p>
+                    <p className="text-xs text-[#9B7B6B]"><span dir="ltr">{getCategoryName(item.category_id, categories)}</span>{item.quantity > 1 && <span dir="ltr" className="ms-1">× {item.quantity}</span>}</p>
+                  </div>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]" onClick={() => openEdit(item)} aria-label="Edit"><PencilIcon /></button>
+                    {deleteConfirmId === item.id ? (
+                      <button type="button" className="text-xs text-red-600" onClick={() => handleDelete(item.id)} disabled={deleteLoading}>Yes</button>
+                    ) : (
+                      <button type="button" className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]" onClick={() => setDeleteConfirmId(item.id)} aria-label="Delete"><TrashIcon /></button>
+                    )}
+                  </div>
                 </div>
               </li>
             )}
@@ -1049,80 +1053,81 @@ export function PackingList({
                     <li
                       ref={setNodeRef}
                       style={style}
-                      className={`flex items-center gap-3 rounded-sm py-0.5 transition-opacity duration-150 ${isDragging ? "opacity-50" : ""} ${canEditContent ? "cursor-grab active:cursor-grabbing touch-none hover:bg-[#F5F3F0]/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/25 focus-visible:ring-inset" : ""}`}
+                      className={`group relative flex items-center gap-2 rounded-sm py-0.5 transition-shadow duration-150 ${canEditContent ? "hover:bg-[#F5F3F0]/60" : ""}`}
                       dir={listRtl ? "rtl" : undefined}
-                      {...attributes}
-                      {...listeners}
                     >
-                      {canEditContent ? (
-                        <button
-                          type="button"
-                          className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                            item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                          }`}
-                          onClick={(e) => { e.stopPropagation(); handleTogglePacked(item); }}
-                          disabled={!!toggleErrorId}
-                        >
-                          {item.is_packed && <CheckIcon />}
-                        </button>
-                      ) : (
-                        <span
-                          className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 ${
-                            item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                          }`}
-                          aria-hidden
-                        >
-                          {item.is_packed && <CheckIcon />}
-                        </span>
-                      )}
-                      <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
-                        <p
-                          className={item.is_packed ? "text-sm text-[#9B7B6B] line-through" : "text-sm text-[#6B7280]"}
-                          dir={listRtl ? "rtl" : "ltr"}
-                          style={{ unicodeBidi: "plaintext" }}
-                        >
-                          {item.title}
-                        </p>
-                        <p className="text-xs text-[#9B7B6B]">
-                          <span dir="ltr">
-                            {getCategoryName(item.category_id, categories)}
-                          </span>
-                          {item.quantity > 1 && (
-                            <span dir="ltr" className="ms-1">× {item.quantity}</span>
-                          )}
-                        </p>
-                      </div>
-                      {canEditContent && (
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]"
-                          onClick={() => openEdit(item)}
-                          aria-label="Edit"
-                        >
-                          <PencilIcon />
-                        </button>
-                        {deleteConfirmId === item.id ? (
+                      <div className={`flex min-w-0 flex-1 items-center gap-2 rounded-sm transition-all duration-150 ${isDragging ? "shadow-lg scale-[1.01]" : ""}`}>
+                        {canEditContent && <DragHandle listeners={listeners} attributes={attributes} />}
+                        {canEditContent ? (
                           <button
                             type="button"
-                            className="text-xs text-red-600"
-                            onClick={() => handleDelete(item.id)}
-                            disabled={deleteLoading}
+                            className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
+                              item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
+                            }`}
+                            onClick={(e) => { e.stopPropagation(); handleTogglePacked(item); }}
+                            disabled={!!toggleErrorId}
                           >
-                            Yes
+                            {item.is_packed && <CheckIcon />}
                           </button>
                         ) : (
+                          <span
+                            className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 ${
+                              item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
+                            }`}
+                            aria-hidden
+                          >
+                            {item.is_packed && <CheckIcon />}
+                          </span>
+                        )}
+                        <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
+                          <p
+                            className={item.is_packed ? "text-sm text-[#9B7B6B] line-through" : "text-sm text-[#6B7280]"}
+                            dir={listRtl ? "rtl" : "ltr"}
+                            style={{ unicodeBidi: "plaintext" }}
+                          >
+                            {item.title}
+                          </p>
+                          <p className="text-xs text-[#9B7B6B]">
+                            <span dir="ltr">
+                              {getCategoryName(item.category_id, categories)}
+                            </span>
+                            {item.quantity > 1 && (
+                              <span dir="ltr" className="ms-1">× {item.quantity}</span>
+                            )}
+                          </p>
+                        </div>
+                        {canEditContent && (
+                        <div onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
                             className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]"
-                            onClick={() => setDeleteConfirmId(item.id)}
-                            aria-label="Delete"
+                            onClick={() => openEdit(item)}
+                            aria-label="Edit"
                           >
-                            <TrashIcon />
+                            <PencilIcon />
                           </button>
+                          {deleteConfirmId === item.id ? (
+                            <button
+                              type="button"
+                              className="text-xs text-red-600"
+                              onClick={() => handleDelete(item.id)}
+                              disabled={deleteLoading}
+                            >
+                              Yes
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]"
+                              onClick={() => setDeleteConfirmId(item.id)}
+                              aria-label="Delete"
+                            >
+                              <TrashIcon />
+                            </button>
+                          )}
+                        </div>
                         )}
                       </div>
-                      )}
                     </li>
                   )}
                 </SortableGroupList>
