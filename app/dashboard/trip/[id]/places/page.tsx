@@ -130,9 +130,9 @@ export default function TripPlacesPage() {
     if (!id) return;
     supabase
       .from("trip_place_categories")
-      .select("id, name, icon")
+      .select("id, name, icon, sort_order")
       .eq("trip_id", id)
-      .order("name", { ascending: true })
+      .order("sort_order", { ascending: true })
       .then(({ data, error }) => {
         if (error) {
           console.error(error);
@@ -148,9 +148,9 @@ export default function TripPlacesPage() {
     setPlacesLoading(true);
     supabase
       .from("trip_places")
-      .select("id, trip_id, title, google_maps_url, notes, category_id, created_at")
+      .select("id, trip_id, title, google_maps_url, notes, category_id, created_at, sort_order")
       .eq("trip_id", id)
-      .order("created_at", { ascending: false })
+      .order("sort_order", { ascending: true })
       .then(({ data, error }) => {
         if (error) {
           console.error(error);

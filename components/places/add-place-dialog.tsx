@@ -52,6 +52,7 @@ export type PlaceCategory = {
   id: string;
   name: string;
   icon: string | null;
+  sort_order: number;
 };
 
 export type PlaceFormInitialValues = {

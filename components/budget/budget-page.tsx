@@ -185,6 +185,8 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [displayCurrency, setDisplayCurrency] = useState<string>("ILS");
   const [listView, setListView] = useState<"category" | "date">("category");
+  /** When set, opening Add dialog will prefill category or date (from group-level add). */
+  const [addItemPrefill, setAddItemPrefill] = useState<{ categoryId?: string | null; date?: string | null } | null>(null);
 
   const displayCurrencies = mergeDisplayCurrencies(tripCurrencies);
 
@@ -215,7 +217,10 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
   };
 
   const handleAddItemClose = (open: boolean) => {
-    if (!open) setEditingItem(null);
+    if (!open) {
+      setEditingItem(null);
+      setAddItemPrefill(null);
+    }
     setAddItemOpen(open);
   };
 
@@ -481,6 +486,18 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
                 </ul>
               )}
             </div>
+            {canEditContent && (
+              <button
+                type="button"
+                className="mt-2 text-sm text-[#6B7280] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1 rounded transition-colors duration-150"
+                onClick={() => {
+                  setAddItemPrefill({ categoryId: group.category?.id ?? undefined });
+                  setAddItemOpen(true);
+                }}
+              >
+                + Add item
+              </button>
+            )}
           </section>
         ))}
       </div>
@@ -546,6 +563,20 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
                     })}
                   </ul>
                 </div>
+                {canEditContent && (
+                  <button
+                    type="button"
+                    className="mt-2 text-sm text-[#6B7280] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1 rounded transition-colors duration-150"
+                    onClick={() => {
+                      setAddItemPrefill({
+                        date: group.dateKey === "__no_date__" ? "" : group.dateKey,
+                      });
+                      setAddItemOpen(true);
+                    }}
+                  >
+                    + Add item
+                  </button>
+                )}
               </section>
             ))}
           </div>
@@ -561,6 +592,8 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
         defaultCurrency={displayCurrency}
         tripCurrencies={displayCurrencies}
         onSuccess={refetchBudget}
+        initialCategoryId={addItemPrefill?.categoryId}
+        initialDate={addItemPrefill?.date}
         onCategoryCreated={(category) => {
           setData((prev) =>
             prev

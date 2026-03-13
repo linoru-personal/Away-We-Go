@@ -23,6 +23,7 @@ export type TripNote = {
   tags: string[] | null;
   created_at: string;
   updated_at: string;
+  sort_order: number;
 };
 
 export interface TripNotesSectionProps {
@@ -424,9 +425,9 @@ function NoteCard({
 function fetchNotes(tripId: string) {
   return supabase
     .from("trip_notes")
-    .select("id, trip_id, title, content, tags, created_at, updated_at")
+    .select("id, trip_id, title, content, tags, created_at, updated_at, sort_order")
     .eq("trip_id", tripId)
-    .order("created_at", { ascending: false });
+    .order("sort_order", { ascending: true });
 }
 
 export function TripNotesSection({ tripId, canEditContent = true }: TripNotesSectionProps) {

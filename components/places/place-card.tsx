@@ -16,6 +16,7 @@ export type TripPlace = {
   notes: string | null;
   category_id: string | null;
   created_at: string;
+  sort_order: number;
 };
 
 /** Resolved category for display (name + icon). */

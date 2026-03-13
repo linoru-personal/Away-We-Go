@@ -43,6 +43,10 @@ export interface AddBudgetItemDialogProps {
   onSuccess: () => void;
   /** When a new category is created from this dialog, call with the new category so the parent can add it to the list without closing the dialog. */
   onCategoryCreated?: (category: BudgetCategorySummary) => void;
+  /** When opening for Add, prefill category (e.g. when adding from a category group). */
+  initialCategoryId?: string | null;
+  /** When opening for Add, prefill date (YYYY-MM-DD or "" for no date; e.g. when adding from a date group). */
+  initialDate?: string | null;
 }
 
 function toDateInputValue(date: string | null): string {
@@ -68,6 +72,8 @@ export function AddBudgetItemDialog({
   tripCurrencies,
   onSuccess,
   onCategoryCreated,
+  initialCategoryId,
+  initialDate,
 }: AddBudgetItemDialogProps) {
   const isEdit = Boolean(existingItem);
   const currencies =
@@ -114,11 +120,11 @@ export function AddBudgetItemDialog({
       setCurrency(
         currencies.includes(defaultCurrency) ? defaultCurrency : currencies[0] ?? "USD"
       );
-      setCategoryId("");
-      setDate("");
+      setCategoryId(initialCategoryId ?? "");
+      setDate(initialDate ?? "");
       setNotes("");
     }
-  }, [open, existingItem, defaultCurrency, currencies]);
+  }, [open, existingItem, defaultCurrency, currencies, initialCategoryId, initialDate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,6 +195,7 @@ export function AddBudgetItemDialog({
         color: created.color,
         icon: created.icon,
         total_base: 0,
+        sort_order: created.sort_order,
       };
       setCategoryId(created.id);
       setCreateCategoryName("");

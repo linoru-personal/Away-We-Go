@@ -24,6 +24,7 @@ export type TripPlace = {
   google_maps_url: string;
   notes: string | null;
   created_at: string;
+  sort_order: number;
 };
 
 export interface PlacesSummaryCardProps {
@@ -57,9 +58,9 @@ export function PlacesSummaryCard({ tripId }: PlacesSummaryCardProps) {
     if (!tripId) return;
     supabase
       .from("trip_places")
-      .select("id, trip_id, title, google_maps_url, notes, created_at")
+      .select("id, trip_id, title, google_maps_url, notes, created_at, sort_order")
       .eq("trip_id", tripId)
-      .order("created_at", { ascending: false })
+      .order("sort_order", { ascending: true })
       .then(({ data, error }) => {
         if (error) {
           console.error(error);

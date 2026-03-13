@@ -153,6 +153,7 @@ export type BudgetCategorySummary = {
   color: string;
   icon: string;
   total_base: number;
+  sort_order: number;
 };
 
 export type BudgetItemRow = {
@@ -168,6 +169,7 @@ export type BudgetItemRow = {
   date: string | null;
   notes: string | null;
   created_at: string | null;
+  sort_order: number;
 };
 
 export type BudgetData = {
@@ -214,14 +216,14 @@ export async function fetchBudgetData(tripId: string): Promise<BudgetData> {
   const [categoriesRes, itemsRes] = await Promise.all([
     supabase
       .from("trip_budget_categories")
-      .select("id, name, color, icon")
+      .select("id, name, color, icon, sort_order")
       .eq("trip_id", tripId)
-      .order("name", { ascending: true }),
+      .order("sort_order", { ascending: true }),
     supabase
       .from("trip_budget_items")
       .select("*")
       .eq("trip_id", tripId)
-      .order("created_at", { ascending: false }),
+      .order("sort_order", { ascending: true }),
   ]);
 
   if (categoriesRes.error) {
@@ -231,12 +233,7 @@ export async function fetchBudgetData(tripId: string): Promise<BudgetData> {
     throw new Error(itemsRes.error.message);
   }
 
-  const categories = (categoriesRes.data ?? []) as {
-    id: string;
-    name: string;
-    color: string;
-    icon: string;
-  }[];
+  const categories = (categoriesRes.data ?? []) as (BudgetCategorySummary & { total_base?: number })[];
   const items = (itemsRes.data ?? []) as BudgetItemRow[];
 
   const categoryTotals = new Map<string, number>();
@@ -254,6 +251,7 @@ export async function fetchBudgetData(tripId: string): Promise<BudgetData> {
     color: c.color,
     icon: c.icon,
     total_base: categoryTotals.get(c.id) ?? 0,
+    sort_order: c.sort_order ?? 0,
   }));
 
   const itemsByCategory = new Map<string | null, BudgetItemRow[]>();
@@ -395,7 +393,7 @@ const DEFAULT_CATEGORY_COLOR = "#E07A5F";
 export async function createBudgetCategory(
   tripId: string,
   payload: CreateBudgetCategoryPayload
-): Promise<{ id: string; trip_id: string; name: string; color: string; icon: string }> {
+): Promise<{ id: string; trip_id: string; name: string; color: string; icon: string; sort_order: number }> {
   const { data, error } = await supabase
     .from("trip_budget_categories")
     .insert({
@@ -404,44 +402,44 @@ export async function createBudgetCategory(
       color: payload.color ?? DEFAULT_CATEGORY_COLOR,
       icon: payload.icon,
     })
-    .select("id, trip_id, name, color, icon")
+    .select("id, trip_id, name, color, icon, sort_order")
     .single();
 
   if (error) {
     throw new Error(error.message);
   }
-  return data as { id: string; trip_id: string; name: string; color: string; icon: string };
+  return data as { id: string; trip_id: string; name: string; color: string; icon: string; sort_order: number };
 }
 
 export async function updateBudgetCategory(
   tripId: string,
   categoryId: string,
   payload: UpdateBudgetCategoryPayload
-): Promise<{ id: string; trip_id: string; name: string; color: string; icon: string }> {
+): Promise<{ id: string; trip_id: string; name: string; color: string; icon: string; sort_order: number }> {
   const updates: Record<string, unknown> = {};
   if (payload.name !== undefined) updates.name = payload.name;
   if (payload.icon !== undefined) updates.icon = payload.icon;
   if (Object.keys(updates).length === 0) {
     const { data, error } = await supabase
       .from("trip_budget_categories")
-      .select("id, trip_id, name, color, icon")
+      .select("id, trip_id, name, color, icon, sort_order")
       .eq("id", categoryId)
       .eq("trip_id", tripId)
       .single();
     if (error) throw new Error(error.message);
-    return data as { id: string; trip_id: string; name: string; color: string; icon: string };
+    return data as { id: string; trip_id: string; name: string; color: string; icon: string; sort_order: number };
   }
   const { data, error } = await supabase
     .from("trip_budget_categories")
     .update(updates)
     .eq("id", categoryId)
     .eq("trip_id", tripId)
-    .select("id, trip_id, name, color, icon")
+    .select("id, trip_id, name, color, icon, sort_order")
     .single();
   if (error) {
     throw new Error(error.message);
   }
-  return data as { id: string; trip_id: string; name: string; color: string; icon: string };
+  return data as { id: string; trip_id: string; name: string; color: string; icon: string; sort_order: number };
 }
 
 /** Move all items in this category to General (uncategorized), then delete the category. */

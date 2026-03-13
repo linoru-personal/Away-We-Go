@@ -24,6 +24,7 @@ type PackingItemRow = {
   title: string;
   is_packed: boolean;
   assigned_to_participant_id: string | null;
+  sort_order: number;
 };
 
 type ParticipantRow = {
@@ -51,8 +52,9 @@ export function PackingSummaryCard({ tripId, tripCoverImageUrl }: PackingSummary
       const [itemsRes, partRes] = await Promise.all([
         supabase
           .from("packing_items")
-          .select("id, trip_id, title, is_packed, assigned_to_participant_id")
-          .eq("trip_id", tripId),
+          .select("id, trip_id, title, is_packed, assigned_to_participant_id, sort_order")
+          .eq("trip_id", tripId)
+          .order("sort_order", { ascending: true }),
         supabase
           .from("trip_participants")
           .select("id, name, avatar_path, sort_order")

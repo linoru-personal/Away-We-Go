@@ -74,7 +74,7 @@ export function ManagePlaceCategoriesDialog({
           name: trimmed,
           icon: icon ?? PLACES_DEFAULT_ICON,
         })
-        .select("id, name, icon")
+        .select("id, name, icon, sort_order")
         .single();
       if (insertError) throw new Error(insertError.message);
       setCategories((prev) => [...prev, data as PlaceCategory]);
@@ -114,7 +114,7 @@ export function ManagePlaceCategoriesDialog({
         .update({ name: trimmed, icon: editIcon ?? PLACES_DEFAULT_ICON })
         .eq("id", editingId)
         .eq("trip_id", tripId)
-        .select("id, name, icon")
+        .select("id, name, icon, sort_order")
         .single();
       if (updateError) throw new Error(updateError.message);
       setCategories((prev) =>

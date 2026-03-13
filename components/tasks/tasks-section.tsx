@@ -15,6 +15,7 @@ export type Task = {
   status: TaskStatus;
   assignee: string;
   created_at: string;
+  sort_order: number;
 };
 
 export interface TasksSectionProps {
@@ -152,6 +153,7 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
         .from("tasks")
         .select("*")
         .eq("trip_id", tripId)
+        .order("sort_order", { ascending: true })
         .order("created_at", { ascending: true });
 
       if (error) {

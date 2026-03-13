@@ -8,6 +8,7 @@ import { useTripRole } from "@/app/lib/useTripRole";
 import TripHero from "@/components/trip/trip-hero";
 import { formatTripDateRange } from "@/lib/format-trip-dates";
 import { PackingList } from "@/components/packing/packing-list";
+import { getPackingGroupingMode, PACKING_GROUP_KEY_EVERYONE } from "@/lib/list-grouping";
 
 type Trip = {
   id: string;
@@ -37,6 +38,7 @@ export type PackingItem = {
   quantity: number;
   is_packed: boolean;
   assigned_to_participant_id: string | null;
+  sort_order: number;
 };
 
 export type PackingParticipant = {
@@ -166,7 +168,7 @@ export default function PackingPage() {
           .eq("trip_id", id)
           .order("sort_order", { ascending: true })
           .order("name", { ascending: true }),
-        supabase.from("packing_items").select("id, trip_id, category_id, title, quantity, is_packed, assigned_to_participant_id").eq("trip_id", id),
+        supabase.from("packing_items").select("id, trip_id, category_id, title, quantity, is_packed, assigned_to_participant_id, sort_order").eq("trip_id", id).order("sort_order", { ascending: true }),
         supabase
           .from("trip_participants")
           .select("id, name")
@@ -237,10 +239,78 @@ export default function PackingPage() {
                     .eq("trip_id", id)
                     .order("sort_order", { ascending: true })
                     .order("name", { ascending: true }),
-                  supabase.from("packing_items").select("id, trip_id, category_id, title, quantity, is_packed, assigned_to_participant_id").eq("trip_id", id),
+                  supabase.from("packing_items").select("id, trip_id, category_id, title, quantity, is_packed, assigned_to_participant_id, sort_order").eq("trip_id", id).order("sort_order", { ascending: true }),
                 ]);
                 if (!catRes.error && catRes.data) setCategories((catRes.data ?? []) as PackingCategory[]);
                 if (!itemsRes.error && itemsRes.data) setItems((itemsRes.data ?? []) as PackingItem[]);
+              }}
+              onReorderGroup={async (newOrderedItems) => {
+                if (newOrderedItems.length === 0) return;
+                const minOrder = Math.min(...newOrderedItems.map((i) => i.sort_order));
+                const updated = newOrderedItems.map((item, i) => ({ ...item, sort_order: minOrder + i }));
+                setItems((prev) => {
+                  const ids = new Set(updated.map((i) => i.id));
+                  const rest = prev.filter((i) => !ids.has(i.id));
+                  return [...rest, ...updated].sort((a, b) => a.sort_order - b.sort_order);
+                });
+                await Promise.all(
+                  updated.map((item) =>
+                    supabase.from("packing_items").update({ sort_order: item.sort_order }).eq("id", item.id)
+                  )
+                );
+              }}
+              onMoveItem={async (viewMode, item, fromGroupKey, toGroupKey, insertIndex) => {
+                const meta = getPackingGroupingMode(viewMode);
+                const field = meta.field as keyof PackingItem;
+                const fieldValue = meta.groupKeyToFieldValue(toGroupKey);
+
+                const getGroupKey = (i: PackingItem) =>
+                  viewMode === "category"
+                    ? i.category_id
+                    : (i.assigned_to_participant_id ?? PACKING_GROUP_KEY_EVERYONE);
+
+                const groupKeysInOrder: string[] =
+                  viewMode === "category"
+                    ? [...categories].sort((a, b) => a.sort_order - b.sort_order).map((c) => c.id)
+                    : [PACKING_GROUP_KEY_EVERYONE, ...participants.map((p) => p.id)];
+
+                const sourceItems = items.filter((i) => getGroupKey(i) === fromGroupKey && i.id !== item.id);
+                const destItems = items.filter((i) => getGroupKey(i) === toGroupKey);
+                const newDestItems = [
+                  ...destItems.slice(0, insertIndex),
+                  { ...item, [field]: fieldValue } as PackingItem,
+                  ...destItems.slice(insertIndex),
+                ];
+
+                const itemsByKey = new Map<string, PackingItem[]>();
+                for (const key of groupKeysInOrder) {
+                  if (key === fromGroupKey) itemsByKey.set(key, sourceItems);
+                  else if (key === toGroupKey) itemsByKey.set(key, newDestItems);
+                  else itemsByKey.set(key, items.filter((i) => getGroupKey(i) === key));
+                }
+                const flat: PackingItem[] = [];
+                for (const key of groupKeysInOrder) {
+                  const list = itemsByKey.get(key) ?? [];
+                  for (let i = 0; i < list.length; i++) {
+                    flat.push({ ...list[i], sort_order: flat.length });
+                  }
+                }
+
+                setItems(flat);
+
+                await supabase
+                  .from("packing_items")
+                  .update({ [field]: fieldValue, sort_order: flat.find((i) => i.id === item.id)!.sort_order })
+                  .eq("id", item.id);
+
+                const toUpdate = flat.filter(
+                  (i) => i.id !== item.id && (getGroupKey(i) === fromGroupKey || getGroupKey(i) === toGroupKey)
+                );
+                await Promise.all(
+                  toUpdate.map((i) =>
+                    supabase.from("packing_items").update({ sort_order: i.sort_order }).eq("id", i.id)
+                  )
+                );
               }}
             />
           </>
