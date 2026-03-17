@@ -714,9 +714,9 @@ export default function TripPage() {
         trip={trip}
         open={editModalOpen}
         onClose={() => setEditModalOpen(false)}
-        onSuccess={() => {
-          refetchTrip();
-          refetchParticipants();
+        onSuccess={async () => {
+          await refetchTrip();
+          await refetchParticipants();
         }}
       />
 

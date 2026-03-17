@@ -43,7 +43,7 @@ export interface TripFormModalProps {
   trip?: TripForForm | null;
   open: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: () => void | Promise<void>;
 }
 
 const INPUT_CLASS =
@@ -739,7 +739,7 @@ export default function TripFormModal({
             }
           }
         }
-        onSuccess?.();
+        await Promise.resolve(onSuccess?.());
         onClose();
       } else if (trip) {
         const { error: updateError } = await supabase
@@ -803,7 +803,7 @@ export default function TripFormModal({
             }
           }
         }
-        onSuccess?.();
+        await Promise.resolve(onSuccess?.());
         onClose();
       }
     } finally {
@@ -1195,7 +1195,16 @@ export default function TripFormModal({
                   const { data } = await supabase.storage
                     .from("trip-covers")
                     .createSignedUrl(path, 3600);
-                  if (data?.signedUrl) setExistingDestinationSignedUrl(data.signedUrl);
+                  if (data?.signedUrl) {
+                    setExistingDestinationSignedUrl(data.signedUrl);
+                    setDestinationPendingOriginalFile(null);
+                    setDestinationPendingCroppedBlob(null);
+                    setDestinationPendingCropMetadata(null);
+                    setDestinationPreviewUrl((prev) => {
+                      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+                      return null;
+                    });
+                  }
                 } catch (err) {
                   console.error("Destination image save failed", err);
                 }
@@ -1282,7 +1291,16 @@ export default function TripFormModal({
                     const { data } = await supabase.storage
                       .from("trip-covers")
                       .createSignedUrl(`${trip.id}/cover.jpg`, 3600);
-                    if (data?.signedUrl) setExistingCoverSignedUrl(data.signedUrl);
+                    if (data?.signedUrl) {
+                      setExistingCoverSignedUrl(data.signedUrl);
+                      setCoverPreviewUrl((prev) => {
+                        if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+                        return null;
+                      });
+                      setCoverFile(null);
+                      setCoverCroppedBlob(null);
+                      setCoverCropMetadata(null);
+                    }
                   } catch (err) {
                     console.error("Cover save failed", err);
                   }

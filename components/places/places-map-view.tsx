@@ -204,9 +204,9 @@ export function PlacesMapView({ places, categories, className = "" }: PlacesMapV
 
   return (
     <div
-      className={`flex min-h-[320px] w-full overflow-hidden rounded-2xl border border-[#ebe5df] ${className}`}
+      className={`flex min-h-[320px] w-full flex-col overflow-hidden rounded-2xl border border-[#ebe5df] md:flex-row ${className}`}
     >
-      <div className="flex w-72 shrink-0 flex-col border-r border-[#ebe5df] bg-[#faf8f6]">
+      <div className="flex w-full shrink-0 flex-col overflow-hidden border-b border-[#ebe5df] bg-[#faf8f6] md:max-h-none md:w-72 md:border-b-0 md:border-r md:rounded-none max-h-[45vh] rounded-t-2xl">
         <div className="flex flex-col gap-2 border-b border-[#ebe5df] px-4 py-3">
           <h2 className="text-sm font-semibold text-[#4A4A4A]">Places by category</h2>
           {groups.length > 1 && (
@@ -315,9 +315,9 @@ export function PlacesMapView({ places, categories, className = "" }: PlacesMapV
           })}
         </ul>
       </div>
-      <div className="min-w-0 flex-1 [&_.leaflet-container]:rounded-r-2xl [&_.leaflet-container]:h-full">
+      <div className="min-h-[280px] min-w-0 flex-1 md:min-h-0 h-[50vh] md:h-[320px] [&_.leaflet-container]:h-full [&_.leaflet-container]:rounded-b-2xl md:[&_.leaflet-container]:rounded-r-2xl">
         {placesToShowOnMap.length === 0 ? (
-          <div className="flex h-[320px] items-center justify-center rounded-r-2xl bg-[#faf8f6] px-6 text-center">
+          <div className="flex h-full min-h-[280px] items-center justify-center rounded-b-2xl bg-[#faf8f6] px-6 text-center md:rounded-r-2xl">
             <p className="text-sm text-[#8a8a8a]">
               Select at least one category above to see places on the map.
             </p>
@@ -326,7 +326,7 @@ export function PlacesMapView({ places, categories, className = "" }: PlacesMapV
           <MapContainer
             center={[center.lat, center.lng]}
             zoom={placesToShowOnMap.length === 1 ? 14 : 10}
-            className="h-[320px] w-full"
+            className="h-full min-h-[280px] w-full"
             scrollWheelZoom={true}
             aria-label="Map of trip places"
           >
