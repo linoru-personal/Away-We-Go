@@ -1,0 +1,110 @@
+[
+  {
+    "id": "munich-1",
+    "name": "English Garden",
+    "city": "Munich",
+    "category": "park",
+    "tags": ["kids", "family", "outdoor", "free"],
+    "ageRange": [0, 99],
+    "description": "One of the world's largest urban parks. Great for picnics, cycling, and watching surfers at the Eisbach. Plenty of open space for kids to run."
+  },
+  {
+    "id": "munich-2",
+    "name": "Westpark Playground",
+    "city": "Munich",
+    "category": "playground",
+    "tags": ["kids", "family", "outdoor", "free", "age_4_5", "age_6_10"],
+    "ageRange": [2, 12],
+    "description": "Large playground with climbing frames, sand areas, and shaded spots. Popular with local families."
+  },
+  {
+    "id": "munich-3",
+    "name": "Hellabrunn Zoo",
+    "city": "Munich",
+    "category": "zoo",
+    "tags": ["kids", "family", "outdoor", "ticket_required", "age_4_5", "age_6_10"],
+    "ageRange": [0, 99],
+    "description": "Family-friendly zoo with natural enclosures. Polar bears, elephants, and a petting area. Plan for half a day."
+  },
+  {
+    "id": "munich-4",
+    "name": "Deutsches Museum",
+    "city": "Munich",
+    "category": "museum",
+    "tags": ["kids", "family", "indoor", "rainy_day", "ticket_required", "age_6_10"],
+    "ageRange": [4, 99],
+    "description": "Huge science and technology museum. Kids' Kingdom section is perfect for younger children. Good for rainy days."
+  },
+  {
+    "id": "munich-5",
+    "name": "Olympiapark",
+    "city": "Munich",
+    "category": "park",
+    "tags": ["kids", "family", "outdoor", "free"],
+    "ageRange": [0, 99],
+    "description": "Olympic Park with lawns, lake, and climbing hill. Hosts events and has a small playground. Stroller-friendly paths."
+  },
+  {
+    "id": "munich-6",
+    "name": "Kinderreich at Deutsches Museum",
+    "city": "Munich",
+    "category": "indoor",
+    "tags": ["kids", "family", "indoor", "rainy_day", "ticket_required", "age_4_5", "age_6_10"],
+    "ageRange": [3, 8],
+    "description": "Hands-on children's area inside Deutsches Museum. Water play, construction, and simple experiments. Book in advance."
+  },
+  {
+    "id": "munich-7",
+    "name": "Spielplatz am Flaucher",
+    "city": "Munich",
+    "category": "playground",
+    "tags": ["kids", "family", "outdoor", "free", "age_4_5", "age_6_10"],
+    "ageRange": [2, 12],
+    "description": "Playground by the Isar river with sand, climbing structures, and river access. Bring a towel in summer."
+  },
+  {
+    "id": "munich-8",
+    "name": "BMW Welt",
+    "city": "Munich",
+    "category": "indoor",
+    "tags": ["family", "indoor", "rainy_day", "free", "age_6_10"],
+    "ageRange": [5, 99],
+    "description": "Free exhibition space with cars and motorcycles. Interactive displays. Combine with Olympiapark next door."
+  },
+  {
+    "id": "munich-9",
+    "name": "Bavaria Filmstadt",
+    "city": "Munich",
+    "category": "indoor",
+    "tags": ["kids", "family", "indoor", "rainy_day", "ticket_required", "age_6_10"],
+    "ageRange": [5, 99],
+    "description": "Film studio tour with sets, stunt shows, and 4D cinema. Great for older kids who like movies and action."
+  },
+  {
+    "id": "munich-10",
+    "name": "Nymphenburg Palace Park",
+    "city": "Munich",
+    "category": "park",
+    "tags": ["kids", "family", "outdoor", "ticket_required"],
+    "ageRange": [0, 99],
+    "description": "Baroque palace with large park and canals. Nice for walks and feed-the-ducks. Palace interior is optional."
+  },
+  {
+    "id": "munich-11",
+    "name": "Jugendmuseum",
+    "city": "Munich",
+    "category": "museum",
+    "tags": ["kids", "family", "indoor", "rainy_day", "ticket_required", "age_4_5", "age_6_10"],
+    "ageRange": [4, 14],
+    "description": "Children's museum with rotating hands-on exhibitions. Focus on history and culture in a child-friendly way."
+  },
+  {
+    "id": "munich-12",
+    "name": "Sea Life Munich",
+    "city": "Munich",
+    "category": "indoor",
+    "tags": ["kids", "family", "indoor", "rainy_day", "ticket_required", "age_4_5", "age_6_10"],
+    "ageRange": [2, 99],
+    "description": "Aquarium in the Olympiapark area. Sharks, rays, and touch pool. Compact and manageable with toddlers."
+  }
+]
