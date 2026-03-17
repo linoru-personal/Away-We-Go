@@ -87,7 +87,7 @@ export function DialogContent({ children }: DialogContentProps) {
       tabIndex={-1}
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onOpenChange(false);
       }}

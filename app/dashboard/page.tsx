@@ -254,26 +254,6 @@ function DashboardInner({ user }: { user: User }) {
             </button>
             <button
               type="button"
-              onClick={async () => {
-                const res = await fetch("/api/agent", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    message: "Which parks in Munich are good for kids age 4-5?",
-                    tripId: "trip-123",
-                    destination: "Munich",
-                    childrenAges: [4, 5],
-                  }),
-                });
-                const data = await res.json();
-                console.log(data);
-              }}
-              className="rounded-full px-4 py-2 text-sm font-medium text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900"
-            >
-              Test agent
-            </button>
-            <button
-              type="button"
               onClick={logout}
               className="rounded-full px-4 py-2 text-sm font-medium text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900"
             >
