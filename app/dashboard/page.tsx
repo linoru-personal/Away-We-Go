@@ -221,17 +221,17 @@ function DashboardInner({ user }: { user: User }) {
   return (
     <main className="min-h-screen bg-neutral-50">
       <div className={DASHBOARD_LIST_PAGE_SHELL}>
-        {/* Header: greeting + profile icon + logout */}
-        <div className="relative mb-8">
-          <div className="pr-24">
-            <h1 className="text-3xl font-bold text-neutral-900 sm:text-4xl">
+        {/* Header: greeting + profile (stack on narrow screens to avoid overlap with long names) */}
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl md:text-4xl">
               {getTimeBasedGreeting(new Date())}, {displayName}
             </h1>
-            <p className="mt-1 text-neutral-600">
+            <p className="mt-1 text-sm text-neutral-600 sm:text-base">
               Where would you like to go next?
             </p>
           </div>
-          <div className="absolute top-0 right-0 flex items-center gap-2">
+          <div className="flex shrink-0 items-center justify-end gap-2 sm:justify-start sm:pt-1">
             <button
               type="button"
               onClick={() => setIsAccountOpen(true)}
@@ -256,7 +256,7 @@ function DashboardInner({ user }: { user: User }) {
             <button
               type="button"
               onClick={logout}
-              className="rounded-full px-4 py-2 text-sm font-medium text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900"
+              className="rounded-full px-3 py-2 text-sm font-medium text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900 sm:px-4"
             >
               Logout
             </button>

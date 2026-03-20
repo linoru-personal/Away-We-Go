@@ -14,8 +14,9 @@ export interface DragHandleProps {
 }
 
 /**
- * Small drag handle (⋮⋮) for sortable rows. Visible on row hover.
- * Put dnd-kit listeners and attributes only on this element so dragging starts from the handle.
+ * Small drag handle (⋮⋮) for sortable rows.
+ * On fine pointers with hover: hidden until row/handle hover (desktop).
+ * On touch / coarse pointers: always visible with a ~44px tap target (mobile).
  */
 export function DragHandle({
   listeners = {},
@@ -25,7 +26,7 @@ export function DragHandle({
 }: DragHandleProps) {
   return (
     <span
-      className={`inline-flex shrink-0 cursor-grab touch-none items-center justify-center rounded p-1 text-[#9B7B6B] opacity-0 transition-opacity duration-150 hover:opacity-100 active:cursor-grabbing group-hover:opacity-70 ${className}`}
+      className={`inline-flex min-h-11 min-w-11 shrink-0 cursor-grab touch-none items-center justify-center rounded text-[#9B7B6B] opacity-80 transition-opacity duration-150 active:cursor-grabbing [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-70 [@media(hover:hover)_and_(pointer:fine)]:hover:opacity-100 ${className}`}
       role="button"
       aria-label={ariaLabel}
       {...(listeners as Record<string, unknown>)}
