@@ -20,6 +20,21 @@ import {
   Shirt,
   CircleDollarSign,
   Luggage,
+  Tent,
+  BedDouble,
+  House,
+  Building2,
+  Castle,
+  FerrisWheel,
+  Mountain,
+  LeafyGreen,
+  TreePalm,
+  TramFront,
+  Bus,
+  Ship,
+  Waves,
+  Umbrella,
+  Telescope,
   LucideIcon,
 } from "lucide-react";
 
@@ -42,6 +57,22 @@ export const CATEGORY_ICON_KEYS = [
   "shirt",
   "money",
   "luggage",
+  /* travel & places */
+  "tent",
+  "hotel",
+  "house",
+  "building_2",
+  "landmark",
+  "ferris_wheel",
+  "mountain",
+  "trees",
+  "tree_palm",
+  "train_front",
+  "bus",
+  "ship",
+  "waves",
+  "umbrella",
+  "telescope",
 ] as const;
 
 export type CategoryIconKey = (typeof CATEGORY_ICON_KEYS)[number];
@@ -68,6 +99,21 @@ const ICON_MAP: Record<CategoryIconKey, LucideIcon> = {
   shirt: Shirt,
   money: CircleDollarSign,
   luggage: Luggage,
+  tent: Tent,
+  hotel: BedDouble,
+  house: House,
+  building_2: Building2,
+  landmark: Castle,
+  ferris_wheel: FerrisWheel,
+  mountain: Mountain,
+  trees: LeafyGreen,
+  tree_palm: TreePalm,
+  train_front: TramFront,
+  bus: Bus,
+  ship: Ship,
+  waves: Waves,
+  umbrella: Umbrella,
+  telescope: Telescope,
 };
 
 /** Legacy budget icon keys → new key */
@@ -78,6 +124,8 @@ const LEGACY_KEY_MAP: Record<string, CategoryIconKey> = {
   compass: "compass",
   bag: "luggage",
   dots: "star",
+  building2: "building_2",
+  binoculars: "telescope",
 };
 
 /** Emoji (or stored value) → new key. Covers old DB values. */
@@ -85,7 +133,7 @@ const EMOJI_TO_KEY: Record<string, CategoryIconKey> = {
   "🍽️": "utensils",
   "🚗": "car",
   "✈️": "plane",
-  "🏨": "map_pin",
+  "🏨": "hotel",
   "🎟️": "ticket",
   "✨": "sparkles",
   "🛍️": "shopping_bag",
@@ -103,7 +151,21 @@ const EMOJI_TO_KEY: Record<string, CategoryIconKey> = {
   "🔌": "compass",
   "📄": "ticket",
   "💰": "money",
-  "🏠": "map_pin",
+  "🏠": "house",
+  "🏕️": "tent",
+  "🏰": "landmark",
+  "🎡": "ferris_wheel",
+  "⛰️": "mountain",
+  "🌲": "trees",
+  "🌴": "tree_palm",
+  "🚆": "train_front",
+  "🚇": "train_front",
+  "🚌": "bus",
+  "🚢": "ship",
+  "🌊": "waves",
+  "☂️": "umbrella",
+  "🏖️": "waves",
+  "🔭": "telescope",
 };
 
 /**
@@ -163,15 +225,71 @@ export function CategoryIconPicker({
   className = "",
 }: CategoryIconPickerProps) {
   const [open, setOpen] = React.useState(false);
-  const [position, setPosition] = React.useState<{ top: number; left: number } | null>(null);
+  const [position, setPosition] = React.useState<{
+    left: number;
+    maxHeight: number;
+    top?: number;
+    bottom?: number;
+  } | null>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
 
-  const updatePosition = () => {
+  /**
+   * Keep the popover anchored to the trigger (never `top: 8px` alone).
+   * Prefer opening below; if not enough room, open above using `bottom`.
+   */
+  const updatePosition = React.useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    setPosition({ top: rect.bottom + 4, left: rect.left });
-  };
+    const margin = 8;
+    const gap = 4;
+    const designMax = Math.min(window.innerHeight * 0.55, 400);
+    const minNice = 120;
+    const popoverW = Math.min(360, window.innerWidth - 2 * margin);
+
+    const spaceBelow = window.innerHeight - rect.bottom - gap - margin;
+    const spaceAbove = rect.top - margin - gap;
+
+    const maxBelow = Math.min(designMax, Math.max(0, spaceBelow));
+    const maxAbove = Math.min(designMax, Math.max(0, spaceAbove));
+
+    let placement: "below" | "above";
+    let maxHeight: number;
+
+    if (maxBelow >= minNice) {
+      placement = "below";
+      maxHeight = maxBelow;
+    } else if (maxAbove >= minNice) {
+      placement = "above";
+      maxHeight = maxAbove;
+    } else if (maxAbove > maxBelow) {
+      placement = "above";
+      maxHeight = maxAbove;
+    } else {
+      placement = "below";
+      maxHeight = maxBelow;
+    }
+
+    let left = rect.left;
+    if (left + popoverW > window.innerWidth - margin) {
+      left = window.innerWidth - margin - popoverW;
+    }
+    if (left < margin) left = margin;
+
+    if (placement === "below") {
+      setPosition({
+        left,
+        maxHeight,
+        top: rect.bottom + gap,
+      });
+    } else {
+      setPosition({
+        left,
+        maxHeight,
+        bottom: window.innerHeight - rect.top + gap,
+      });
+    }
+  }, []);
 
   React.useLayoutEffect(() => {
     if (!open || !triggerRef.current) return;
@@ -190,11 +308,13 @@ export function CategoryIconPicker({
     const onScroll = () => updatePosition();
     scrollParents.forEach((el) => el.addEventListener("scroll", onScroll, true));
     window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", updatePosition);
     return () => {
       scrollParents.forEach((el) => el.removeEventListener("scroll", onScroll, true));
       window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", updatePosition);
     };
-  }, [open]);
+  }, [open, updatePosition]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -218,9 +338,17 @@ export function CategoryIconPicker({
     typeof document !== "undefined" && (
       <div
         id="category-icon-picker-portal"
-        className="fixed w-[max-content] max-w-[min(100vw-16px,280px)] grid grid-cols-6 gap-1 rounded-xl border border-[#ebe5df] bg-white p-2 shadow-lg"
-        style={{ zIndex: POPOVER_Z, top: position.top, left: position.left }}
+        className="fixed box-border w-[min(100vw-16px,360px)] overflow-y-auto overscroll-contain grid grid-cols-8 gap-1 rounded-xl border border-[#ebe5df] bg-white p-2 shadow-lg [-webkit-overflow-scrolling:touch]"
+        style={{
+          zIndex: POPOVER_Z,
+          left: position.left,
+          maxHeight: position.maxHeight,
+          ...(position.top !== undefined
+            ? { top: position.top, bottom: "auto" as const }
+            : { bottom: position.bottom ?? 0, top: "auto" as const }),
+        }}
         role="listbox"
+        aria-label="Choose category icon"
       >
         {CATEGORY_ICON_KEYS.map((key) => (
           <button
