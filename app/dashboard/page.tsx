@@ -221,9 +221,9 @@ function DashboardInner({ user }: { user: User }) {
   return (
     <main className="min-h-screen bg-neutral-50">
       <div className={DASHBOARD_LIST_PAGE_SHELL}>
-        {/* Header: on mobile, profile + logout above greeting (right-aligned) to avoid overlap; row layout on sm+ */}
-        <div className="mb-8 flex flex-col-reverse gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-          <div className="min-w-0 flex-1">
+        {/* Header: one row; compact profile + logout on mobile so greeting has room */}
+        <div className="mb-8 flex items-start justify-between gap-2 sm:gap-6">
+          <div className="min-w-0 flex-1 pr-1">
             <h1 className="text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl md:text-4xl">
               {getTimeBasedGreeting(new Date())}, {displayName}
             </h1>
@@ -231,11 +231,11 @@ function DashboardInner({ user }: { user: User }) {
               Where would you like to go next?
             </p>
           </div>
-          <div className="flex shrink-0 items-center justify-end gap-2 self-end sm:self-auto sm:justify-end sm:pt-1">
+          <div className="flex shrink-0 items-center gap-1 pt-0.5 sm:gap-2 sm:pt-1">
             <button
               type="button"
               onClick={() => setIsAccountOpen(true)}
-              className="flex size-10 items-center justify-center rounded-full border border-neutral-300 bg-neutral-100 text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2"
+              className="flex size-8 items-center justify-center rounded-full border border-neutral-300 bg-neutral-100 text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 sm:size-10"
               aria-label="Account settings"
               title="Update profile"
             >
@@ -247,7 +247,7 @@ function DashboardInner({ user }: { user: User }) {
                 strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="size-5"
+                className="size-4 sm:size-5"
               >
                 <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
                 <circle cx="12" cy="7" r="4" />
@@ -256,7 +256,7 @@ function DashboardInner({ user }: { user: User }) {
             <button
               type="button"
               onClick={logout}
-              className="rounded-full px-3 py-2 text-sm font-medium text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900 sm:px-4"
+              className="rounded-full px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-neutral-200 hover:text-neutral-900 sm:px-4 sm:py-2 sm:text-sm"
             >
               Logout
             </button>
