@@ -221,8 +221,8 @@ function DashboardInner({ user }: { user: User }) {
   return (
     <main className="min-h-screen bg-neutral-50">
       <div className={DASHBOARD_LIST_PAGE_SHELL}>
-        {/* Header: greeting + profile (stack on narrow screens to avoid overlap with long names) */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+        {/* Header: on mobile, profile + logout above greeting (right-aligned) to avoid overlap; row layout on sm+ */}
+        <div className="mb-8 flex flex-col-reverse gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl md:text-4xl">
               {getTimeBasedGreeting(new Date())}, {displayName}
@@ -231,7 +231,7 @@ function DashboardInner({ user }: { user: User }) {
               Where would you like to go next?
             </p>
           </div>
-          <div className="flex shrink-0 items-center justify-end gap-2 sm:justify-start sm:pt-1">
+          <div className="flex shrink-0 items-center justify-end gap-2 self-end sm:self-auto sm:justify-end sm:pt-1">
             <button
               type="button"
               onClick={() => setIsAccountOpen(true)}
