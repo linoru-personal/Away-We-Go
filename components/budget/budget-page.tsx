@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { supabase } from "@/app/lib/supabaseClient";
+import { GroupedSortableList } from "@/components/ui/grouped-sortable-list";
+import { DragHandle } from "@/components/ui/drag-handle";
 import {
   fetchBudgetData,
   fetchTripCurrencies,
@@ -31,6 +34,17 @@ import {
 } from "@/components/ui/dialog";
 
 const BUDGET_DISPLAY_CURRENCY_KEY = "budget_display_currency";
+
+/** Group key for budget items with no category (matches grouping in budget-queries). */
+const BUDGET_UNCATEGORIZED_KEY = "__uncategorized__";
+
+const EMPTY_BUDGET: BudgetData = {
+  items_count: 0,
+  categories_count: 0,
+  total_base: 0,
+  categories: [],
+  itemsGrouped: [],
+};
 
 /** Display currency list: ILS, USD, EUR first, then trip-added currencies (unique). */
 function mergeDisplayCurrencies(tripCurrencies: string[]): string[] {
@@ -101,7 +115,14 @@ type DateGroup = {
   total_base: number;
 };
 
-/** Group items by date (and "No date"), sorted by date; each group has label and total for section header. */
+/** Parse stored date key for sorting (YYYY-MM-DD or ISO; avoids localeCompare on ambiguous strings). */
+function budgetDateKeyToTime(dateKey: string): number {
+  const s = dateKey.trim();
+  const ms = Date.parse(s.includes("T") ? s : `${s}T12:00:00`);
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+/** Group items by date (and "No date"), sorted newest-first; each group has label and total for section header. */
 function itemsGroupedByDate(itemsGrouped: BudgetData["itemsGrouped"]): DateGroup[] {
   const flat: BudgetItemRow[] = [];
   for (const g of itemsGrouped) flat.push(...g.items);
@@ -114,7 +135,7 @@ function itemsGroupedByDate(itemsGrouped: BudgetData["itemsGrouped"]): DateGroup
   }
   const withDate: DateGroup[] = Array.from(byDate.entries())
     .filter(([date]) => date != null)
-    .sort(([a], [b]) => a!.localeCompare(b!))
+    .sort(([a], [b]) => budgetDateKeyToTime(b!) - budgetDateKeyToTime(a!))
     .map(([date, items]) => ({
       dateKey: date!,
       dateLabel: formatDayLabel(date!),
@@ -207,14 +228,14 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
     setStoredDisplayCurrency(tripId, value);
   };
 
-  const refetchBudget = () => {
+  const refetchBudget = useCallback(() => {
     if (!tripId) return;
     fetchBudgetData(tripId).then(setData).catch(() => {});
     fetchTripExchangeRates(tripId).then((tripRates) =>
       setRatesToUSDMap(mergeRatesToUSD(tripRates))
     );
     fetchTripCurrencies(tripId).then(setTripCurrencies).catch(() => {});
-  };
+  }, [tripId]);
 
   const handleAddItemClose = (open: boolean) => {
     if (!open) {
@@ -223,6 +244,152 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
     }
     setAddItemOpen(open);
   };
+
+  const budget = data ?? EMPTY_BUDGET;
+
+  const categoryGroupKeysInOrder = useMemo(
+    () => budget.itemsGrouped.map((g) => g.category?.id ?? BUDGET_UNCATEGORIZED_KEY),
+    [budget.itemsGrouped]
+  );
+
+  const dateGroups = useMemo(
+    () => itemsGroupedByDate(budget.itemsGrouped),
+    [budget.itemsGrouped]
+  );
+
+  const dateGroupKeysInOrder = useMemo(
+    () => dateGroups.map((g) => g.dateKey),
+    [dateGroups]
+  );
+
+  const getBudgetCategoryGroupKey = (item: BudgetItemRow) =>
+    item.category_id ?? BUDGET_UNCATEGORIZED_KEY;
+
+  const getBudgetDateGroupKey = (item: BudgetItemRow) => item.date ?? "__no_date__";
+
+  const handleBudgetCategoryReorder = useCallback(
+    async (_groupKey: string, newOrderedItems: BudgetItemRow[]) => {
+      if (newOrderedItems.length === 0) return;
+      const minOrder = Math.min(...newOrderedItems.map((i) => i.sort_order));
+      const updated = newOrderedItems.map((item, i) => ({ ...item, sort_order: minOrder + i }));
+      await Promise.all(
+        updated.map((item) =>
+          supabase.from("trip_budget_items").update({ sort_order: item.sort_order }).eq("id", item.id)
+        )
+      );
+      refetchBudget();
+    },
+    [refetchBudget]
+  );
+
+  const handleBudgetCategoryMove = useCallback(
+    async (
+      item: BudgetItemRow,
+      fromGroupKey: string,
+      toGroupKey: string,
+      insertIndex: number
+    ) => {
+      const newCategoryId = toGroupKey === BUDGET_UNCATEGORIZED_KEY ? null : toGroupKey;
+      const allFlat = budget.itemsGrouped.flatMap((g) => g.items);
+      const getKey = getBudgetCategoryGroupKey;
+
+      const sourceItems = allFlat.filter((i) => getKey(i) === fromGroupKey && i.id !== item.id);
+      const destItems = allFlat.filter((i) => getKey(i) === toGroupKey);
+      const newDestItems = [
+        ...destItems.slice(0, insertIndex),
+        { ...item, category_id: newCategoryId },
+        ...destItems.slice(insertIndex),
+      ];
+
+      const itemsByKey = new Map<string, BudgetItemRow[]>();
+      for (const key of categoryGroupKeysInOrder) {
+        if (key === fromGroupKey) itemsByKey.set(key, sourceItems);
+        else if (key === toGroupKey) itemsByKey.set(key, newDestItems);
+        else itemsByKey.set(key, allFlat.filter((i) => getKey(i) === key));
+      }
+
+      const flat: BudgetItemRow[] = [];
+      for (const key of categoryGroupKeysInOrder) {
+        const list = itemsByKey.get(key) ?? [];
+        for (let i = 0; i < list.length; i++) {
+          flat.push({ ...list[i], sort_order: flat.length });
+        }
+      }
+
+      await Promise.all(
+        flat.map((i) =>
+          supabase
+            .from("trip_budget_items")
+            .update({ sort_order: i.sort_order, category_id: i.category_id })
+            .eq("id", i.id)
+        )
+      );
+      refetchBudget();
+    },
+    [budget.itemsGrouped, categoryGroupKeysInOrder, refetchBudget]
+  );
+
+  const handleBudgetDateReorder = useCallback(
+    async (_groupKey: string, newOrderedItems: BudgetItemRow[]) => {
+      if (newOrderedItems.length === 0) return;
+      const minOrder = Math.min(...newOrderedItems.map((i) => i.sort_order));
+      const updated = newOrderedItems.map((item, i) => ({ ...item, sort_order: minOrder + i }));
+      await Promise.all(
+        updated.map((item) =>
+          supabase.from("trip_budget_items").update({ sort_order: item.sort_order }).eq("id", item.id)
+        )
+      );
+      refetchBudget();
+    },
+    [refetchBudget]
+  );
+
+  const handleBudgetDateMove = useCallback(
+    async (
+      item: BudgetItemRow,
+      fromGroupKey: string,
+      toGroupKey: string,
+      insertIndex: number
+    ) => {
+      const newDate = toGroupKey === "__no_date__" ? null : toGroupKey;
+      const allFlat = budget.itemsGrouped.flatMap((g) => g.items);
+      const getKey = getBudgetDateGroupKey;
+
+      const sourceItems = allFlat.filter((i) => getKey(i) === fromGroupKey && i.id !== item.id);
+      const destItems = allFlat.filter((i) => getKey(i) === toGroupKey);
+      const newDestItems = [
+        ...destItems.slice(0, insertIndex),
+        { ...item, date: newDate },
+        ...destItems.slice(insertIndex),
+      ];
+
+      const itemsByKey = new Map<string, BudgetItemRow[]>();
+      for (const key of dateGroupKeysInOrder) {
+        if (key === fromGroupKey) itemsByKey.set(key, sourceItems);
+        else if (key === toGroupKey) itemsByKey.set(key, newDestItems);
+        else itemsByKey.set(key, allFlat.filter((i) => getKey(i) === key));
+      }
+
+      const flat: BudgetItemRow[] = [];
+      for (const key of dateGroupKeysInOrder) {
+        const list = itemsByKey.get(key) ?? [];
+        for (let i = 0; i < list.length; i++) {
+          flat.push({ ...list[i], sort_order: flat.length });
+        }
+      }
+
+      await Promise.all(
+        flat.map((i) =>
+          supabase
+            .from("trip_budget_items")
+            .update({ sort_order: i.sort_order, date: i.date })
+            .eq("id", i.id)
+        )
+      );
+      refetchBudget();
+    },
+    [budget.itemsGrouped, dateGroupKeysInOrder, refetchBudget]
+  );
 
   useEffect(() => {
     if (!tripId) return;
@@ -255,14 +422,6 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
       </div>
     );
   }
-
-  const budget = data ?? {
-    items_count: 0,
-    categories_count: 0,
-    total_base: 0,
-    categories: [],
-    itemsGrouped: [],
-  };
 
   return (
     <div className="mt-8 space-y-6">
@@ -316,10 +475,12 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
 
         {/* Spending Breakdown (only categories with expenses) */}
         {(() => {
-          const withExpenses = budget.itemsGrouped.filter((group) => {
-            const totalBase = group.category?.total_base ?? group.items.reduce((s, i) => s + Number(i.amount_base), 0);
-            return totalBase > 0;
-          });
+          const categorySpendBase = (group: (typeof budget.itemsGrouped)[number]) =>
+            group.category?.total_base ??
+            group.items.reduce((s, i) => s + Number(i.amount_base), 0);
+          const withExpenses = budget.itemsGrouped
+            .filter((group) => categorySpendBase(group) > 0)
+            .sort((a, b) => categorySpendBase(b) - categorySpendBase(a));
           return withExpenses.length > 0 && budget.total_base > 0 ? (
             <div className="mt-6">
               <p className="mb-3 text-xs font-medium uppercase tracking-wider opacity-90">
@@ -328,7 +489,7 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
               <div className="-mx-6 overflow-x-auto px-6 pb-1">
                 <div className="flex gap-3" style={{ minWidth: "min-content" }}>
                   {withExpenses.map((group) => {
-                    const totalBase = group.category?.total_base ?? group.items.reduce((s, i) => s + Number(i.amount_base), 0);
+                    const totalBase = categorySpendBase(group);
                     const percent = Math.round((totalBase / budget.total_base) * 100);
                     const amountDisplay = formatMoney(
                       usdToDisplay(totalBase, displayCurrency, ratesToUSDMap),
@@ -419,11 +580,127 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
       )}
 
       {/* Category list with items (default) */}
-      {listView === "category" && (
+      {listView === "category" && canEditContent && (
+        <GroupedSortableList<BudgetItemRow>
+          groups={budget.itemsGrouped.map((g) => ({
+            groupKey: g.category?.id ?? BUDGET_UNCATEGORIZED_KEY,
+            items: [...g.items].sort(
+              (a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)
+            ),
+          }))}
+          groupingMeta={{
+            field: "category_id",
+            groupKeyToFieldValue: (k) =>
+              k === BUDGET_UNCATEGORIZED_KEY ? null : k,
+          }}
+          onReorder={handleBudgetCategoryReorder}
+          onMove={handleBudgetCategoryMove}
+          disabled={false}
+          listTag="ul"
+          listClassName="divide-y divide-[#F5F3F0]"
+          groupClassName="rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]"
+          renderGroupHeader={(groupKey) => {
+            const group = budget.itemsGrouped.find(
+              (g) => (g.category?.id ?? BUDGET_UNCATEGORIZED_KEY) === groupKey
+            );
+            if (!group) return null;
+            return (
+              <div className="mb-3 flex items-center gap-3">
+                {group.category ? (
+                  <>
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl text-[#1f1f1f]">
+                      <CategoryIcon iconKey={getIconKey(group.category.icon)} size={22} />
+                    </div>
+                    <span className="flex-1 font-semibold text-[#4A4A4A]">
+                      {group.category.name}
+                    </span>
+                    <span className="text-right font-medium text-[#4A4A4A]">
+                      {formatMoney(
+                        usdToDisplay(group.category.total_base, displayCurrency, ratesToUSDMap),
+                        displayCurrency
+                      )}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl text-[#1f1f1f]">
+                      <CategoryIcon iconKey={BUDGET_DEFAULT_ICON} size={22} />
+                    </div>
+                    <span className="flex-1 font-semibold text-[#4A4A4A]">General</span>
+                    <span className="text-right font-medium text-[#4A4A4A]">
+                      {formatMoney(
+                        usdToDisplay(
+                          group.items.reduce((s, i) => s + Number(i.amount_base), 0),
+                          displayCurrency,
+                          ratesToUSDMap
+                        ),
+                        displayCurrency
+                      )}
+                    </span>
+                  </>
+                )}
+              </div>
+            );
+          }}
+          renderGroupFooter={(groupKey) => (
+            <button
+              type="button"
+              className="mt-2 text-sm text-[#6B7280] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1 rounded transition-colors duration-150"
+              onClick={() => {
+                const group = budget.itemsGrouped.find(
+                  (g) => (g.category?.id ?? BUDGET_UNCATEGORIZED_KEY) === groupKey
+                );
+                setAddItemPrefill({ categoryId: group?.category?.id ?? undefined });
+                setAddItemOpen(true);
+              }}
+            >
+              + Add item
+            </button>
+          )}
+          renderItem={(item, { setNodeRef, style, attributes, listeners, isDragging }) => (
+            <li
+              ref={setNodeRef}
+              style={style}
+              className="group relative list-none"
+            >
+              <div
+                className={`flex items-stretch gap-2 py-3 first:pt-0 last:pb-0 ${isDragging ? "opacity-95 shadow-md" : ""}`}
+              >
+                <span className="flex shrink-0 items-center pt-0.5">
+                  <DragHandle
+                    listeners={listeners}
+                    attributes={attributes}
+                    aria-label="Drag to reorder budget item"
+                  />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <BudgetItemRow
+                    as="div"
+                    className="flex items-center justify-between gap-4"
+                    item={item}
+                    displayCurrency={displayCurrency}
+                    ratesToUSDMap={ratesToUSDMap}
+                    canEdit={canEditContent}
+                    onEdit={() => {
+                      setEditingItem(item);
+                      setAddItemOpen(true);
+                    }}
+                    onDelete={async () => {
+                      await deleteBudgetItem(item.id);
+                      refetchBudget();
+                    }}
+                  />
+                </div>
+              </div>
+            </li>
+          )}
+        />
+      )}
+
+      {listView === "category" && !canEditContent && (
       <div className="space-y-8">
         {budget.itemsGrouped.map((group) => (
           <section key={group.category?.id ?? "uncategorized"}>
-            {/* Category header: icon, name, total */}
             <div className="mb-3 flex items-center gap-3">
               {group.category ? (
                 <>
@@ -460,7 +737,6 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
               )}
             </div>
 
-            {/* Item rows */}
             <div className="rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
               {group.items.length === 0 ? (
                 <p className="py-2 text-sm text-[#6B7280]">No items</p>
@@ -472,32 +748,14 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
                       item={item}
                       displayCurrency={displayCurrency}
                       ratesToUSDMap={ratesToUSDMap}
-                      canEdit={canEditContent}
-                      onEdit={() => {
-                        setEditingItem(item);
-                        setAddItemOpen(true);
-                      }}
-                      onDelete={async () => {
-                        await deleteBudgetItem(item.id);
-                        refetchBudget();
-                      }}
+                      canEdit={false}
+                      onEdit={() => {}}
+                      onDelete={async () => {}}
                     />
                   ))}
                 </ul>
               )}
             </div>
-            {canEditContent && (
-              <button
-                type="button"
-                className="mt-2 text-sm text-[#6B7280] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1 rounded transition-colors duration-150"
-                onClick={() => {
-                  setAddItemPrefill({ categoryId: group.category?.id ?? undefined });
-                  setAddItemOpen(true);
-                }}
-              >
-                + Add item
-              </button>
-            )}
           </section>
         ))}
       </div>
@@ -505,44 +763,91 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
 
       {/* Date view: sections like category view (date header + card per day) */}
       {listView === "date" && (() => {
-        const groupsByDate = itemsGroupedByDate(budget.itemsGrouped);
         const categoryNameById = new Map(budget.categories.map((c) => [c.id, c.name]));
-        if (groupsByDate.length === 0) {
+        if (dateGroups.length === 0) {
           return (
             <div className="rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
               <p className="py-2 text-sm text-[#6B7280]">No items</p>
             </div>
           );
         }
-        return (
-          <div className="space-y-8">
-            {groupsByDate.map((group) => (
-              <section key={group.dateKey}>
-                {/* Date header: icon, label, total (same layout as category) */}
-                <div className="mb-3 flex items-center gap-3">
-                  <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl text-[#1f1f1f]">
-                    <CategoryIcon iconKey={getIconKey(group.iconKey, BUDGET_DEFAULT_ICON)} size={22} />
+        if (canEditContent) {
+          return (
+            <GroupedSortableList<BudgetItemRow>
+              groups={dateGroups.map((g) => ({
+                groupKey: g.dateKey,
+                items: [...g.items].sort(
+                  (a, b) => a.sort_order - b.sort_order || a.id.localeCompare(b.id)
+                ),
+              }))}
+              groupingMeta={{
+                field: "date",
+                groupKeyToFieldValue: (k) => (k === "__no_date__" ? null : k),
+              }}
+              onReorder={handleBudgetDateReorder}
+              onMove={handleBudgetDateMove}
+              disabled={false}
+              listTag="ul"
+              listClassName="divide-y divide-[#F5F3F0]"
+              groupClassName="rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]"
+              renderGroupHeader={(groupKey) => {
+                const group = dateGroups.find((g) => g.dateKey === groupKey);
+                if (!group) return null;
+                return (
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl text-[#1f1f1f]">
+                      <CategoryIcon iconKey={getIconKey(group.iconKey, BUDGET_DEFAULT_ICON)} size={22} />
+                    </div>
+                    <span className="flex-1 font-semibold text-[#4A4A4A]">
+                      {group.dateLabel}
+                    </span>
+                    <span className="text-right font-medium text-[#4A4A4A]">
+                      {formatMoney(
+                        usdToDisplay(group.total_base, displayCurrency, ratesToUSDMap),
+                        displayCurrency
+                      )}
+                    </span>
                   </div>
-                  <span className="flex-1 font-semibold text-[#4A4A4A]">
-                    {group.dateLabel}
-                  </span>
-                  <span className="text-right font-medium text-[#4A4A4A]">
-                    {formatMoney(
-                      usdToDisplay(group.total_base, displayCurrency, ratesToUSDMap),
-                      displayCurrency
-                    )}
-                  </span>
-                </div>
-                {/* Item rows in same card as category view */}
-                <div className="rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-                  <ul className="divide-y divide-[#F5F3F0]" role="list">
-                    {group.items.map((item) => {
-                      const categoryName = item.category_id
-                        ? categoryNameById.get(item.category_id) ?? null
-                        : null;
-                      return (
+                );
+              }}
+              renderGroupFooter={(groupKey) => (
+                <button
+                  type="button"
+                  className="mt-2 text-sm text-[#6B7280] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1 rounded transition-colors duration-150"
+                  onClick={() => {
+                    setAddItemPrefill({
+                      date: groupKey === "__no_date__" ? "" : groupKey,
+                    });
+                    setAddItemOpen(true);
+                  }}
+                >
+                  + Add item
+                </button>
+              )}
+              renderItem={(item, { setNodeRef, style, attributes, listeners, isDragging }) => {
+                const categoryName = item.category_id
+                  ? categoryNameById.get(item.category_id) ?? null
+                  : null;
+                return (
+                  <li
+                    ref={setNodeRef}
+                    style={style}
+                    className="group relative list-none"
+                  >
+                    <div
+                      className={`flex items-stretch gap-2 py-3 first:pt-0 last:pb-0 ${isDragging ? "opacity-95 shadow-md" : ""}`}
+                    >
+                      <span className="flex shrink-0 items-center pt-0.5">
+                        <DragHandle
+                          listeners={listeners}
+                          attributes={attributes}
+                          aria-label="Drag to reorder budget item"
+                        />
+                      </span>
+                      <div className="min-w-0 flex-1">
                         <BudgetItemRow
-                          key={item.id}
+                          as="div"
+                          className="flex items-center justify-between gap-4"
                           item={item}
                           displayCurrency={displayCurrency}
                           ratesToUSDMap={ratesToUSDMap}
@@ -559,24 +864,55 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
                             refetchBudget();
                           }}
                         />
+                      </div>
+                    </div>
+                  </li>
+                );
+              }}
+            />
+          );
+        }
+        return (
+          <div className="space-y-8">
+            {dateGroups.map((group) => (
+              <section key={group.dateKey}>
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl text-[#1f1f1f]">
+                    <CategoryIcon iconKey={getIconKey(group.iconKey, BUDGET_DEFAULT_ICON)} size={22} />
+                  </div>
+                  <span className="flex-1 font-semibold text-[#4A4A4A]">
+                    {group.dateLabel}
+                  </span>
+                  <span className="text-right font-medium text-[#4A4A4A]">
+                    {formatMoney(
+                      usdToDisplay(group.total_base, displayCurrency, ratesToUSDMap),
+                      displayCurrency
+                    )}
+                  </span>
+                </div>
+                <div className="rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+                  <ul className="divide-y divide-[#F5F3F0]" role="list">
+                    {group.items.map((item) => {
+                      const categoryName = item.category_id
+                        ? categoryNameById.get(item.category_id) ?? null
+                        : null;
+                      return (
+                        <BudgetItemRow
+                          key={item.id}
+                          item={item}
+                          displayCurrency={displayCurrency}
+                          ratesToUSDMap={ratesToUSDMap}
+                          canEdit={false}
+                          showCategoryLabel={categoryName != null}
+                          categoryLabel={categoryName ?? undefined}
+                          hideDateInRow
+                          onEdit={() => {}}
+                          onDelete={async () => {}}
+                        />
                       );
                     })}
                   </ul>
                 </div>
-                {canEditContent && (
-                  <button
-                    type="button"
-                    className="mt-2 text-sm text-[#6B7280] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1 rounded transition-colors duration-150"
-                    onClick={() => {
-                      setAddItemPrefill({
-                        date: group.dateKey === "__no_date__" ? "" : group.dateKey,
-                      });
-                      setAddItemOpen(true);
-                    }}
-                  >
-                    + Add item
-                  </button>
-                )}
               </section>
             ))}
           </div>
@@ -633,6 +969,7 @@ function BudgetItemRow({
   categoryLabel,
   hideDateInRow,
   as: Wrapper = "li",
+  className,
 }: {
   item: BudgetItemRow;
   displayCurrency: string;
@@ -645,6 +982,8 @@ function BudgetItemRow({
   /** When true (e.g. in "by date" view), do not show date in the row subtitle; section header is enough. */
   hideDateInRow?: boolean;
   as?: "li" | "div";
+  /** Replaces default padding when nested (e.g. drag row). */
+  className?: string;
 }) {
   const itemCurrency = item.currency.toUpperCase();
   const amountDisplay = formatMoney(item.amount, item.currency);
@@ -661,8 +1000,11 @@ function BudgetItemRow({
     : 0;
   const dateStr = hideDateInRow ? null : formatDate(item.date);
 
+  const rowClass =
+    className ?? "flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0";
+
   return (
-    <Wrapper className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+    <Wrapper className={rowClass}>
       <div className="min-w-0 flex-1">
         <p className="font-medium text-[#4A4A4A]">{item.name}</p>
         {(showCategoryLabel && categoryLabel) || dateStr ? (

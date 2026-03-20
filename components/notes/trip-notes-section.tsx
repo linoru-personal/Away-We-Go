@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/app/lib/supabaseClient";
 import { LinkFavicon } from "@/components/ui/link-favicon";
-import { SortableGroupList } from "@/components/ui/sortable-group-list";
+import { GroupedSortableList } from "@/components/ui/grouped-sortable-list";
 import { DragHandle } from "@/components/ui/drag-handle";
 import { AddTripNoteDialog } from "@/components/notes/add-trip-note-dialog";
 
@@ -201,8 +201,11 @@ function LinkPreviewBlock({ href }: { href: string }) {
 }
 
 const NOTE_IMAGE_THUMB_CLASS =
-  "max-h-36 w-full max-w-[240px] rounded-lg object-cover";
+  "max-h-32 w-full max-w-[200px] rounded-lg object-cover sm:max-h-36 sm:max-w-[220px]";
 const NOTE_IMAGE_GRID_CLASS = "h-full w-full rounded-lg object-cover";
+/** Grid cells: fixed height thumbs (avoid full-width aspect-square, which dominates the card). */
+const NOTE_IMAGE_GRID_CELL_CLASS =
+  "h-24 w-full overflow-hidden rounded-lg sm:h-28 md:h-32";
 
 function NoteImageBlock({
   path,
@@ -250,7 +253,7 @@ function NoteImageBlock({
         onClick={() => onImageClick(src)}
         className={
           grid
-            ? "aspect-square w-full overflow-hidden rounded-lg text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1"
+            ? `${NOTE_IMAGE_GRID_CELL_CLASS} text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1`
             : "overflow-hidden rounded-lg text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1"
         }
         aria-label="View image full size"
@@ -312,7 +315,7 @@ function NoteImageThumbnail({
         key={blockKey}
         type="button"
         onClick={() => onImageClick(url)}
-        className="aspect-square w-full overflow-hidden rounded-lg text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1"
+        className={`${NOTE_IMAGE_GRID_CELL_CLASS} text-start focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1`}
         aria-label="View image full size"
       >
         {thumb}
@@ -320,7 +323,7 @@ function NoteImageThumbnail({
     );
   }
   return (
-    <div key={blockKey} className="aspect-square w-full overflow-hidden rounded-lg">
+    <div key={blockKey} className={NOTE_IMAGE_GRID_CELL_CLASS}>
       {thumb}
     </div>
   );
@@ -410,7 +413,11 @@ function NoteCardContent({
       )}
       {hasImages && (
         <div
-          className={`grid gap-2 ${imageBlocks.length === 1 ? "grid-cols-1 max-w-[200px]" : "grid-cols-2"}`}
+          className={`grid gap-1.5 sm:gap-2 ${
+            imageBlocks.length === 1
+              ? "grid-cols-1 max-w-[180px] sm:max-w-[200px]"
+              : "grid-cols-2 max-w-[240px] sm:max-w-[280px]"
+          }`}
         >
           {imageBlocks.map((img) => (
             <NoteImageThumbnail
@@ -536,6 +543,47 @@ function fetchNotes(tripId: string) {
     .order("sort_order", { ascending: true });
 }
 
+/** Sentinel group for notes with no tags (droppable even when empty). */
+const NOTE_UNTAGGED_KEY = "__untagged__";
+
+/** Primary section = alphabetically first tag, or untagged if none. */
+function getNotePrimaryGroupKey(note: TripNote): string {
+  const tags = note.tags?.filter((t) => t.trim()) ?? [];
+  if (tags.length === 0) return NOTE_UNTAGGED_KEY;
+  const sorted = [...tags].sort((a, b) => a.localeCompare(b));
+  return sorted[0] ?? NOTE_UNTAGGED_KEY;
+}
+
+function tagsForMoveToGroup(note: TripNote, toGroupKey: string): string[] | null {
+  if (toGroupKey === NOTE_UNTAGGED_KEY) return null;
+  const rest = (note.tags ?? []).filter((t) => t !== toGroupKey);
+  return [toGroupKey, ...rest];
+}
+
+function buildNoteGroups(notes: TripNote[]): { groupKey: string; items: TripNote[] }[] {
+  const byKey = new Map<string, TripNote[]>();
+  for (const n of notes) {
+    const k = getNotePrimaryGroupKey(n);
+    const list = byKey.get(k) ?? [];
+    list.push(n);
+    byKey.set(k, list);
+  }
+  if (!byKey.has(NOTE_UNTAGGED_KEY)) {
+    byKey.set(NOTE_UNTAGGED_KEY, []);
+  }
+  const keys = Array.from(byKey.keys()).sort((a, b) => {
+    if (a === NOTE_UNTAGGED_KEY) return 1;
+    if (b === NOTE_UNTAGGED_KEY) return -1;
+    return a.localeCompare(b);
+  });
+  return keys.map((groupKey) => ({
+    groupKey,
+    items: (byKey.get(groupKey) ?? []).sort(
+      (a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at)
+    ),
+  }));
+}
+
 function ImageLightbox({
   src,
   onClose,
@@ -650,6 +698,77 @@ export function TripNotesSection({ tripId, canEditContent = true }: TripNotesSec
     await refetchNotes();
   }
 
+  const noteGroups = useMemo(() => buildNoteGroups(notes), [notes]);
+
+  const noteGroupKeysInOrder = useMemo(
+    () => noteGroups.map((g) => g.groupKey),
+    [noteGroups]
+  );
+
+  const handleNotesReorder = useCallback(
+    async (_groupKey: string, newOrderedItems: TripNote[]) => {
+      if (newOrderedItems.length === 0) return;
+      const minOrder = Math.min(...newOrderedItems.map((n) => n.sort_order));
+      const updated = newOrderedItems.map((note, i) => ({
+        ...note,
+        sort_order: minOrder + i,
+      }));
+      setNotes((prev) => {
+        const ids = new Set(updated.map((n) => n.id));
+        const rest = prev.filter((n) => !ids.has(n.id));
+        return [...rest, ...updated].sort((a, b) => a.sort_order - b.sort_order);
+      });
+      await Promise.all(
+        updated.map((note) =>
+          supabase.from("trip_notes").update({ sort_order: note.sort_order }).eq("id", note.id)
+        )
+      );
+    },
+    []
+  );
+
+  const handleNotesMove = useCallback(
+    async (item: TripNote, fromGroupKey: string, toGroupKey: string, insertIndex: number) => {
+      const getKey = getNotePrimaryGroupKey;
+      const sourceItems = notes.filter((n) => getKey(n) === fromGroupKey && n.id !== item.id);
+      const destItems = notes.filter((n) => getKey(n) === toGroupKey);
+      const newTags = tagsForMoveToGroup(item, toGroupKey);
+      const movedItem: TripNote = { ...item, tags: newTags };
+      const newDestItems = [
+        ...destItems.slice(0, insertIndex),
+        movedItem,
+        ...destItems.slice(insertIndex),
+      ];
+
+      const itemsByKey = new Map<string, TripNote[]>();
+      for (const key of noteGroupKeysInOrder) {
+        if (key === fromGroupKey) itemsByKey.set(key, sourceItems);
+        else if (key === toGroupKey) itemsByKey.set(key, newDestItems);
+        else itemsByKey.set(key, notes.filter((n) => getKey(n) === key));
+      }
+
+      const flat: TripNote[] = [];
+      for (const key of noteGroupKeysInOrder) {
+        const list = itemsByKey.get(key) ?? [];
+        for (let i = 0; i < list.length; i++) {
+          flat.push({ ...list[i], sort_order: flat.length });
+        }
+      }
+
+      setNotes(flat);
+
+      await Promise.all(
+        flat.map((note) =>
+          supabase
+            .from("trip_notes")
+            .update({ sort_order: note.sort_order, tags: note.tags })
+            .eq("id", note.id)
+        )
+      );
+    },
+    [notes, noteGroupKeysInOrder]
+  );
+
   return (
     <>
       <div className="mt-8 flex flex-wrap items-start justify-between gap-4">
@@ -693,44 +812,57 @@ export function TripNotesSection({ tripId, canEditContent = true }: TripNotesSec
         </div>
       ) : canEditContent ? (
         <>
-          <SortableGroupList<TripNote>
-            items={notes}
-            onReorder={async (newOrderedItems) => {
-              const minOrder = Math.min(...notes.map((n) => n.sort_order));
-              const updated = newOrderedItems.map((note, i) => ({
-                ...note,
-                sort_order: minOrder + i,
-              }));
-              setNotes(updated);
-              await Promise.all(
-                updated.map((note) =>
-                  supabase.from("trip_notes").update({ sort_order: note.sort_order }).eq("id", note.id)
-                )
-              );
-            }}
-            className="mt-6 space-y-5 list-none"
-          >
-            {(note, { setNodeRef, style, attributes, listeners, isDragging }) => (
-              <li
-                ref={setNodeRef}
-                style={style}
-                className="group relative rounded-[24px] transition-shadow duration-150"
-              >
-                <div className={`relative ps-10 rounded-[24px] transition-all duration-150 ${isDragging ? "shadow-lg scale-[1.01]" : ""}`}>
-                  <span className="absolute start-4 top-4 z-[1] transition-opacity">
-                    <DragHandle listeners={listeners} attributes={attributes} aria-label="Drag to reorder note" />
-                  </span>
-                  <NoteCard
-                    note={note}
-                    onEditRequest={handleEditRequest}
-                    onDeleteRequest={handleDeleteRequest}
-                    onImageClick={setLightboxUrl}
-                    isDeleting={deletingId === note.id}
-                  />
+          <div className="mt-6">
+            <GroupedSortableList<TripNote>
+              groups={noteGroups}
+              groupingMeta={{
+                field: "tags",
+                groupKeyToFieldValue: () => null,
+              }}
+              onReorder={handleNotesReorder}
+              onMove={handleNotesMove}
+              disabled={false}
+              listTag="ul"
+              listClassName="space-y-5 list-none"
+              renderGroupHeader={(groupKey) => (
+                <div className="mb-3">
+                  {groupKey === NOTE_UNTAGGED_KEY ? (
+                    <span className="text-base font-semibold text-[#4A4A4A]">Untagged</span>
+                  ) : (
+                    <span className="inline-block rounded-full bg-[#F5F3F0] px-3 py-1 text-sm font-semibold text-[#4A4A4A]">
+                      {groupKey}
+                    </span>
+                  )}
                 </div>
-              </li>
-            )}
-          </SortableGroupList>
+              )}
+              renderItem={(note, { setNodeRef, style, attributes, listeners, isDragging }) => (
+                <li
+                  ref={setNodeRef}
+                  style={style}
+                  className="group relative rounded-[24px] transition-shadow duration-150 list-none"
+                >
+                  <div
+                    className={`relative ps-10 rounded-[24px] transition-all duration-150 ${isDragging ? "shadow-lg scale-[1.01]" : ""}`}
+                  >
+                    <span className="absolute start-4 top-4 z-[1] transition-opacity">
+                      <DragHandle
+                        listeners={listeners}
+                        attributes={attributes}
+                        aria-label="Drag to reorder note"
+                      />
+                    </span>
+                    <NoteCard
+                      note={note}
+                      onEditRequest={handleEditRequest}
+                      onDeleteRequest={handleDeleteRequest}
+                      onImageClick={setLightboxUrl}
+                      isDeleting={deletingId === note.id}
+                    />
+                  </div>
+                </li>
+              )}
+            />
+          </div>
 
           {lightboxUrl && (
             <ImageLightbox
@@ -781,19 +913,34 @@ export function TripNotesSection({ tripId, canEditContent = true }: TripNotesSec
         </>
       ) : (
         <>
-          <ul className="mt-6 space-y-5 list-none">
-            {notes.map((note) => (
-              <li key={note.id}>
-                <NoteCard
-                  note={note}
-                  onEditRequest={undefined}
-                  onDeleteRequest={undefined}
-                  onImageClick={setLightboxUrl}
-                  isDeleting={false}
-                />
-              </li>
+          <div className="mt-6 space-y-10">
+            {noteGroups.map((group) => (
+              <section key={group.groupKey}>
+                <div className="mb-3">
+                  {group.groupKey === NOTE_UNTAGGED_KEY ? (
+                    <span className="text-base font-semibold text-[#4A4A4A]">Untagged</span>
+                  ) : (
+                    <span className="inline-block rounded-full bg-[#F5F3F0] px-3 py-1 text-sm font-semibold text-[#4A4A4A]">
+                      {group.groupKey}
+                    </span>
+                  )}
+                </div>
+                <ul className="space-y-5 list-none">
+                  {group.items.map((note) => (
+                    <li key={note.id}>
+                      <NoteCard
+                        note={note}
+                        onEditRequest={undefined}
+                        onDeleteRequest={undefined}
+                        onImageClick={setLightboxUrl}
+                        isDeleting={false}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
 
           {lightboxUrl && (
             <ImageLightbox

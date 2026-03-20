@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/app/lib/supabaseClient";
 import { AddTaskDialog } from "@/components/tasks/add-task-dialog";
+import { GroupedSortableList } from "@/components/ui/grouped-sortable-list";
+import { DragHandle } from "@/components/ui/drag-handle";
 
 export type TaskStatus = "todo" | "done";
 
@@ -234,23 +236,38 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
     else if (rtlCount < half) setLastDirection("ltr");
   }, [filteredTasks]);
 
+  const sortByOrderThenCreated = (a: Task, b: Task) => {
+    const o = a.sort_order - b.sort_order;
+    if (o !== 0) return o;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  };
+
   const todoTasks = useMemo(() => {
     const todo = filteredTasks.filter((t) => t.status === "todo");
-    todo.sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
+    todo.sort(sortByOrderThenCreated);
     return todo;
   }, [filteredTasks]);
 
   const completedTasks = useMemo(() => {
     const done = filteredTasks.filter((t) => t.status === "done");
-    done.sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    );
+    done.sort(sortByOrderThenCreated);
     return done;
   }, [filteredTasks]);
+
+  /** Full-trip lists for drag-and-drop (assignee filter must be "all"). */
+  const todoTasksAll = useMemo(() => {
+    const todo = tasks.filter((t) => t.status === "todo");
+    todo.sort(sortByOrderThenCreated);
+    return todo;
+  }, [tasks]);
+
+  const completedTasksAll = useMemo(() => {
+    const done = tasks.filter((t) => t.status === "done");
+    done.sort(sortByOrderThenCreated);
+    return done;
+  }, [tasks]);
+
+  const dndEnabled = canEditContent && assigneeFilter === "all";
 
   const totalTaskCount = tasks.length;
   const completedCountAll = tasks.filter((t) => t.status === "done").length;
@@ -264,6 +281,77 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
     if (filteredTasks.length === 0 && hasFilters) return "No tasks match this filter.";
     return null;
   }, [tasks.length, filteredTasks.length, hasFilters]);
+
+  const TASK_GROUP_ORDER = useMemo(() => ["todo", "done"] as const, []);
+
+  const handleTasksReorder = useCallback(
+    async (groupKey: string, newOrderedItems: Task[]) => {
+      if (newOrderedItems.length === 0) return;
+      const minOrder = Math.min(...newOrderedItems.map((t) => t.sort_order));
+      const updated = newOrderedItems.map((t, i) => ({ ...t, sort_order: minOrder + i }));
+      setTasks((prev) => {
+        const ids = new Set(updated.map((t) => t.id));
+        const rest = prev.filter((t) => !ids.has(t.id));
+        return [...rest, ...updated].sort((a, b) => a.sort_order - b.sort_order);
+      });
+      await Promise.all(
+        updated.map((t) =>
+          supabase.from("tasks").update({ sort_order: t.sort_order }).eq("id", t.id)
+        )
+      );
+    },
+    []
+  );
+
+  const handleTasksMove = useCallback(
+    async (item: Task, fromGroupKey: string, toGroupKey: string, insertIndex: number) => {
+      const newStatus = toGroupKey as TaskStatus;
+      const getGroupKey = (t: Task) => t.status;
+
+      const sourceItems = tasks.filter((t) => getGroupKey(t) === fromGroupKey && t.id !== item.id);
+      const destItems = tasks.filter((t) => getGroupKey(t) === toGroupKey);
+      const newDestItems = [
+        ...destItems.slice(0, insertIndex),
+        { ...item, status: newStatus },
+        ...destItems.slice(insertIndex),
+      ];
+
+      const itemsByKey = new Map<string, Task[]>();
+      for (const key of TASK_GROUP_ORDER) {
+        if (key === fromGroupKey) itemsByKey.set(key, sourceItems);
+        else if (key === toGroupKey) itemsByKey.set(key, newDestItems);
+        else itemsByKey.set(key, tasks.filter((t) => getGroupKey(t) === key));
+      }
+
+      const flat: Task[] = [];
+      for (const key of TASK_GROUP_ORDER) {
+        const list = itemsByKey.get(key) ?? [];
+        for (let i = 0; i < list.length; i++) {
+          flat.push({ ...list[i], sort_order: flat.length });
+        }
+      }
+
+      setTasks(flat);
+
+      const moved = flat.find((t) => t.id === item.id)!;
+      await supabase
+        .from("tasks")
+        .update({ status: moved.status, sort_order: moved.sort_order })
+        .eq("id", item.id);
+
+      const toUpdate = flat.filter(
+        (t) =>
+          t.id !== item.id &&
+          (t.status === (fromGroupKey as TaskStatus) || t.status === (toGroupKey as TaskStatus))
+      );
+      await Promise.all(
+        toUpdate.map((t) =>
+          supabase.from("tasks").update({ sort_order: t.sort_order, status: t.status }).eq("id", t.id)
+        )
+      );
+    },
+    [tasks, TASK_GROUP_ORDER]
+  );
 
   async function handleAddTask(params: {
     title: string;
@@ -647,6 +735,12 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
             })}
           </div>
 
+          {canEditContent && hasFilters && (
+            <p className="text-xs text-[#9B7B6B]">
+              Clear assignee filter to drag and reorder tasks.
+            </p>
+          )}
+
           {/* Add Task below participant filter (same layout as packing: button on right) */}
           {canEditContent && (
             <div className="flex justify-end">
@@ -679,10 +773,67 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
         </div>
       )}
 
-      {/* Category-style sections: To do (always open), Completed (collapsible, open by default) */}
-      {!emptyStateMessage && (
+      {/* To do / Completed: DnD when all assignees and can edit; else static lists + collapsible completed */}
+      {!emptyStateMessage && dndEnabled && (
+        <div className="mt-8">
+          <GroupedSortableList<Task>
+            groups={[
+              { groupKey: "todo", items: todoTasksAll },
+              { groupKey: "done", items: completedTasksAll },
+            ]}
+            groupingMeta={{
+              field: "status",
+              groupKeyToFieldValue: (k) => k,
+            }}
+            onReorder={handleTasksReorder}
+            onMove={handleTasksMove}
+            disabled={editingTaskId !== null}
+            listTag="ul"
+            listClassName="space-y-3"
+            groupClassName="rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]"
+            renderGroupHeader={(groupKey) =>
+              groupKey === "todo" ? (
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <span className="font-semibold text-[#4A4A4A]">To do</span>
+                  <span className="text-sm text-[#6B7280]">
+                    {todoTasksAll.length} task{todoTasksAll.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              ) : (
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <span className="font-semibold text-[#4A4A4A]">Completed</span>
+                  <span className="text-sm text-[#6B7280]">
+                    {completedTasksAll.length} task{completedTasksAll.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              )
+            }
+            renderItem={(task, { setNodeRef, style, attributes, listeners, isDragging }) => (
+              <li
+                ref={setNodeRef}
+                style={style}
+                className="group relative list-none"
+              >
+                <div
+                  className={`relative ps-9 transition-all duration-150 ${isDragging ? "scale-[1.01] shadow-lg" : ""}`}
+                >
+                  <span className="absolute start-1 top-4 z-[1] transition-opacity">
+                    <DragHandle
+                      listeners={listeners}
+                      attributes={attributes}
+                      aria-label="Drag to reorder task"
+                    />
+                  </span>
+                  {renderTaskCard(task)}
+                </div>
+              </li>
+            )}
+          />
+        </div>
+      )}
+
+      {!emptyStateMessage && !dndEnabled && (
         <div className="mt-8 space-y-8">
-          {/* To do – always visible */}
           <section>
             <div className="mb-3 flex items-center justify-between gap-3">
               <span className="font-semibold text-[#4A4A4A]">To do</span>
@@ -703,7 +854,6 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
             </div>
           </section>
 
-          {/* Completed – collapsible, open by default */}
           <section>
             <button
               type="button"

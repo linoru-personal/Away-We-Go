@@ -78,7 +78,7 @@ function MoreIcon() {
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
       fill="currentColor"
-      className="size-5"
+      className="size-4 sm:size-5"
     >
       <circle cx="12" cy="6" r="1.5" />
       <circle cx="12" cy="12" r="1.5" />
@@ -97,7 +97,7 @@ function Share2Icon() {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="size-4"
+      className="size-3.5 sm:size-4"
     >
       <circle cx="18" cy="5" r="3" />
       <circle cx="6" cy="12" r="3" />
@@ -593,12 +593,12 @@ export default function TripPage() {
                 onBack={() => router.push("/dashboard")}
                 participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
                 topRight={
-                  <div className="relative flex items-center gap-2" ref={menuRef}>
+                  <div className="relative flex items-center gap-1.5 sm:gap-2" ref={menuRef}>
                     {canManageSharing && (
                       <button
                         type="button"
                         title="Share"
-                        className="flex h-9 items-center gap-1.5 rounded-full bg-[#f6f2ed]/90 px-3 text-sm font-medium text-[#d97b5e] backdrop-blur-sm transition hover:bg-[#ebe5df] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 focus:ring-offset-transparent active:bg-[#e0d9d2]"
+                        className="flex h-8 items-center gap-1 rounded-full bg-[#f6f2ed]/90 px-2.5 text-xs font-medium text-[#d97b5e] backdrop-blur-sm transition hover:bg-[#ebe5df] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 focus:ring-offset-transparent active:bg-[#e0d9d2] sm:h-9 sm:gap-1.5 sm:px-3 sm:text-sm"
                         aria-label="Share trip"
                         onClick={() => {
                           setShareModalOpen(true);
@@ -607,12 +607,12 @@ export default function TripPage() {
                         }}
                       >
                         <Share2Icon />
-                        Share
+                        <span className="hidden sm:inline">Share</span>
                       </button>
                     )}
                     <button
                       type="button"
-                      className="flex size-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30"
+                      className="flex size-8 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30 sm:size-10"
                       aria-label="Menu"
                       onClick={() => setMenuOpen((o) => !o)}
                     >
@@ -822,19 +822,19 @@ export default function TripPage() {
                           className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent"
                           aria-hidden
                         />
-                        <div className="relative flex h-full flex-col justify-end p-5">
-                          <div className="flex items-center gap-2">
-                            <MapPinIcon className="size-5 shrink-0 text-white/90" />
-                            <h2 className="text-base font-semibold tracking-tight text-white">
+                        <div className="relative flex h-full flex-col justify-end p-3 sm:p-5">
+                          <div className="flex items-center gap-1.5 sm:gap-2">
+                            <MapPinIcon className="size-4 shrink-0 text-white/90 sm:size-5" />
+                            <h2 className="text-sm font-semibold tracking-tight text-white sm:text-base">
                               Places & map
                             </h2>
                           </div>
                           {trip.destination?.trim() ? (
-                            <p className="mt-1 text-sm text-white/90">
+                            <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-white/90 sm:mt-1 sm:text-sm">
                               {trip.destination}
                             </p>
                           ) : (
-                            <p className="mt-1 text-xs text-white/80">
+                            <p className="mt-0.5 text-[11px] text-white/80 sm:mt-1 sm:text-xs">
                               Your saved places will appear here
                             </p>
                           )}

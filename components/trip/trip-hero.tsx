@@ -29,7 +29,7 @@ function BackArrowIcon() {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="size-5"
+      className="size-4 sm:size-5"
     >
       <path d="M19 12H5M12 19l-7-7 7-7" />
     </svg>
@@ -88,12 +88,12 @@ export default function TripHero({
       />
 
       {/* Content */}
-      <div className="relative flex h-full flex-col justify-between p-5">
+      <div className="relative flex h-full flex-col justify-between p-3.5 sm:p-5">
         {/* Top row: back button + optional right slot */}
         <div className="flex items-start justify-between">
           <button
             type="button"
-            className="flex size-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30"
+            className="flex size-8 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30 sm:size-10"
             aria-label="Back"
             onClick={onBack}
           >
@@ -109,14 +109,14 @@ export default function TripHero({
               titleContent
             ) : (
               <>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-3xl font-bold text-white drop-shadow-sm sm:text-4xl">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <h1 className="text-xl font-bold leading-tight text-white drop-shadow-sm sm:text-3xl md:text-4xl">
                     {title}
                   </h1>
                   {onEditTitle != null && (
                     <button
                       type="button"
-                      className="flex size-8 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30"
+                      className="flex size-7 shrink-0 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm transition hover:bg-white/30 sm:size-8"
                       aria-label="Edit title"
                       onClick={onEditTitle}
                     >
@@ -124,14 +124,14 @@ export default function TripHero({
                     </button>
                   )}
                 </div>
-                <p className="text-base text-white/90 sm:text-lg">{dates}</p>
+                <p className="text-sm text-white/90 sm:text-base md:text-lg">{dates}</p>
                 {/* Overlapping avatar circles */}
-                <div className="mt-3 flex -space-x-2">
+                <div className="mt-2 flex -space-x-2 sm:mt-3">
                   {participants && participants.length > 0 ? (
                     participants.slice(0, 5).map((p, i) => (
                       <div
                         key={i}
-                        className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-neutral-500"
+                        className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-neutral-500 sm:size-9"
                       >
                         {p.avatarUrl ? (
                           <img
@@ -146,9 +146,9 @@ export default function TripHero({
                     ))
                   ) : (
                     <>
-                      <div className="size-9 rounded-full border-2 border-white bg-neutral-400" />
-                      <div className="size-9 rounded-full border-2 border-white bg-neutral-500" />
-                      <div className="size-9 rounded-full border-2 border-white bg-neutral-600" />
+                      <div className="size-7 rounded-full border-2 border-white bg-neutral-400 sm:size-9" />
+                      <div className="size-7 rounded-full border-2 border-white bg-neutral-500 sm:size-9" />
+                      <div className="size-7 rounded-full border-2 border-white bg-neutral-600 sm:size-9" />
                     </>
                   )}
                 </div>
