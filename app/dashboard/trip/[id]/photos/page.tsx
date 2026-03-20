@@ -9,6 +9,7 @@ import { getTripPhotos } from "@/lib/trip-photos/queries";
 import type { PhotoWithUrl } from "@/components/trips/photos/photos-section";
 import { PhotosPageClient } from "./photos-page-client";
 import { formatTripDateRange } from "@/lib/format-trip-dates";
+import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
 
 type Trip = {
   id: string;
@@ -198,7 +199,7 @@ export default function TripPhotosPage() {
   if (!id) {
     return (
       <main className="min-h-screen bg-[#F8F6F4]">
-        <div className="mx-auto max-w-5xl px-5 py-6 md:px-8 md:py-10">
+        <div className={DASHBOARD_TRIP_SUBPAGE_SHELL}>
           <p className="text-[#6B7280]">Missing trip id.</p>
         </div>
       </main>
@@ -208,7 +209,7 @@ export default function TripPhotosPage() {
   if (tripLoading) {
     return (
       <main className="min-h-screen bg-[#F8F6F4]">
-        <div className="mx-auto max-w-5xl px-5 py-6 md:px-8 md:py-10">
+        <div className={DASHBOARD_TRIP_SUBPAGE_SHELL}>
           <p className="text-[#6B7280]">Loading…</p>
         </div>
       </main>
@@ -218,7 +219,7 @@ export default function TripPhotosPage() {
   if (!trip) {
     return (
       <main className="min-h-screen bg-[#F8F6F4]">
-        <div className="mx-auto max-w-5xl px-5 py-6 md:px-8 md:py-10">
+        <div className={DASHBOARD_TRIP_SUBPAGE_SHELL}>
           <div className="space-y-2">
             <p className="text-[#6B7280]">Trip not found.</p>
             <button

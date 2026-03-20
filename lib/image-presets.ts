@@ -15,7 +15,14 @@ export type ImagePreset = {
   label: string;
 };
 
-/** Trip cover: crop aspect matches TripHero on dashboard (full width × 280px; 1024/280 ≈ 3.66). */
+/**
+ * Tailwind aspect classes — keep in sync with TRIP_HERO_PRESET / DESTINATION_HERO_PRESET
+ * so object-cover framing matches the crop UI at any content width.
+ */
+export const TRIP_HERO_ASPECT_CLASS = "aspect-[1024/280]";
+export const DESTINATION_HERO_ASPECT_CLASS = "aspect-[6/1]";
+
+/** Trip cover: crop aspect must match TripHero display (TRIP_HERO_ASPECT_CLASS). */
 export const TRIP_HERO_PRESET: ImagePreset = {
   key: "trip_hero",
   aspect: 1024 / 280,
@@ -24,7 +31,7 @@ export const TRIP_HERO_PRESET: ImagePreset = {
   label: "Trip cover",
 };
 
-/** Short wide banner for destination (Places & map card). Crop matches display height. */
+/** Destination / Places & map banner: crop aspect must match DESTINATION_HERO_ASPECT_CLASS (6:1). */
 export const DESTINATION_HERO_PRESET: ImagePreset = {
   key: "destination_hero",
   aspect: 6,

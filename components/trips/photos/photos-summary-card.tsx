@@ -19,11 +19,19 @@ import {
 } from "@/components/trip/dashboard-card-styles";
 
 const PHOTOS_BUCKET = "trip-photos";
-/** Total slots (desktop). On mobile, only the first 5 are visible via CSS. */
-const SLOT_COUNT = 7;
+/** Max slots; kept modest so one row fits typical card widths (no wrap). */
+const SLOT_COUNT = 8;
+/** First N slots always visible (narrow screens). */
 const SLOT_COUNT_MOBILE = 5;
 const ROTATION_INTERVAL_MS = 5000;
 const FADE_DURATION_MS = 1800;
+
+/** Responsive visibility: 0–4 always; 5–6 md+; 7 lg+ (single row at each breakpoint). */
+function slotVisibilityClass(slotIndex: number): string {
+  if (slotIndex < SLOT_COUNT_MOBILE) return "";
+  if (slotIndex < 7) return "hidden md:block";
+  return "hidden lg:block";
+}
 
 function usePrefersReducedMotion(): boolean {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -202,11 +210,13 @@ export function PhotosSummaryCard({ tripId }: PhotosSummaryCardProps) {
         {loading ? (
           <p className={`${CARD_CONTENT_MT} text-sm text-[#8a8a8a]`}>Loading…</p>
         ) : thumbnailUrls.length > 0 ? (
-          <div className={`${CARD_CONTENT_MT} flex gap-2`}>
+          <div
+            className={`${CARD_CONTENT_MT} grid w-full min-w-0 grid-cols-5 gap-2 md:grid-cols-7 lg:grid-cols-8`}
+          >
             {urlsForSlots.map((url, i) => (
               <div
                 key={i}
-                className={`relative aspect-square w-full max-w-[120px] overflow-hidden rounded-lg bg-neutral-100 ${i >= SLOT_COUNT_MOBILE ? "hidden md:block" : ""}`}
+                className={`relative aspect-square min-h-0 min-w-0 overflow-hidden rounded-lg bg-neutral-100 ${slotVisibilityClass(i)}`}
               >
                 {url ? <FadeThumbnail url={url} /> : null}
               </div>

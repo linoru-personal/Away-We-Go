@@ -7,6 +7,7 @@ import { useSession } from "@/app/lib/useSession";
 import { useTripRole } from "@/app/lib/useTripRole";
 import TripHero from "@/components/trip/trip-hero";
 import { formatTripDateRange } from "@/lib/format-trip-dates";
+import { DESTINATION_HERO_ASPECT_CLASS } from "@/lib/image-presets";
 import { TasksSummaryCard } from "@/components/tasks/tasks-summary-card";
 import { TripNotesSummaryCard } from "@/components/notes/trip-notes-summary-card";
 import { PackingSummaryCard } from "@/components/packing/packing-summary-card";
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   DASHBOARD_CARD_CLASS,
+  DASHBOARD_TRIP_HOME_SHELL,
   SECTION_TITLE_CLASS,
   META_CLASS,
   DESTINATION_PLACEHOLDER_CLASS,
@@ -570,7 +572,7 @@ export default function TripPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F6F4]">
-      <div className="mx-auto max-w-5xl px-5 py-8 md:px-8 md:py-12">
+      <div className={DASHBOARD_TRIP_HOME_SHELL}>
         {loading ? (
           <p className={META_CLASS}>Loading…</p>
         ) : !trip ? (
@@ -794,7 +796,7 @@ export default function TripPage() {
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 {/* Destination / Places & map (prominent: full-width, links to places page) */}
                 <article
-                  className={`md:col-span-2 cursor-pointer transition hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] overflow-hidden rounded-2xl border border-[#ebe5df] shadow-[0_2px_12px_rgba(0,0,0,0.04)] ${destinationImageUrl ? "min-h-[160px]" : DASHBOARD_CARD_CLASS}`}
+                  className={`md:col-span-2 cursor-pointer transition hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] overflow-hidden rounded-2xl border border-[#ebe5df] shadow-[0_2px_12px_rgba(0,0,0,0.04)] ${destinationImageUrl ? "" : DASHBOARD_CARD_CLASS}`}
                   role="button"
                   tabIndex={0}
                   onClick={() => router.push(`/dashboard/trip/${trip.id}/places`)}
@@ -807,8 +809,10 @@ export default function TripPage() {
                 >
                   {destinationImageUrl ? (
                     <>
-                      {/* Fixed height matches destination crop aspect (6:1) so crop = display */}
-                      <div className="relative h-[160px] w-full overflow-hidden rounded-2xl bg-neutral-200">
+                      {/* Aspect matches DESTINATION_HERO_PRESET / trip form preview */}
+                      <div
+                        className={`relative w-full overflow-hidden rounded-2xl bg-neutral-200 ${DESTINATION_HERO_ASPECT_CLASS}`}
+                      >
                         <img
                           src={destinationImageUrl}
                           alt=""

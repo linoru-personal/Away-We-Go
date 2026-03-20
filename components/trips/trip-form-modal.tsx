@@ -24,6 +24,10 @@ import {
   getExistingEditableAssetId,
   updateEditableImageAssetCrop,
 } from "@/lib/editable-image-assets/upload";
+import {
+  DESTINATION_HERO_ASPECT_CLASS,
+  TRIP_HERO_ASPECT_CLASS,
+} from "@/lib/image-presets";
 
 export type TripForForm = {
   id: string;
@@ -850,7 +854,7 @@ export default function TripFormModal({
                     onClick={() => fileInputRef.current?.click()}
                     onDrop={handleDrop}
                     onDragOver={handleDragOver}
-                    className="flex aspect-[1024/280] w-full flex-col items-center justify-center rounded-[20px] border-2 border-dashed border-[#e0d9d2] bg-[#fbf7f2] transition hover:border-[#d97b5e]/50 hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30"
+                    className={`flex ${TRIP_HERO_ASPECT_CLASS} w-full flex-col items-center justify-center rounded-[20px] border-2 border-dashed border-[#e0d9d2] bg-[#fbf7f2] transition hover:border-[#d97b5e]/50 hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30`}
                   >
                     {displayCoverUrl ? (
                       <img
@@ -906,7 +910,7 @@ export default function TripFormModal({
                       <img
                         src={destinationImageUrl}
                         alt="Destination cover"
-                        className="aspect-[6/1] w-full rounded-[12px] object-cover"
+                        className={`${DESTINATION_HERO_ASPECT_CLASS} w-full rounded-[12px] object-cover`}
                       />
                       <ImageActionsOverlay
                         onEditCrop={
@@ -931,7 +935,7 @@ export default function TripFormModal({
                     type="button"
                     onClick={() => destinationFileInputRef.current?.click()}
                     disabled={saving}
-                    className="mt-1.5 flex aspect-[6/1] w-full max-w-[280px] items-center justify-center rounded-[12px] border-2 border-dashed border-[#e0d9d2] bg-[#fbf7f2] text-sm text-[#8a8a8a] transition hover:border-[#d97b5e]/50 hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 disabled:opacity-50"
+                    className={`mt-1.5 flex ${DESTINATION_HERO_ASPECT_CLASS} w-full max-w-[280px] items-center justify-center rounded-[12px] border-2 border-dashed border-[#e0d9d2] bg-[#fbf7f2] text-sm text-[#8a8a8a] transition hover:border-[#d97b5e]/50 hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 disabled:opacity-50`}
                   >
                     Upload destination cover image
                   </button>

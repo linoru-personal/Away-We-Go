@@ -61,3 +61,16 @@ export const DASHBOARD_CARD_CHEVRON_ICON_CLASS = "size-5";
 
 /** Wrapper for card content so text/numbers don’t overlap the bottom-right chevron. Use around all content except the chevron span. */
 export const DASHBOARD_CARD_CONTENT_CLASS = "min-w-0 pr-10";
+
+/**
+ * Page shells: widen on 2xl viewports so large monitors use less side whitespace.
+ * Below 2xl keeps original max-w-5xl / max-w-6xl caps.
+ */
+export const DASHBOARD_LIST_PAGE_SHELL =
+  "mx-auto max-w-6xl 2xl:max-w-screen-2xl px-4 py-8 sm:px-6 sm:py-10";
+
+export const DASHBOARD_TRIP_HOME_SHELL =
+  "mx-auto max-w-5xl 2xl:max-w-screen-2xl px-5 py-8 md:px-8 md:py-12";
+
+export const DASHBOARD_TRIP_SUBPAGE_SHELL =
+  "mx-auto max-w-5xl 2xl:max-w-screen-2xl px-5 py-6 md:px-8 md:py-10";

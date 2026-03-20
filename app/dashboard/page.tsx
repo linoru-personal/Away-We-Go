@@ -7,6 +7,7 @@ import { useSession } from "../lib/useSession";
 import { useProfile, getDisplayName } from "../lib/useProfile";
 import type { User } from "@supabase/supabase-js";
 import { TripCard } from "@/components/trips/trip-card";
+import { DASHBOARD_LIST_PAGE_SHELL } from "@/components/trip/dashboard-card-styles";
 import CreateFirstTripCard from "@/components/trips/create-first-trip-card";
 import TripFormModal from "@/components/trips/trip-form-modal";
 import AccountSettingsModal from "@/components/account/account-settings-modal";
@@ -219,7 +220,7 @@ function DashboardInner({ user }: { user: User }) {
 
   return (
     <main className="min-h-screen bg-neutral-50">
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+      <div className={DASHBOARD_LIST_PAGE_SHELL}>
         {/* Header: greeting + profile icon + logout */}
         <div className="relative mb-8">
           <div className="pr-24">

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "@/app/lib/useSession";
 import TripHero from "@/components/trip/trip-hero";
 import { PhotosSection, type PhotoWithUrl } from "@/components/trips/photos/photos-section";
+import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
 
 export interface PhotosPageClientProps {
   tripId: string;
@@ -41,7 +42,7 @@ export function PhotosPageClient({
   if (sessionLoading) {
     return (
       <main className="min-h-screen bg-[#F8F6F4]">
-        <div className="mx-auto max-w-5xl px-5 py-6 md:px-8 md:py-10">
+        <div className={DASHBOARD_TRIP_SUBPAGE_SHELL}>
           <p className="text-[#6B7280]">Loading…</p>
         </div>
       </main>
@@ -52,7 +53,7 @@ export function PhotosPageClient({
 
   return (
     <main className="min-h-screen bg-[#F8F6F4]">
-      <div className="mx-auto max-w-5xl px-5 py-6 md:px-8 md:py-10">
+      <div className={DASHBOARD_TRIP_SUBPAGE_SHELL}>
         <TripHero
           title={title}
           dates={dates}

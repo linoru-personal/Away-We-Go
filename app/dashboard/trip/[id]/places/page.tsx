@@ -12,6 +12,7 @@ import { PlaceCard, type TripPlace } from "@/components/places/place-card";
 import { ManagePlaceCategoriesDialog } from "@/components/places/manage-place-categories-dialog";
 import { PlacesMapView } from "@/components/places/places-map-view";
 import { CategoryIcon, getIconKey, PLACES_DEFAULT_ICON } from "@/components/ui/category-icons";
+import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
 
 type Trip = {
   id: string;
@@ -198,7 +199,7 @@ export default function TripPlacesPage() {
   if (!id) {
     return (
       <main className="min-h-screen bg-[#F8F6F4]">
-        <div className="mx-auto max-w-5xl px-5 py-6 md:px-8 md:py-10">
+        <div className={DASHBOARD_TRIP_SUBPAGE_SHELL}>
           <p className="text-[#6B7280]">Missing trip id.</p>
         </div>
       </main>
@@ -207,7 +208,7 @@ export default function TripPlacesPage() {
 
   return (
     <main className="min-h-screen bg-[#F8F6F4]">
-      <div className="mx-auto max-w-5xl px-5 py-6 md:px-8 md:py-10">
+      <div className={DASHBOARD_TRIP_SUBPAGE_SHELL}>
         {tripLoading ? (
           <p className="text-[#6B7280]">Loading…</p>
         ) : trip ? (

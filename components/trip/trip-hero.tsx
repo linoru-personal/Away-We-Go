@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import type { ReactNode } from "react";
+import { TRIP_HERO_ASPECT_CLASS } from "@/lib/image-presets";
 
 export interface TripHeroProps {
   title?: string;
@@ -63,15 +64,17 @@ export default function TripHero({
   participants,
 }: TripHeroProps) {
   return (
-    <div className="relative h-[280px] w-full overflow-hidden rounded-3xl sm:h-[300px]">
-      {/* Background image */}
+    <div
+      className={`relative w-full overflow-hidden rounded-3xl ${TRIP_HERO_ASPECT_CLASS}`}
+    >
+      {/* Background image — aspect matches TRIP_HERO_PRESET / cover crop UI */}
       {imageUrl ? (
         <Image
           src={imageUrl}
           alt=""
           fill
           className="object-cover"
-          sizes="(max-width: 1024px) 100vw, 1024px"
+          sizes="(max-width: 1536px) 100vw, 1536px"
           unoptimized
         />
       ) : (

@@ -8,6 +8,7 @@ import { useTripRole } from "@/app/lib/useTripRole";
 import TripHero from "@/components/trip/trip-hero";
 import { formatTripDateRange } from "@/lib/format-trip-dates";
 import { TripNotesSection } from "@/components/notes/trip-notes-section";
+import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
 
 type Trip = {
   id: string;
@@ -129,7 +130,7 @@ export default function TripNotesPage() {
   if (!id) {
     return (
       <main className="min-h-screen bg-[#FAFAF8]">
-        <div className="mx-auto max-w-5xl px-5 py-6 md:px-8 md:py-10">
+        <div className={DASHBOARD_TRIP_SUBPAGE_SHELL}>
           <p className="text-[#6B7280]">Missing trip id.</p>
         </div>
       </main>
@@ -138,7 +139,7 @@ export default function TripNotesPage() {
 
   return (
     <main className="min-h-screen bg-[#FAFAF8]">
-      <div className="mx-auto max-w-5xl px-5 py-6 md:px-8 md:py-10">
+      <div className={DASHBOARD_TRIP_SUBPAGE_SHELL}>
         {tripLoading ? (
           <p className="text-[#6B7280]">Loading…</p>
         ) : trip ? (

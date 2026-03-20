@@ -29,12 +29,12 @@ export type TripPhotosPreview = {
   totalCount: number;
 };
 
-/** Max photos to fetch for dashboard preview (5 visible slots + rotation pool). */
-const PREVIEW_PHOTO_LIMIT = 20;
+/** Max photos to fetch for dashboard preview (8 visible slots + rotation pool). */
+const PREVIEW_PHOTO_LIMIT = 32;
 
 /**
  * Returns the latest photos (by sort_at) for dashboard preview and the total count.
- * Fetches up to PREVIEW_PHOTO_LIMIT so the card can show 5 thumbnails and rotate through more.
+ * Fetches up to PREVIEW_PHOTO_LIMIT so the summary card can show many thumbnails and rotate through more.
  */
 export async function getTripPhotosPreview(
   tripId: string
