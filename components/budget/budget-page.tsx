@@ -38,6 +38,10 @@ const BUDGET_DISPLAY_CURRENCY_KEY = "budget_display_currency";
 /** Group key for budget items with no category (matches grouping in budget-queries). */
 const BUDGET_UNCATEGORIZED_KEY = "__uncategorized__";
 
+/** Per-item card inside the list (matches tasks `TASK_CARD_CLASS` in tasks-section). */
+const BUDGET_LIST_ITEM_CARD_CLASS =
+  "rounded-[24px] bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]";
+
 const EMPTY_BUDGET: BudgetData = {
   items_count: 0,
   categories_count: 0,
@@ -597,7 +601,7 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
           onMove={handleBudgetCategoryMove}
           disabled={false}
           listTag="ul"
-          listClassName="divide-y divide-[#F5F3F0]"
+          listClassName="space-y-3"
           groupClassName="rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]"
           renderGroupHeader={(groupKey) => {
             const group = budget.itemsGrouped.find(
@@ -664,16 +668,16 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
               className="group relative list-none"
             >
               <div
-                className={`flex items-stretch gap-2 py-3 first:pt-0 last:pb-0 ${isDragging ? "opacity-95 shadow-md" : ""}`}
+                className={`relative ps-9 transition-all duration-150 ${isDragging ? "scale-[1.01] shadow-lg" : ""}`}
               >
-                <span className="flex shrink-0 items-center pt-0.5">
+                <span className="absolute start-1 top-4 z-[1] transition-opacity">
                   <DragHandle
                     listeners={listeners}
                     attributes={attributes}
                     aria-label="Drag to reorder budget item"
                   />
                 </span>
-                <div className="min-w-0 flex-1">
+                <div className={BUDGET_LIST_ITEM_CARD_CLASS}>
                   <BudgetItemRow
                     as="div"
                     className="flex items-center justify-between gap-4"
@@ -741,17 +745,22 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
               {group.items.length === 0 ? (
                 <p className="py-2 text-sm text-[#6B7280]">No items</p>
               ) : (
-                <ul className="divide-y divide-[#F5F3F0]" role="list">
+                <ul className="space-y-3" role="list">
                   {group.items.map((item) => (
-                    <BudgetItemRow
-                      key={item.id}
-                      item={item}
-                      displayCurrency={displayCurrency}
-                      ratesToUSDMap={ratesToUSDMap}
-                      canEdit={false}
-                      onEdit={() => {}}
-                      onDelete={async () => {}}
-                    />
+                    <li key={item.id}>
+                      <div className={BUDGET_LIST_ITEM_CARD_CLASS}>
+                        <BudgetItemRow
+                          as="div"
+                          className="flex items-center justify-between gap-4"
+                          item={item}
+                          displayCurrency={displayCurrency}
+                          ratesToUSDMap={ratesToUSDMap}
+                          canEdit={false}
+                          onEdit={() => {}}
+                          onDelete={async () => {}}
+                        />
+                      </div>
+                    </li>
                   ))}
                 </ul>
               )}
@@ -788,7 +797,7 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
               onMove={handleBudgetDateMove}
               disabled={false}
               listTag="ul"
-              listClassName="divide-y divide-[#F5F3F0]"
+              listClassName="space-y-3"
               groupClassName="rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]"
               renderGroupHeader={(groupKey) => {
                 const group = dateGroups.find((g) => g.dateKey === groupKey);
@@ -835,16 +844,16 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
                     className="group relative list-none"
                   >
                     <div
-                      className={`flex items-stretch gap-2 py-3 first:pt-0 last:pb-0 ${isDragging ? "opacity-95 shadow-md" : ""}`}
+                      className={`relative ps-9 transition-all duration-150 ${isDragging ? "scale-[1.01] shadow-lg" : ""}`}
                     >
-                      <span className="flex shrink-0 items-center pt-0.5">
+                      <span className="absolute start-1 top-4 z-[1] transition-opacity">
                         <DragHandle
                           listeners={listeners}
                           attributes={attributes}
                           aria-label="Drag to reorder budget item"
                         />
                       </span>
-                      <div className="min-w-0 flex-1">
+                      <div className={BUDGET_LIST_ITEM_CARD_CLASS}>
                         <BudgetItemRow
                           as="div"
                           className="flex items-center justify-between gap-4"
@@ -891,24 +900,29 @@ export function BudgetPage({ tripId, canEditContent = true }: BudgetPageProps) {
                   </span>
                 </div>
                 <div className="rounded-[24px] border border-[#ebe5df] bg-white p-4 shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
-                  <ul className="divide-y divide-[#F5F3F0]" role="list">
+                  <ul className="space-y-3" role="list">
                     {group.items.map((item) => {
                       const categoryName = item.category_id
                         ? categoryNameById.get(item.category_id) ?? null
                         : null;
                       return (
-                        <BudgetItemRow
-                          key={item.id}
-                          item={item}
-                          displayCurrency={displayCurrency}
-                          ratesToUSDMap={ratesToUSDMap}
-                          canEdit={false}
-                          showCategoryLabel={categoryName != null}
-                          categoryLabel={categoryName ?? undefined}
-                          hideDateInRow
-                          onEdit={() => {}}
-                          onDelete={async () => {}}
-                        />
+                        <li key={item.id}>
+                          <div className={BUDGET_LIST_ITEM_CARD_CLASS}>
+                            <BudgetItemRow
+                              as="div"
+                              className="flex items-center justify-between gap-4"
+                              item={item}
+                              displayCurrency={displayCurrency}
+                              ratesToUSDMap={ratesToUSDMap}
+                              canEdit={false}
+                              showCategoryLabel={categoryName != null}
+                              categoryLabel={categoryName ?? undefined}
+                              hideDateInRow
+                              onEdit={() => {}}
+                              onDelete={async () => {}}
+                            />
+                          </div>
+                        </li>
                       );
                     })}
                   </ul>
@@ -1006,7 +1020,7 @@ function BudgetItemRow({
   return (
     <Wrapper className={rowClass}>
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-[#4A4A4A]">{item.name}</p>
+        <p className="text-sm font-medium text-[#4A4A4A]">{item.name}</p>
         {(showCategoryLabel && categoryLabel) || dateStr ? (
           <p className="mt-0.5 text-xs text-[#6B7280]">
             {[showCategoryLabel && categoryLabel ? categoryLabel : null, dateStr]
@@ -1017,7 +1031,7 @@ function BudgetItemRow({
       </div>
       <div className="flex items-center gap-3">
         <div className="text-right">
-          <p className="font-medium text-[#4A4A4A]">{amountDisplay}</p>
+          <p className="text-sm font-medium text-[#4A4A4A]">{amountDisplay}</p>
           {showConverted && (
             <p className="text-xs text-[#6B7280]">
               ≈ {formatMoney(convertedAmount, displayCurrency)}
