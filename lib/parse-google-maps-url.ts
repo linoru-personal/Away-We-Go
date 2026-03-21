@@ -19,3 +19,25 @@ export function parseCoordsFromGoogleMapsUrl(
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
   return { lat, lng };
 }
+
+/**
+ * True for Google Maps short links that need redirect resolution before
+ * {@link parseCoordsFromGoogleMapsUrl} / /place/... name extraction can run.
+ * Full google.com/maps URLs are false here so they keep the existing client-only flow.
+ */
+export function isGoogleMapsShortUrl(url: string): boolean {
+  if (!url || typeof url !== "string") return false;
+  const trimmed = url.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return false;
+  let host: string;
+  try {
+    host = new URL(trimmed).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (host === "maps.app.goo.gl") return true;
+  if (host === "goo.gl" || host === "www.goo.gl") {
+    return trimmed.toLowerCase().includes("/maps");
+  }
+  return false;
+}

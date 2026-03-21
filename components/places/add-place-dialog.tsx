@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/app/lib/supabaseClient";
+import { MAPS_SHORT_URL_LOADING_MESSAGE } from "@/lib/maps-ui-messages";
+import { isGoogleMapsShortUrl } from "@/lib/parse-google-maps-url";
 import {
   Dialog,
   DialogContent,
@@ -31,7 +33,7 @@ function isGoogleMapsUrl(url: string): boolean {
 
 /**
  * Extract a human-readable place name from a Google Maps URL if possible.
- * Only parses /place/Name/... style paths; short links (goo.gl, maps.app.goo.gl) return null.
+ * Only parses /place/Name/... style paths. Short links return null until resolved to a full URL.
  */
 function extractPlaceNameFromUrl(url: string): string | null {
   const trimmed = url.trim();
@@ -46,6 +48,41 @@ function extractPlaceNameFromUrl(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+async function resolveShortMapsUrlClient(
+  url: string
+): Promise<{ resolvedUrl: string } | { error: string }> {
+  const res = await fetch("/api/resolve-google-maps-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  let data: unknown = {};
+  try {
+    data = await res.json();
+  } catch {
+    /* ignore */
+  }
+  const err =
+    data &&
+    typeof data === "object" &&
+    "error" in data &&
+    typeof (data as { error: unknown }).error === "string"
+      ? (data as { error: string }).error
+      : null;
+  if (!res.ok) {
+    return { error: err || "Could not resolve short link" };
+  }
+  const resolvedUrl =
+    data &&
+    typeof data === "object" &&
+    "resolvedUrl" in data &&
+    typeof (data as { resolvedUrl: unknown }).resolvedUrl === "string"
+      ? (data as { resolvedUrl: string }).resolvedUrl.trim()
+      : "";
+  if (!resolvedUrl) return { error: "Invalid resolve response" };
+  return { resolvedUrl };
 }
 
 export type PlaceCategory = {
@@ -101,6 +138,7 @@ export function AddPlaceDialog({
   const [createCategoryError, setCreateCategoryError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shortUrlResolving, setShortUrlResolving] = useState(false);
 
   const editPlaceId = mode === "edit" ? initialValues?.id ?? null : null;
 
@@ -125,6 +163,34 @@ export function AddPlaceDialog({
     }
   }, [open, mode, editPlaceId]);
 
+  /** Debounced resolve for short links only — feeds the same extractPlaceNameFromUrl as full URLs. */
+  useEffect(() => {
+    if (!open) return;
+    const trimmed = googleMapsUrl.trim();
+    if (!trimmed || !isGoogleMapsShortUrl(trimmed)) {
+      setShortUrlResolving(false);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setShortUrlResolving(true);
+      const result = await resolveShortMapsUrlClient(trimmed);
+      if (cancelled) return;
+      setShortUrlResolving(false);
+      if ("error" in result) return;
+      setTitle((prev) => {
+        if (prev.trim()) return prev;
+        const extracted = extractPlaceNameFromUrl(result.resolvedUrl);
+        return extracted || prev;
+      });
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      setShortUrlResolving(false);
+    };
+  }, [open, googleMapsUrl]);
+
   const handleClose = () => {
     if (!saving) {
       onOpenChange(false);
@@ -143,11 +209,24 @@ export function AddPlaceDialog({
       setError("Please enter a valid Google Maps link (e.g. google.com/maps or goo.gl/maps).");
       return;
     }
-    const titleToSave = title.trim() || "Place";
     setSaving(true);
+    let urlToSave = urlTrimmed;
+    if (isGoogleMapsShortUrl(urlTrimmed)) {
+      const resolved = await resolveShortMapsUrlClient(urlTrimmed);
+      if ("error" in resolved) {
+        setError(resolved.error);
+        setSaving(false);
+        return;
+      }
+      urlToSave = resolved.resolvedUrl;
+    }
+    const titleToSave =
+      title.trim() ||
+      extractPlaceNameFromUrl(urlToSave)?.trim() ||
+      "Place";
     const payload = {
       title: titleToSave,
-      google_maps_url: urlTrimmed,
+      google_maps_url: urlToSave,
       notes: notes.trim() || null,
       category_id: categoryId.trim() || null,
     };
@@ -314,6 +393,11 @@ export function AddPlaceDialog({
                       aria-invalid={!!error}
                       className={`mt-1.5 ${inputClass} aria-[invalid=true]:border-red-400`}
                     />
+                    {shortUrlResolving && (
+                      <p className="mt-1 text-xs text-[#6b6b6b]">
+                        {MAPS_SHORT_URL_LOADING_MESSAGE}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label
