@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabaseClient";
+import { LinkPreviewThumbnail } from "@/components/ui/link-preview-thumbnail";
 import {
   DASHBOARD_CARD_CLASS,
   DASHBOARD_CARD_LINK_CLASS,
@@ -172,24 +173,6 @@ function getPreviewFromBlocks(content: unknown): string {
   return "";
 }
 
-function LinkIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="size-6 text-[#6B7280]"
-    >
-      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-    </svg>
-  );
-}
-
 export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
   const [total, setTotal] = useState(0);
   const [firstNote, setFirstNote] = useState<TripNote | null>(null);
@@ -236,10 +219,6 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
       : null;
 
   useEffect(() => {
-    setLinkFaviconError(false);
-  }, [previewLinkUrl]);
-
-  useEffect(() => {
     if (pathForSign == null || bucketForSign == null) {
       setThumbnailSignedUrl(null);
       return;
@@ -274,8 +253,6 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
     : "";
   const showLinkPreview =
     !previewImage && previewLinkUrl && previewText.length > 0;
-  const linkDomain = previewLinkUrl ? getDomain(previewLinkUrl) : "";
-  const linkFaviconSrc = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(linkDomain)}&sz=64`;
 
   return (
     <Link
@@ -312,18 +289,10 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
                 />
               ))}
             {showLinkPreview && (
-              <div className="size-12 shrink-0 flex items-center justify-center rounded bg-[#F5F3F0] overflow-hidden">
-                {linkFaviconError ? (
-                  <LinkIcon />
-                ) : (
-                  <img
-                    src={linkFaviconSrc}
-                    alt=""
-                    className="size-12 rounded object-contain"
-                    onError={() => setLinkFaviconError(true)}
-                  />
-                )}
-              </div>
+              <LinkPreviewThumbnail
+                imageUrl={null}
+                className="size-12 shrink-0"
+              />
             )}
             <p className="min-w-0 flex-1 line-clamp-2 text-start text-sm text-[#8a8a8a]">
               {previewText || (previewImage ? "" : "No content")}

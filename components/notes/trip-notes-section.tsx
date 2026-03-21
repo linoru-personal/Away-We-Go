@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/app/lib/supabaseClient";
-import { LinkFavicon } from "@/components/ui/link-favicon";
+import { LinkPreviewThumbnail } from "@/components/ui/link-preview-thumbnail";
 import { GroupedSortableList } from "@/components/ui/grouped-sortable-list";
 import { DragHandle } from "@/components/ui/drag-handle";
 import { AddTripNoteDialog } from "@/components/notes/add-trip-note-dialog";
@@ -118,7 +118,7 @@ function startsWithHebrew(s: string): boolean {
   return (code >= 0x0590 && code <= 0x05ff) || (code >= 0xfb1d && code <= 0xfb4f);
 }
 
-/** Compact text-based link preview: domain, title, optional description. No preview image. */
+/** Compact link preview: og:image thumb when valid; otherwise neutral link icon placeholder. */
 function LinkPreviewBlock({ href }: { href: string }) {
   const [preview, setPreview] = useState<LinkPreviewData | null>(null);
   const [status, setStatus] = useState<"loading" | "done" | "error">("loading");
@@ -178,8 +178,12 @@ function LinkPreviewBlock({ href }: { href: string }) {
       dir="ltr"
       className="block rounded-lg border border-[#D4C5BA] bg-[#FAFAF8] p-3 text-left text-sm transition hover:bg-[#F5F3F0]"
     >
-      <div className="flex items-start gap-2">
-        <LinkFavicon url={href} size={20} className="mt-0.5 shrink-0" />
+      <div className="flex items-start gap-3">
+        <LinkPreviewThumbnail
+          imageUrl={status === "done" ? preview?.image : null}
+          apiLoading={status === "loading"}
+          className="mt-0.5 h-20 w-20"
+        />
         <div className="min-w-0 flex-1 space-y-0.5">
           <span className="block text-xs font-medium uppercase tracking-wide text-[#9B7B6B]">
             {domain}
