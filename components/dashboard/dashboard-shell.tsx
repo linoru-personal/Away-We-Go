@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { Menu, X } from "lucide-react";
+import { AppLogo } from "@/components/brand/app-logo";
 import { DashboardTripsProvider } from "./dashboard-trips-context";
 import { DashboardSidebar } from "./dashboard-sidebar";
 import { useDashboardTrips } from "./dashboard-trips-context";
@@ -79,7 +80,9 @@ function DashboardShellInner({ children }: { children: ReactNode }) {
           >
             <Menu className="size-6" />
           </button>
-          <span className="text-sm font-semibold text-[#2d2d2d]">Away We Go</span>
+          <div className="min-w-0 flex-1 bg-transparent">
+            <AppLogo variant="header" />
+          </div>
         </header>
         <div className="min-w-0 flex-1">{children}</div>
       </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { claimPendingTripInvitations } from "@/lib/claim-pending-trip-invitations";
+import { AppLogo } from "@/components/brand/app-logo";
 
 /** Safe redirect: only allow relative path starting with / (e.g. /invite?token=...) */
 function getSafeRedirect(redirect: string | null): string | null {
@@ -81,34 +82,16 @@ export function HomePageContent() {
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#fbf7f2] p-6">
       <div className="w-full max-w-[420px]">
-        {/* Badge */}
-        <div
-          className="mx-auto mb-6 flex size-16 items-center justify-center rounded-full bg-white text-[#d97b5e] shadow-[0_10px_30px_rgba(0,0,0,0.06)]"
-          aria-hidden
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="size-8"
-          >
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-            <circle cx="12" cy="10" r="3" />
-          </svg>
+        <div className="mb-8 flex flex-col items-center px-2 bg-transparent">
+          <AppLogo variant="login" priority className="mx-auto bg-transparent" />
+          <p className="mt-4 text-center text-[15px] leading-relaxed text-[#6b6b6b]">
+            Sign in to access your trips.
+          </p>
         </div>
 
         {/* Card */}
         <div className="rounded-[28px] border border-[#ebe5df] bg-white p-7 shadow-[0_10px_30px_rgba(0,0,0,0.06)]">
-          <h1 className="text-[32px] font-semibold tracking-tight text-[#1f1f1f]">
-            Away We Go
-          </h1>
-          <p className="mt-2 text-[15px] leading-relaxed text-[#6b6b6b]">
-            Sign in to access your trips.
-          </p>
+          <h1 className="sr-only">Sign in to Away We Go</h1>
 
           <form
             onSubmit={handleLogin}

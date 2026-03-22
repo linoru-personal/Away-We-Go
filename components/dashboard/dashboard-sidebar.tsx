@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { AppLogo } from "@/components/brand/app-logo";
 import type { DashboardTrip } from "./dashboard-trips-context";
 
 const SIDEBAR_WIDTH = "w-[300px]";
@@ -233,12 +234,15 @@ export function DashboardSidebar({
       }`}
     >
       <div className="flex h-full flex-col overflow-y-auto px-4 pb-8 pt-6">
-        <div className="px-1">
-          <h1 className="text-lg font-bold tracking-tight text-[#2d2d2d]">
-            Away We Go
-          </h1>
-          <p className="mt-0.5 text-sm text-[#9b7b6b]">Plan your adventures</p>
-        </div>
+        <Link
+          href="/dashboard"
+          onClick={() => onNavigate?.()}
+          className="block bg-transparent px-1 outline-none focus-visible:ring-2 focus-visible:ring-[#d97b5e] focus-visible:ring-offset-2 rounded-lg"
+        >
+          <span className="sr-only">Away We Go — home</span>
+          <AppLogo variant="sidebar" className="max-w-full bg-transparent" />
+          <p className="mt-2 text-sm text-[#9b7b6b]">Plan your adventures</p>
+        </Link>
         <div className="my-5 h-px bg-[#ebe5df]" />
 
         <Link
