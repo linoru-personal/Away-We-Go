@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { claimPendingTripInvitations } from "@/lib/claim-pending-trip-invitations";
 import { supabase } from "./supabaseClient";
 
 export function useSession() {
@@ -12,22 +13,34 @@ export function useSession() {
     let mounted = true;
 
     const init = async () => {
-      const { data: { user: initialUser } } = await supabase.auth.getUser();
+      const {
+        data: { user: initialUser },
+      } = await supabase.auth.getUser();
       if (mounted) {
         setUser(initialUser ?? null);
         setLoading(false);
+      }
+      if (mounted && initialUser) {
+        void claimPendingTripInvitations(supabase);
       }
     };
 
     init();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (mounted) {
-          setUser(session?.user ?? null);
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (mounted) {
+        setUser(session?.user ?? null);
       }
-    );
+      if (
+        mounted &&
+        session?.user &&
+        (event === "SIGNED_IN" || event === "USER_UPDATED")
+      ) {
+        void claimPendingTripInvitations(supabase);
+      }
+    });
 
     return () => {
       mounted = false;

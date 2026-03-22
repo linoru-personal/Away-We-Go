@@ -142,7 +142,9 @@ export function InvitePageContent() {
         <div className={cardClass}>
           <h1 className="text-xl font-semibold text-[#1f1f1f]">Sign in to accept</h1>
           <p className="mt-2 text-[#6b6b6b]">
-            Sign in or create an account with the email that received this invitation to accept it.
+            Sign in or create an account with the email that received this invitation. Pending invites
+            for that email are applied automatically — you don’t need to open this link again after
+            signing in.
           </p>
           <div className="mt-6 flex flex-col gap-3">
             <Link
@@ -270,7 +272,7 @@ export function InvitePageContent() {
         <div className={cardClass}>
           <h1 className="text-xl font-semibold text-[#1f1f1f]">You're in</h1>
           <p className="mt-2 text-[#6b6b6b]">
-            You've accepted the invitation. You can open the trip from your dashboard.
+            You have access to this trip. Open it below or find it on your dashboard.
           </p>
           <Link
             href={`/dashboard/trip/${tripId}`}

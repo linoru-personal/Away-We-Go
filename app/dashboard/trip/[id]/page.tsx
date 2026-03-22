@@ -936,7 +936,10 @@ export default function TripPage() {
                 Share this trip
               </DialogTitle>
               <p className="mt-1 text-[15px] leading-relaxed text-[#6b6b6b]">
-                Share this trip by email. Existing users get access right away. New users will receive an invitation email.
+                Share by email. If they already have an account, they get access immediately. If not,
+                we store a pending invite — as soon as they sign up or sign in with that same email,
+                access is added automatically (the invitation email is optional but helps them get the
+                link).
               </p>
             </DialogHeader>
             <div className="min-h-0 flex-1 overflow-y-auto">

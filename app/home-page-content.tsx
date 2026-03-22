@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
+import { claimPendingTripInvitations } from "@/lib/claim-pending-trip-invitations";
 
 /** Safe redirect: only allow relative path starting with / (e.g. /invite?token=...) */
 function getSafeRedirect(redirect: string | null): string | null {
@@ -28,6 +29,7 @@ export function HomePageContent() {
     const checkUser = async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
+        await claimPendingTripInvitations(supabase, { force: true });
         router.push(redirectTo ?? "/dashboard");
       }
     };
@@ -58,6 +60,7 @@ export function HomePageContent() {
       setError(err.message);
       return;
     }
+    await claimPendingTripInvitations(supabase, { force: true });
     router.push(redirectTo ?? "/dashboard");
   };
 
@@ -71,6 +74,7 @@ export function HomePageContent() {
       setError(err.message);
       return;
     }
+    await claimPendingTripInvitations(supabase, { force: true });
     router.push(redirectTo ?? "/dashboard");
   };
 
