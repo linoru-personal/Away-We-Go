@@ -1,29 +1,18 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabaseClient";
 import { useSession } from "../lib/useSession";
 import { useProfile, getDisplayName } from "../lib/useProfile";
+import { useDashboardTrips } from "@/components/dashboard/dashboard-trips-context";
 import type { User } from "@supabase/supabase-js";
 import { TripCard } from "@/components/trips/trip-card";
 import { DASHBOARD_LIST_PAGE_SHELL } from "@/components/trip/dashboard-card-styles";
 import CreateFirstTripCard from "@/components/trips/create-first-trip-card";
 import TripFormModal from "@/components/trips/trip-form-modal";
 import AccountSettingsModal from "@/components/account/account-settings-modal";
-
-type Trip = {
-  id: string;
-  user_id: string;
-  title: string;
-  destination: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  cover_image_url: string | null;
-  cover_image_path: string | null;
-  destination_image_url: string | null;
-  created_at: string | null;
-};
+import type { DashboardTrip } from "@/components/dashboard/dashboard-trips-context";
 
 function getEmptyMessage(tab: "all" | "upcoming" | "past"): string {
   switch (tab) {
@@ -36,7 +25,6 @@ function getEmptyMessage(tab: "all" | "upcoming" | "past"): string {
   }
 }
 
-/** Greeting phrase by local hour: morning 5–11, afternoon 12–16, evening 17–20, night 21–4. */
 function getTimeBasedGreeting(date: Date): string {
   const hour = date.getHours();
   if (hour >= 5 && hour < 12) return "Good morning";
@@ -45,10 +33,6 @@ function getTimeBasedGreeting(date: Date): string {
   return "Good night";
 }
 
-/**
- * DashboardPage: useSession + redirect logic + early returns only.
- * No useProfile here; it runs inside DashboardInner when user exists.
- */
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: sessionLoading } = useSession();
@@ -59,102 +43,31 @@ export default function DashboardPage() {
     }
   }, [sessionLoading, user, router]);
 
-  if (sessionLoading) {
-    return (
-      <p className="flex min-h-screen items-center justify-center p-6 text-gray-600">
-        Loading...
-      </p>
-    );
-  }
-  if (!user) {
+  if (sessionLoading || !user) {
     return null;
   }
   return <DashboardInner user={user} />;
 }
 
-/**
- * DashboardInner: all trip UI and state. Only mounted when user exists.
- * useProfile(user) runs here so it's only executed when user exists.
- */
 function DashboardInner({ user }: { user: User }) {
   const router = useRouter();
   const { profile, refetch: refetchProfile } = useProfile(user);
+  const {
+    trips,
+    loadingTrips,
+    refetchTrips,
+    coverSignedUrls,
+    destinationSignedUrls,
+  } = useDashboardTrips();
 
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [loadingTrips, setLoadingTrips] = useState(true);
-  const [coverSignedUrls, setCoverSignedUrls] = useState<Record<string, string>>({});
-  const [destinationSignedUrls, setDestinationSignedUrls] = useState<Record<string, string>>({});
   const [tripParticipantAvatars, setTripParticipantAvatars] = useState<
     Record<string, (string | null)[]>
   >({});
-  const [activeTab, setActiveTab] = useState<"all" | "upcoming" | "past">("upcoming");
+  const [activeTab, setActiveTab] = useState<"all" | "upcoming" | "past">(
+    "upcoming"
+  );
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
-
-  useEffect(() => {
-    const load = async () => {
-      setLoadingTrips(true);
-      const { data, error } = await supabase
-        .from("trips")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) {
-        console.error(error);
-        alert(error.message);
-        setLoadingTrips(false);
-        return;
-      }
-      setTrips((data ?? []) as Trip[]);
-      setLoadingTrips(false);
-    };
-    load();
-  }, [user]);
-
-  useEffect(() => {
-    const withPath = trips.filter((t) => t.cover_image_path);
-    if (withPath.length === 0) {
-      setCoverSignedUrls({});
-      return;
-    }
-    Promise.all(
-      withPath.map(async (t) => {
-        const { data, error } = await supabase.storage
-          .from("trip-covers")
-          .createSignedUrl(t.cover_image_path!, 3600);
-        if (error || !data?.signedUrl) return { id: t.id, url: null };
-        return { id: t.id, url: data.signedUrl };
-      })
-    ).then((results) => {
-      const next: Record<string, string> = {};
-      results.forEach((r) => {
-        if (r.url) next[r.id] = r.url;
-      });
-      setCoverSignedUrls(next);
-    });
-  }, [trips]);
-
-  useEffect(() => {
-    const withDestination = trips.filter((t) => t.destination_image_url);
-    if (withDestination.length === 0) {
-      setDestinationSignedUrls({});
-      return;
-    }
-    Promise.all(
-      withDestination.map(async (t) => {
-        const { data, error } = await supabase.storage
-          .from("trip-covers")
-          .createSignedUrl(t.destination_image_url!, 3600);
-        if (error || !data?.signedUrl) return { id: t.id, url: null };
-        return { id: t.id, url: data.signedUrl };
-      })
-    ).then((results) => {
-      const next: Record<string, string> = {};
-      results.forEach((r) => {
-        if (r.url) next[r.id] = r.url;
-      });
-      setDestinationSignedUrls(next);
-    });
-  }, [trips]);
 
   useEffect(() => {
     if (trips.length === 0) {
@@ -210,18 +123,9 @@ function DashboardInner({ user }: { user: User }) {
     router.replace("/");
   };
 
-  const refetchTrips = async () => {
-    const { data, error } = await supabase
-      .from("trips")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (!error && data) setTrips(data as Trip[]);
-  };
-
   return (
     <main className="min-h-screen bg-neutral-50">
       <div className={DASHBOARD_LIST_PAGE_SHELL}>
-        {/* Header: one row; compact profile + logout on mobile so greeting has room */}
         <div className="mb-8 flex items-start justify-between gap-2 sm:gap-6">
           <div className="min-w-0 flex-1 pr-1">
             <h1 className="text-2xl font-bold leading-tight text-neutral-900 sm:text-3xl md:text-4xl">
@@ -272,8 +176,7 @@ function DashboardInner({ user }: { user: User }) {
           onLogout={logout}
         />
 
-        {/* Segmented control: All, Upcoming, Past */}
-        <div className="mb-8 flex gap-1 rounded-full bg-neutral-200 p-1 w-fit">
+        <div className="mb-8 flex w-fit gap-1 rounded-full bg-neutral-200 p-1">
           {(["all", "upcoming", "past"] as const).map((tab) => (
             <button
               key={tab}
@@ -290,7 +193,6 @@ function DashboardInner({ user }: { user: User }) {
           ))}
         </div>
 
-        {/* 1) Your Trips section (top) */}
         <section className="mb-10">
           <h2 className="mb-4 text-xl font-semibold text-neutral-900">
             Your Trips
@@ -308,13 +210,18 @@ function DashboardInner({ user }: { user: User }) {
                   onClick={() => setIsCreateOpen(true)}
                 />
               )}
-              {filteredTrips.map((t) => (
+              {filteredTrips.map((t: DashboardTrip) => (
                 <TripCard
                   key={t.id}
                   title={t.title}
                   startDate={t.start_date ?? "—"}
                   endDate={t.end_date ?? "—"}
-                  coverImageUrl={coverSignedUrls[t.id] ?? destinationSignedUrls[t.id] ?? t.cover_image_url ?? undefined}
+                  coverImageUrl={
+                    coverSignedUrls[t.id] ??
+                    destinationSignedUrls[t.id] ??
+                    t.cover_image_url ??
+                    undefined
+                  }
                   onClick={() => router.push(`/dashboard/trip/${t.id}`)}
                   participantAvatarUrls={tripParticipantAvatars[t.id] ?? []}
                 />
@@ -331,7 +238,6 @@ function DashboardInner({ user }: { user: User }) {
           )}
         </section>
 
-        {/* 2) Large create card (only when user has no trips) */}
         {!loadingTrips && !hasAnyTrips && (
           <section className="mb-10 flex justify-center">
             <div className="w-full max-w-md">

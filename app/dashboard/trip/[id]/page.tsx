@@ -30,6 +30,7 @@ import {
 } from "@/components/trip/dashboard-card-styles";
 import { Sparkles } from "lucide-react";
 import { fetchTripByIdForUser } from "@/lib/fetch-trip-for-user";
+import { useDashboardTripsOptional } from "@/components/dashboard/dashboard-trips-context";
 
 function MapPinIcon({ className }: { className?: string }) {
   return (
@@ -116,6 +117,7 @@ export default function TripPage() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const { user, loading: sessionLoading } = useSession();
+  const dashboardTrips = useDashboardTripsOptional();
   const [trip, setTrip] = useState<Trip | null>(null);
   const { canManageSharing, canEditMetadata, canDeleteTrip, role: tripRole } = useTripRole(trip, user?.id ?? undefined);
   const [loading, setLoading] = useState(true);
@@ -925,6 +927,7 @@ export default function TripPage() {
         onSuccess={async () => {
           await refetchTrip();
           await refetchParticipants();
+          await dashboardTrips?.refetchTrips();
         }}
       />
 
