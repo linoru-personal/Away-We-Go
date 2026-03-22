@@ -10,6 +10,7 @@ import type { PhotoWithUrl } from "@/components/trips/photos/photos-section";
 import { PhotosPageClient } from "./photos-page-client";
 import { formatTripDateRange } from "@/lib/format-trip-dates";
 import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
+import { fetchTripByIdForUser } from "@/lib/fetch-trip-for-user";
 
 type Trip = {
   id: string;
@@ -51,27 +52,26 @@ export default function TripPhotosPage() {
       return;
     }
     let cancelled = false;
-    supabase
-      .from("trips")
-      .select("id, user_id, title, start_date, end_date, cover_image_url, cover_image_path")
-      .eq("id", id)
-      .single()
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (!error && data) {
-          setTrip(data as Trip);
-          if (data.cover_image_path) {
-            supabase.storage
-              .from(TRIP_COVERS_BUCKET)
-              .createSignedUrl(data.cover_image_path, 3600)
-              .then(({ data: cover }) => {
-                if (!cancelled && cover?.signedUrl)
-                  setCoverImageUrl(cover.signedUrl);
-              });
-          }
+    fetchTripByIdForUser<Trip>(
+      supabase,
+      id,
+      "id, user_id, title, start_date, end_date, cover_image_url, cover_image_path"
+    ).then(({ trip, error }) => {
+      if (cancelled) return;
+      if (!error && trip) {
+        setTrip(trip);
+        if (trip.cover_image_path) {
+          supabase.storage
+            .from(TRIP_COVERS_BUCKET)
+            .createSignedUrl(trip.cover_image_path, 3600)
+            .then(({ data: cover }) => {
+              if (!cancelled && cover?.signedUrl)
+                setCoverImageUrl(cover.signedUrl);
+            });
         }
-        setTripLoading(false);
-      });
+      }
+      setTripLoading(false);
+    });
     return () => {
       cancelled = true;
     };

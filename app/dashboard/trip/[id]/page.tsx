@@ -29,6 +29,7 @@ import {
   DESTINATION_PLACEHOLDER_CLASS,
 } from "@/components/trip/dashboard-card-styles";
 import { Sparkles } from "lucide-react";
+import { fetchTripByIdForUser } from "@/lib/fetch-trip-for-user";
 
 function MapPinIcon({ className }: { className?: string }) {
   return (
@@ -131,7 +132,8 @@ export default function TripPage() {
   const [shareRole, setShareRole] = useState<"admin" | "editor" | "viewer">("viewer");
   const [shareLoading, setShareLoading] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
-  const [shareSuccess, setShareSuccess] = useState(false);
+  /** Short-lived success copy: access granted vs invitation sent, etc. */
+  const [shareSuccessMessage, setShareSuccessMessage] = useState<string | null>(null);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [changingRoleUserId, setChangingRoleUserId] = useState<string | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -176,21 +178,23 @@ export default function TripPage() {
       setLoading(true);
       setTitleError(null);
 
-      const { data, error: fetchError } = await supabase
-        .from("trips")
-        .select("*")
-        .eq("id", id)
-        .single();
+      const { trip: row, noRowVisible, error: fetchError } =
+        await fetchTripByIdForUser<Trip>(supabase, id);
 
       if (cancelled) return;
 
-      if (fetchError || !data) {
+      if (fetchError) {
+        setTitleError(fetchError.message ?? "Failed to load trip.");
+        setTrip(null);
+      } else if (!row) {
         setTitleError(
-          fetchError?.message ?? "Trip not found (or you don't have access)."
+          noRowVisible
+            ? "Trip not found or you don't have access. If you were invited, open the invite link while signed in with the same email."
+            : "Trip not found."
         );
         setTrip(null);
       } else {
-        setTrip(data as Trip);
+        setTrip(row);
       }
       setLoading(false);
     };
@@ -261,15 +265,26 @@ export default function TripPage() {
         role: shareRole,
       }),
     });
-    const result = (await res.json()) as { success?: boolean; message?: string };
+    const result = (await res.json()) as {
+      success?: boolean;
+      message?: string;
+      outcome?: "member_added" | "invitation_created";
+    };
     setShareLoading(false);
     if (!res.ok) {
-      setShareError(result.message ?? "Something went wrong. Try again.");
+      setShareError(
+        result.message ?? "Failed to grant access. Try again."
+      );
       return;
     }
     if (result.success) {
       setShareEmail("");
-      setShareSuccess(true);
+      setShareSuccessMessage(
+        result.message ??
+          (result.outcome === "member_added"
+            ? "Access granted."
+            : "Invitation sent.")
+      );
       const [{ data: memberData }, { data: pendingData }] = await Promise.all([
         supabase.rpc("get_trip_members", { p_trip_id: trip.id }),
         supabase
@@ -281,7 +296,7 @@ export default function TripPage() {
       ]);
       setMembers((memberData ?? []) as { user_id: string; email: string | null; role: string }[]);
       setPendingInvitations((pendingData ?? []) as PendingInvitationRow[]);
-      setTimeout(() => setShareSuccess(false), 3000);
+      setTimeout(() => setShareSuccessMessage(null), 6000);
     } else {
       setShareError(result.message ?? "Something went wrong. Try again.");
     }
@@ -320,13 +335,24 @@ export default function TripPage() {
       },
       body: JSON.stringify({ trip_id: trip.id, email: inv.email, role: inv.role }),
     });
-    const result = (await res.json()) as { success?: boolean; message?: string };
+    const result = (await res.json()) as {
+      success?: boolean;
+      message?: string;
+      outcome?: string;
+    };
     setResendingInvitationId(null);
     if (!res.ok) {
-      setShareError(result.message ?? "Something went wrong. Try again.");
+      setShareError(result.message ?? "Failed to resend. Try again.");
       return;
     }
     if (result.success) {
+      setShareSuccessMessage(
+        result.message ??
+          (result.outcome === "member_added"
+            ? "Access granted."
+            : "Invitation sent again.")
+      );
+      setTimeout(() => setShareSuccessMessage(null), 6000);
       const { data } = await supabase
         .from("trip_invitations")
         .select("id, email, role, status, created_at, expires_at")
@@ -506,12 +532,8 @@ export default function TripPage() {
 
   const refetchTrip = async () => {
     if (!id) return;
-    const { data, error } = await supabase
-      .from("trips")
-      .select("*")
-      .eq("id", id)
-      .single();
-    if (!error && data) setTrip(data as Trip);
+    const { trip: row, error } = await fetchTripByIdForUser<Trip>(supabase, id);
+    if (!error && row) setTrip(row);
   };
 
   const refetchParticipants = async () => {
@@ -603,7 +625,7 @@ export default function TripPage() {
                         onClick={() => {
                           setShareModalOpen(true);
                           setShareError(null);
-                          setShareSuccess(false);
+                          setShareSuccessMessage(null);
                         }}
                       >
                         <Share2Icon />
@@ -934,6 +956,7 @@ export default function TripPage() {
                   onChange={(e) => {
                     setShareEmail(e.target.value);
                     setShareError(null);
+                    setShareSuccessMessage(null);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -943,7 +966,13 @@ export default function TripPage() {
                   }}
                   disabled={shareLoading}
                   aria-invalid={!!shareError}
-                  aria-describedby={shareError ? "share-error" : shareSuccess ? "share-success" : "share-helper"}
+                  aria-describedby={
+                    shareError
+                      ? "share-error"
+                      : shareSuccessMessage
+                        ? "share-success"
+                        : "share-helper"
+                  }
                   className="mt-1.5 w-full rounded-[20px] border border-transparent bg-[#f6f2ed] px-4 py-3 text-[#1f1f1f] placeholder:text-[#8a8a8a] focus:border-[#d97b5e] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-0 disabled:opacity-60 aria-[invalid=true]:focus:ring-red-400/40 aria-[invalid=true]:focus:border-red-400"
                 />
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -978,9 +1007,9 @@ export default function TripPage() {
                     {shareError}
                   </p>
                 )}
-                {shareSuccess && (
+                {shareSuccessMessage && (
                   <p id="share-success" className="mt-1.5 text-sm text-[#16a34a]" role="status">
-                    Done.
+                    {shareSuccessMessage}
                   </p>
                 )}
                 <p id="share-helper" className="mt-1.5 text-xs text-[#8a8a8a]">

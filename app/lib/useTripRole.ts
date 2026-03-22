@@ -42,7 +42,7 @@ export function useTripRole(
       .select("role")
       .eq("trip_id", trip.id)
       .eq("user_id", userId)
-      .single()
+      .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error || !data) {

@@ -7,16 +7,10 @@ import {
   parseInvitationRole,
   type TripForInvitationEmail,
 } from "@/app/lib/invitation-email-payload";
-
-/** RPC result from share_trip_with_invitation */
-type ShareTripResult = {
-  ok: boolean;
-  message?: string;
-  outcome?: "member_added" | "invitation_created";
-  invitation_id?: string | null;
-  invitation_token?: string | null;
-  email_send_required?: boolean;
-};
+import {
+  parseShareTripWithInvitationRpc,
+  type ShareTripWithInvitationRpcResult,
+} from "@/lib/trip-invitations/parse-share-rpc";
 
 /** Request body: server validates; authorization is done by RPC via caller's session. */
 type InviteRequestBody = {
@@ -24,6 +18,12 @@ type InviteRequestBody = {
   email: string;
   role?: string;
 };
+
+const LOG = "[trip-invitations]";
+
+function logInvite(event: string, payload: Record<string, unknown>) {
+  console.info(LOG, event, JSON.stringify(payload));
+}
 
 const INVITE_PATH = "/invite";
 
@@ -43,7 +43,7 @@ async function sendInvitationEmail(params: {
     const msg =
       "Email not configured. Set RESEND_API_KEY and RESEND_FROM in .env.local to send invitation emails.";
     if (process.env.NODE_ENV === "development") {
-      console.warn("[trip-invitations]", msg);
+      console.warn(LOG, msg);
       return { ok: false, error: msg };
     }
     return { ok: false, error: "Email not configured." };
@@ -70,13 +70,27 @@ async function sendInvitationEmail(params: {
   return { ok: true };
 }
 
+export type InvitePostSuccessBody = {
+  success: true;
+  outcome: "member_added" | "invitation_created";
+  message: string;
+  emailSent?: boolean;
+};
+
+export type InvitePostErrorBody = {
+  success: false;
+  message: string;
+  outcome?: string;
+  _debug?: string;
+};
+
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization");
     const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
     if (!token?.trim()) {
       return NextResponse.json(
-        { success: false, message: "Please sign in to send invitations." },
+        { success: false, message: "Please sign in to send invitations." } satisfies InvitePostErrorBody,
         { status: 401 }
       );
     }
@@ -85,7 +99,7 @@ export async function POST(request: NextRequest) {
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!url || !anonKey) {
       return NextResponse.json(
-        { success: false, message: "Server configuration error." },
+        { success: false, message: "Server configuration error." } satisfies InvitePostErrorBody,
         { status: 500 }
       );
     }
@@ -95,7 +109,7 @@ export async function POST(request: NextRequest) {
       body = (await request.json()) as InviteRequestBody;
     } catch {
       return NextResponse.json(
-        { success: false, message: "Invalid request." },
+        { success: false, message: "Invalid request." } satisfies InvitePostErrorBody,
         { status: 400 }
       );
     }
@@ -103,10 +117,11 @@ export async function POST(request: NextRequest) {
     const tripId = typeof body.trip_id === "string" ? body.trip_id.trim() : "";
     const email = typeof body.email === "string" ? body.email.trim() : "";
     const role = typeof body.role === "string" && body.role.trim() ? body.role.trim() : "viewer";
+    const emailNormalized = email.toLowerCase();
 
     if (!tripId || !email) {
       return NextResponse.json(
-        { success: false, message: "Trip and email are required." },
+        { success: false, message: "Trip and email are required." } satisfies InvitePostErrorBody,
         { status: 400 }
       );
     }
@@ -114,7 +129,7 @@ export async function POST(request: NextRequest) {
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRe.test(tripId)) {
       return NextResponse.json(
-        { success: false, message: "Invalid request." },
+        { success: false, message: "Invalid request." } satisfies InvitePostErrorBody,
         { status: 400 }
       );
     }
@@ -123,35 +138,85 @@ export async function POST(request: NextRequest) {
       global: { headers: { Authorization: `Bearer ${token}` } },
     });
 
-    const { data, error } = await supabase.rpc("share_trip_with_invitation", {
+    logInvite("rpc_attempt", {
+      tripId,
+      invitedEmail: email,
+      emailNormalized,
+      role,
+    });
+
+    const { data: rawRpc, error } = await supabase.rpc("share_trip_with_invitation", {
       p_trip_id: tripId,
       p_email: email,
       p_role: role,
     });
 
     if (error) {
-      const errMsg = typeof (error as { message?: string }).message === "string" ? (error as { message: string }).message : String(error);
+      const errMsg =
+        typeof (error as { message?: string }).message === "string"
+          ? (error as { message: string }).message
+          : String(error);
       const errCode = (error as { code?: string }).code;
-      // Unmissable: stdout so it appears next to Next.js request log; response body has _debug in dev
+      logInvite("rpc_error", {
+        tripId,
+        emailNormalized,
+        code: errCode ?? null,
+        message: errMsg,
+      });
       process.stdout.write(`\n>>> TRIP-INV 502 RPC: ${errMsg} (code: ${errCode ?? "n/a"})\n\n`);
       const devMessage =
         process.env.NODE_ENV === "development" && errMsg
           ? errMsg
-          : "Unable to process invitation. Try again.";
-      const body: { success: false; message: string; _debug?: string } = {
+          : "Failed to grant access. Try again.";
+      const errBody: InvitePostErrorBody = {
         success: false,
         message: devMessage,
       };
-      if (process.env.NODE_ENV === "development") body._debug = `${errCode ?? ""}: ${errMsg}`;
-      return NextResponse.json(body, { status: 502 });
+      if (process.env.NODE_ENV === "development") errBody._debug = `${errCode ?? ""}: ${errMsg}`;
+      return NextResponse.json(errBody, { status: 502 });
     }
 
-    const result = (data ?? {}) as ShareTripResult;
+    const result: ShareTripWithInvitationRpcResult = parseShareTripWithInvitationRpc(rawRpc);
+
+    logInvite("rpc_result", {
+      tripId,
+      emailNormalized,
+      ok: result.ok,
+      outcome: result.outcome ?? null,
+      invitationId: result.invitation_id ?? null,
+      emailSendRequired: result.email_send_required ?? null,
+      hasToken: Boolean(result.invitation_token),
+    });
+
     if (!result.ok) {
+      logInvite("rpc_denied", {
+        tripId,
+        emailNormalized,
+        message: result.message ?? null,
+      });
       return NextResponse.json(
-        { success: false, message: result.message ?? "Unable to process invitation. Try again." },
+        {
+          success: false,
+          message: result.message ?? "Failed to grant access. Try again.",
+        } satisfies InvitePostErrorBody,
         { status: 400 }
       );
+    }
+
+    /** Immediate membership — no invitation email. */
+    if (result.outcome === "member_added") {
+      logInvite("trip_members_upserted", {
+        tripId,
+        emailNormalized,
+        outcome: "member_added",
+      });
+      return NextResponse.json({
+        success: true,
+        outcome: "member_added",
+        message:
+          "Access granted. They can open this trip from their dashboard now.",
+        emailSent: false,
+      } satisfies InvitePostSuccessBody);
     }
 
     if (result.email_send_required && result.invitation_token) {
@@ -164,9 +229,16 @@ export async function POST(request: NextRequest) {
         : "";
 
       if (!acceptUrl) {
-        console.error("[trip-invitations] Invitation created but NEXT_PUBLIC_APP_URL (or VERCEL_URL) not set.");
+        console.error(
+          LOG,
+          "Invitation created but NEXT_PUBLIC_APP_URL (or VERCEL_URL) not set."
+        );
         return NextResponse.json(
-          { success: false, message: "Invitation was created but the invite link could not be built. Contact support." },
+          {
+            success: false,
+            message:
+              "Failed to grant access — invitation was created but the invite link could not be built. Set NEXT_PUBLIC_APP_URL.",
+          } satisfies InvitePostErrorBody,
           { status: 500 }
         );
       }
@@ -175,7 +247,7 @@ export async function POST(request: NextRequest) {
         .from("trips")
         .select("title, destination, start_date, end_date, cover_image_path")
         .eq("id", tripId)
-        .single();
+        .maybeSingle();
 
       const trip: TripForInvitationEmail = tripRow
         ? {
@@ -219,36 +291,64 @@ export async function POST(request: NextRequest) {
       const { renderToStaticMarkup } = await import("react-dom/server");
       const html = renderToStaticMarkup(createElement(TripInvitationEmail, payload));
 
+      logInvite("email_send_attempt", { tripId, emailNormalized, to: email });
+
       const sendResult = await sendInvitationEmail({
         to: email,
         subject,
         html,
       });
+
       if (!sendResult.ok) {
         const emailErr = sendResult.error ?? "unknown";
+        logInvite("email_send_failed", {
+          tripId,
+          emailNormalized,
+          error: emailErr,
+        });
         process.stdout.write(`\n>>> TRIP-INV 502 EMAIL: ${String(emailErr)}\n\n`);
-        const body: { success: false; message: string; _debug?: string } = {
+        const errBody: InvitePostErrorBody = {
           success: false,
-          message: "Invitation was created but we couldn't send the email. Try again later.",
+          outcome: "invitation_created",
+          message:
+            "Failed to grant access — the invitation was saved but the email did not send. Try again, or ask the invitee to check spam. They must open the invite link while signed in with the invited email.",
         };
-        if (process.env.NODE_ENV === "development") body._debug = String(emailErr);
-        return NextResponse.json(body, { status: 502 });
+        if (process.env.NODE_ENV === "development") errBody._debug = String(emailErr);
+        return NextResponse.json(errBody, { status: 502 });
       }
+
+      logInvite("email_send_ok", { tripId, emailNormalized });
+
+      return NextResponse.json({
+        success: true,
+        outcome: "invitation_created",
+        message:
+          "Invitation sent. They’ll get access after they sign up or sign in and accept the invite link.",
+        emailSent: true,
+      } satisfies InvitePostSuccessBody);
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "If that person has an account, they've been added. Otherwise, an invitation was sent.",
+    logInvite("unexpected_rpc_shape", {
+      tripId,
+      emailNormalized,
+      result: JSON.stringify(result),
     });
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Failed to grant access — unexpected server response. Try again.",
+      } satisfies InvitePostErrorBody,
+      { status: 500 }
+    );
   } catch (e) {
     const errStr = e instanceof Error ? e.message : String(e);
-    process.stderr.write(`[trip-invitations] 500 CATCH — ${errStr}\n`);
-    console.error("[trip-invitations] 500 CATCH:", e);
-    const body: { success: false; message: string; _debug?: string } = {
+    process.stderr.write(`${LOG} 500 CATCH — ${errStr}\n`);
+    console.error(LOG, "500 CATCH:", e);
+    const errBody: InvitePostErrorBody = {
       success: false,
       message: "Something went wrong. Try again.",
     };
-    if (process.env.NODE_ENV === "development") body._debug = errStr;
-    return NextResponse.json(body, { status: 500 });
+    if (process.env.NODE_ENV === "development") errBody._debug = errStr;
+    return NextResponse.json(errBody, { status: 500 });
   }
 }

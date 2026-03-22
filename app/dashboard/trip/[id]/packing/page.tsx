@@ -10,6 +10,7 @@ import { formatTripDateRange } from "@/lib/format-trip-dates";
 import { PackingList } from "@/components/packing/packing-list";
 import { getPackingGroupingMode, PACKING_GROUP_KEY_EVERYONE } from "@/lib/list-grouping";
 import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
+import { fetchTripByIdForUser } from "@/lib/fetch-trip-for-user";
 
 type Trip = {
   id: string;
@@ -96,16 +97,11 @@ export default function PackingPage() {
       return;
     }
     let cancelled = false;
-    supabase
-      .from("trips")
-      .select("*")
-      .eq("id", id)
-      .single()
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (!error && data) setTrip(data as Trip);
-        setTripLoading(false);
-      });
+    fetchTripByIdForUser<Trip>(supabase, id).then(({ trip, error }) => {
+      if (cancelled) return;
+      if (!error && trip) setTrip(trip);
+      setTripLoading(false);
+    });
     return () => {
       cancelled = true;
     };
