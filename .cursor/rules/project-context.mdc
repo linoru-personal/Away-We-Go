@@ -1,0 +1,42 @@
+---
+description: Away We Go — stack, routes, fragile areas, safe-change rules
+alwaysApply: true
+---
+
+# Project context
+
+Facts below are from **this repo**, not from memory or old audits.
+
+## Stack & layout
+
+Next **14.2.5**, React **18.2**, TS, Tailwind **4**, Supabase JS **2.95**, dnd-kit, Leaflet, lucide (`package.json`). **App Router + API live under `app/`** at repo root.
+
+## Implemented (where to look)
+
+| Area | Pointers |
+|------|----------|
+| Auth, login | `app/home-page-content.tsx`, `useSession`, `useProfile`, `claimPendingTripInvitations` |
+| Trips | `app/dashboard/page.tsx`, `app/dashboard/trip/[id]/page.tsx`, `components/trips/` |
+| Sections | `places`, `budget`, `notes`, `packing`, `tasks`, `photos` → `app/dashboard/trip/[id]/…`, `components/*` |
+| Sharing | `useTripRole`, `app/invite/`, `app/api/trip-invitations/route.ts`; RPCs e.g. `get_trip_members`, `unshare_trip`, `share_trip_with_invitation`, `accept_trip_invitation` |
+| Agent | `app/api/agent/route.ts` → `src/lib/agent/runAgent.ts` |
+| DB | `supabase/migrations/` — RLS helpers include `has_trip_access`, `can_edit_trip_content`, `can_edit_trip_metadata`, `can_manage_trip_sharing` |
+
+**API routes:** `agent`, `trip-invitations`, `link-preview`, `resolve-google-maps-url`, `fx`.
+
+## Partial — verify before building on
+
+- Assistant: **`runAgent` documents no DB writes**; **`searchPlaces`** uses **`src/lib/mock-data/munich-places.json`**. Trip page assistant UI may use **stub handlers** or **hard-coded** request fields — read `app/dashboard/trip/[id]/page.tsx`.
+- Invites: outbound email needs **`RESEND_API_KEY`** + **`RESEND_FROM`**; RPC/DB still run without them.
+
+## Gaps / stale (common footguns)
+
+- **`public.trips`**, **`public.profiles`**: used everywhere but **no `CREATE TABLE` in tracked migrations** — new environments may need manual/baseline SQL.
+- **`src/app/api/agent/route.ts`**: duplicate of **`app/api/agent/route.ts`** — treat as **stale**; change **`app/api/`** unless you prove otherwise.
+
+## Rules of thumb
+
+1. **RLS + RPCs** are the security source of truth; **`useTripRole`** is UX-only — update both when roles change.
+2. **Schema/policy** changes → new files under **`supabase/migrations/`**.
+3. **Storage** paths and **`createSignedUrl`** usage must stay aligned with bucket policies in SQL.
+4. **Verify:** `npm run lint`, `npm run build`; smoke the flows you touched.

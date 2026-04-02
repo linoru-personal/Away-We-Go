@@ -1,0 +1,27 @@
+---
+description: Collaboration — when to plan, approval gate, handoff format
+alwaysApply: true
+---
+
+# Workflow
+
+## Plan + approval (default)
+
+Use this when the ask is **unclear**, **multi-file**, or touches **auth, RLS, schema, payments, or prod data**:
+
+1. Ask **only blocking** questions (1–3).
+2. Give a **short plan**: goal, likely files, explicit non-goals.
+3. **Do not edit code** or run destructive commands until the user approves — unless they already said **go ahead / implement / fix it** for that same ask.
+
+## Skip the wait (still state a one-line plan)
+
+- **Narrow scope:** single file, typo, obvious one-line fix, or the user quoted the exact change.
+- **Explicit green light** in the same message as the task.
+
+## While implementing
+
+Stay inside the agreed scope; match repo conventions (`project-context`).
+
+## Handoff (after substantive edits)
+
+One compact block: **changes** · **files** · **test** (`npm run lint`, `npm run build`, plus manual paths if needed) · **risks** · **one next step**. Research-only: findings + one suggested follow-up.
