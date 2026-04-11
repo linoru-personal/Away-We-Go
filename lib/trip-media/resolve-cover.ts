@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { TripCoverVariant } from "./types";
 import { TRIP_MEDIA_BUCKET } from "./types";
+import {
+  readPartialVariantPathsAt,
+  resolveVariantStoragePath,
+} from "./variant-paths";
 
 const LEGACY_COVER_BUCKET = "trip-covers";
 
@@ -38,56 +42,6 @@ function pruneExpiredCoverSignedUrlCache(): void {
   }
 }
 
-/**
- * When a requested tier is missing in `trips.media.cover.paths`, try the next
- * available path in this order only — never skip straight to "original" unless
- * the chain says so for that request (egress control).
- */
-const VARIANT_RESOLUTION_ORDER: Record<
-  TripCoverVariant,
-  readonly TripCoverVariant[]
-> = {
-  thumb: ["thumb", "preview", "original"],
-  preview: ["preview", "thumb", "original"],
-  original: ["original", "preview", "thumb"],
-};
-
-function isNonEmptyPath(v: unknown): v is string {
-  return typeof v === "string" && v.trim().length > 0;
-}
-
-/**
- * Reads `trips.media.cover.paths` without requiring every variant to be present.
- * (Strict JSON validation lives in `parse.ts`; this is for Storage URL picking only.)
- */
-function readPartialTripMediaCoverPaths(
-  row: CoverImageRowLike
-): Partial<Record<TripCoverVariant, string>> | null {
-  const media = row.media;
-  if (media == null || typeof media !== "object" || Array.isArray(media)) return null;
-  const cover = (media as Record<string, unknown>).cover;
-  if (cover == null || typeof cover !== "object" || Array.isArray(cover)) return null;
-  const paths = (cover as Record<string, unknown>).paths;
-  if (paths == null || typeof paths !== "object" || Array.isArray(paths)) return null;
-  const po = paths as Record<string, unknown>;
-  const out: Partial<Record<TripCoverVariant, string>> = {};
-  (["thumb", "preview", "original"] as const).forEach((k) => {
-    if (isNonEmptyPath(po[k])) out[k] = (po[k] as string).trim();
-  });
-  return Object.keys(out).length > 0 ? out : null;
-}
-
-function resolveTripMediaCoverStoragePath(
-  partial: Partial<Record<TripCoverVariant, string>>,
-  requestedVariant: TripCoverVariant
-): string | null {
-  for (const tier of VARIANT_RESOLUTION_ORDER[requestedVariant]) {
-    const p = partial[tier];
-    if (p) return p;
-  }
-  return null;
-}
-
 export type CoverImageRowLike = {
   media?: unknown;
   cover_image_path?: string | null;
@@ -111,9 +65,9 @@ export function pickCoverStorageLocation(
   row: CoverImageRowLike,
   requestedVariant: TripCoverVariant
 ): { bucket: string; path: string } | { publicUrl: string } | null {
-  const partial = readPartialTripMediaCoverPaths(row);
+  const partial = readPartialVariantPathsAt(row.media, ["cover"]);
   if (partial) {
-    const path = resolveTripMediaCoverStoragePath(partial, requestedVariant);
+    const path = resolveVariantStoragePath(partial, requestedVariant);
     if (path) return { bucket: TRIP_MEDIA_BUCKET, path };
   }
 

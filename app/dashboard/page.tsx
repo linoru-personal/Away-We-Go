@@ -13,6 +13,7 @@ import CreateFirstTripCard from "@/components/trips/create-first-trip-card";
 import TripFormModal from "@/components/trips/trip-form-modal";
 import AccountSettingsModal from "@/components/account/account-settings-modal";
 import type { DashboardTrip } from "@/components/dashboard/dashboard-trips-context";
+import { getParticipantAvatarDisplayUrl } from "@/lib/trip-media/resolve-participant-avatar";
 
 function getEmptyMessage(tab: "all" | "upcoming" | "past"): string {
   switch (tab) {
@@ -78,7 +79,7 @@ function DashboardInner({ user }: { user: User }) {
     (async () => {
       const { data: rows, error } = await supabase
         .from("trip_participants")
-        .select("trip_id, avatar_path, sort_order")
+        .select("trip_id, avatar_path, media, sort_order")
         .in("trip_id", tripIds)
         .order("sort_order", { ascending: true });
       if (error) {
@@ -88,19 +89,14 @@ function DashboardInner({ user }: { user: User }) {
       const list = (rows ?? []) as {
         trip_id: string;
         avatar_path: string | null;
+        media?: unknown;
         sort_order: number;
       }[];
       const map: Record<string, (string | null)[]> = {};
       for (const t of trips) map[t.id] = [];
       for (const row of list) {
-        if (!row.avatar_path) {
-          map[row.trip_id].push(null);
-          continue;
-        }
-        const { data: signed } = await supabase.storage
-          .from("avatars")
-          .createSignedUrl(row.avatar_path, 3600);
-        map[row.trip_id].push(signed?.signedUrl ?? null);
+        const url = await getParticipantAvatarDisplayUrl(supabase, row, "thumb");
+        map[row.trip_id].push(url);
       }
       setTripParticipantAvatars(map);
     })();

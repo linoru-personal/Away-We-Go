@@ -1,15 +1,21 @@
 /**
- * Client-side downscale + WebP encode for trip cover uploads.
+ * Client-side downscale + WebP encode for trip-media uploads.
  */
 
 const WEBP_TYPE = "image/webp";
 const WEBP_QUALITY = 0.82;
 
-export type CoverImageVariantBlobs = {
+export type ThreeTierImageBlobs = {
   original: Blob;
   preview: Blob;
   thumb: Blob;
 };
+
+/** Long-edge caps for hero-style assets (cover + destination). */
+export const HERO_WEBP_MAX_SIDES = { original: 1600, preview: 800, thumb: 320 } as const;
+
+/** Long-edge caps for participant avatars. */
+export const AVATAR_WEBP_MAX_SIDES = { original: 512, preview: 256, thumb: 96 } as const;
 
 function loadImage(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -67,18 +73,29 @@ async function renderMaxSide(source: HTMLImageElement, maxSide: number): Promise
   return canvasToWebpBlob(canvas);
 }
 
-/**
- * Build three WebP blobs from any image blob/file (e.g. cropped cover).
- * Max dimensions: original 1600px, preview 800px, thumb 320px (long edge).
- */
-export async function buildTripCoverWebpVariants(
-  source: Blob | File
-): Promise<CoverImageVariantBlobs> {
+export async function buildWebpVariantsThreeTier(
+  source: Blob | File,
+  maxSides: { original: number; preview: number; thumb: number }
+): Promise<ThreeTierImageBlobs> {
   const img = await loadImage(source);
   const [original, preview, thumb] = await Promise.all([
-    renderMaxSide(img, 1600),
-    renderMaxSide(img, 800),
-    renderMaxSide(img, 320),
+    renderMaxSide(img, maxSides.original),
+    renderMaxSide(img, maxSides.preview),
+    renderMaxSide(img, maxSides.thumb),
   ]);
   return { original, preview, thumb };
+}
+
+/** Cover + destination hero sizes (1600 / 800 / 320 long edge). */
+export async function buildTripCoverWebpVariants(
+  source: Blob | File
+): Promise<ThreeTierImageBlobs> {
+  return buildWebpVariantsThreeTier(source, HERO_WEBP_MAX_SIDES);
+}
+
+/** Participant avatar sizes (512 / 256 / 96 long edge). */
+export async function buildParticipantAvatarWebpVariants(
+  source: Blob | File
+): Promise<ThreeTierImageBlobs> {
+  return buildWebpVariantsThreeTier(source, AVATAR_WEBP_MAX_SIDES);
 }

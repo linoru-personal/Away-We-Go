@@ -19,17 +19,25 @@ import {
 } from "@/components/trips/image-actions-overlay";
 import type { CropMetadata } from "@/lib/editable-image-assets";
 import { getEditableImageSource } from "@/lib/editable-image-assets/get-source";
-import {
-  saveEditableImageAsset,
-  getExistingEditableAssetId,
-  updateEditableImageAssetCrop,
-} from "@/lib/editable-image-assets/upload";
 import { uploadTripCoverToMedia, clearTripCoverMediaAndLegacy } from "@/lib/trip-media/upload-trip-cover";
+import {
+  uploadTripDestinationToMedia,
+  clearTripDestinationMediaAndLegacy,
+} from "@/lib/trip-media/upload-trip-destination";
+import { uploadParticipantAvatarToMedia } from "@/lib/trip-media/upload-participant-avatar";
 import {
   getTripCoverDisplayUrl,
   createSignedUrlForCoverLocation,
 } from "@/lib/trip-media/resolve-cover";
-import { parseTripMediaCoverFromRow, tripHasPersistedCover } from "@/lib/trip-media/parse";
+import { getTripDestinationDisplayUrl } from "@/lib/trip-media/resolve-destination";
+import { getParticipantAvatarDisplayUrl } from "@/lib/trip-media/resolve-participant-avatar";
+import {
+  parseTripMediaCoverFromRow,
+  parseTripMediaDestinationFromRow,
+  parseParticipantMediaAvatarFromRow,
+  tripHasPersistedCover,
+  tripHasPersistedDestination,
+} from "@/lib/trip-media/parse";
 import { TRIP_MEDIA_BUCKET } from "@/lib/trip-media/types";
 import {
   DESTINATION_HERO_ASPECT_CLASS,
@@ -66,6 +74,8 @@ type ParticipantRow = {
   id: string;
   name: string;
   avatarPath: string | null;
+  /** Persisted `trip_participants.media` (preserved on save when avatar not replaced). */
+  media?: unknown | null;
   avatarFile: File | null;
   previewUrl: string | null;
   /** For new avatar: original file and crop result for persistence. */
@@ -74,7 +84,13 @@ type ParticipantRow = {
   avatarCropMetadata: CropMetadata | null;
 };
 
-const AVATARS_BUCKET = "avatars";
+function participantHasPersistedAvatar(p: ParticipantRow): boolean {
+  return !!(
+    p.previewUrl ||
+    p.avatarPath ||
+    parseParticipantMediaAvatarFromRow(p.media ?? null)
+  );
+}
 
 export default function TripFormModal({
   mode,
@@ -140,15 +156,11 @@ export default function TripFormModal({
       } else {
         setExistingCoverSignedUrl(null);
       }
-      if (trip.destination_image_url) {
+      if (tripHasPersistedDestination(trip)) {
         hasJustUploadedDestinationRef.current = false;
-        supabase.storage
-          .from("trip-covers")
-          .createSignedUrl(trip.destination_image_url, 3600)
-          .then(({ data }) => {
-            if (data?.signedUrl) setExistingDestinationSignedUrl(data.signedUrl);
-            else setExistingDestinationSignedUrl(null);
-          });
+        getTripDestinationDisplayUrl(supabase, trip, "preview").then((u) => {
+          setExistingDestinationSignedUrl(u);
+        });
       } else if (!hasJustUploadedDestinationRef.current) {
         setExistingDestinationSignedUrl(null);
       } else {
@@ -175,7 +187,7 @@ export default function TripFormModal({
     let cancelled = false;
     supabase
       .from("trip_participants")
-      .select("id, name, avatar_path, sort_order")
+      .select("id, name, avatar_path, media, sort_order")
       .eq("trip_id", trip.id)
       .order("sort_order", { ascending: true })
       .then(({ data, error: fetchError }) => {
@@ -184,24 +196,29 @@ export default function TripFormModal({
           setParticipants([]);
           return;
         }
-        const rows = (data ?? []) as { id: string; name: string; avatar_path: string | null; sort_order: number }[];
+        const rows = (data ?? []) as {
+          id: string;
+          name: string;
+          avatar_path: string | null;
+          media?: unknown | null;
+          sort_order: number;
+        }[];
         if (rows.length === 0) {
           setParticipants([]);
           return;
         }
         Promise.all(
           rows.map(async (r) => {
-            let previewUrl: string | null = null;
-            if (r.avatar_path) {
-              const { data: signed } = await supabase.storage
-                .from(AVATARS_BUCKET)
-                .createSignedUrl(r.avatar_path, 3600);
-              previewUrl = signed?.signedUrl ?? null;
-            }
+            const previewUrl = await getParticipantAvatarDisplayUrl(
+              supabase,
+              { media: r.media, avatar_path: r.avatar_path },
+              "thumb"
+            );
             return {
               id: r.id,
               name: r.name,
               avatarPath: r.avatar_path,
+              media: r.media ?? null,
               avatarFile: null,
               previewUrl,
               avatarOriginalFile: null,
@@ -374,6 +391,15 @@ export default function TripFormModal({
     if (!trip?.id) return;
     setDestinationSourceLoading(true);
     try {
+      if (parseTripMediaDestinationFromRow(trip.media ?? null)) {
+        const fromMedia = await getTripDestinationDisplayUrl(supabase, trip, "original");
+        if (fromMedia) {
+          destinationRecropContextRef.current = { existingAssetId: null, cropMetadata: null };
+          setDestinationImageSrcForCrop(fromMedia);
+          setDestinationCropOpen(true);
+          return;
+        }
+      }
       const source = await getEditableImageSource(supabase, {
         tripId: trip.id,
         ownerType: "destination_cover",
@@ -430,12 +456,13 @@ export default function TripFormModal({
 
   const removeDestinationImage = async () => {
     if (!trip?.id) return;
-    await supabase
-      .from("trips")
-      .update({ destination_image_url: null })
-      .eq("id", trip.id);
-    setExistingDestinationSignedUrl(null);
-    onSuccess?.();
+    try {
+      await clearTripDestinationMediaAndLegacy(supabase, trip.id);
+      setExistingDestinationSignedUrl(null);
+      await Promise.resolve(onSuccess?.());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not remove destination image.");
+    }
   };
 
   const clearDestinationPending = () => {
@@ -464,6 +491,7 @@ export default function TripFormModal({
         id: crypto.randomUUID(),
         name: "",
         avatarPath: null,
+        media: null,
         avatarFile: null,
         previewUrl: null,
         avatarOriginalFile: null,
@@ -490,6 +518,7 @@ export default function TripFormModal({
         return {
           ...p,
           avatarPath: null,
+          media: null,
           avatarFile: null,
           previewUrl: null,
           avatarOriginalFile: null,
@@ -502,20 +531,6 @@ export default function TripFormModal({
 
   const setParticipantName = (id: string, name: string) => {
     setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, name } : p)));
-  };
-
-  const setParticipantPhoto = (id: string, file: File | null) => {
-    setParticipants((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        if (p.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
-        return {
-          ...p,
-          avatarFile: file,
-          previewUrl: file ? URL.createObjectURL(file) : p.avatarPath ? null : null,
-        };
-      })
-    );
   };
 
   const setParticipantAvatarCropResult = (
@@ -570,9 +585,28 @@ export default function TripFormModal({
   const handleEditAvatarCrop = async (participantId: string) => {
     if (!trip?.id) return;
     const p = participants.find((x) => x.id === participantId);
-    if (!p?.avatarPath) return;
+    if (!p) return;
+    const hasMediaAvatar = parseParticipantMediaAvatarFromRow(p.media ?? null);
+    if (!p.avatarPath && !hasMediaAvatar) return;
     setParticipantIdForAvatarCrop(participantId);
     try {
+      if (hasMediaAvatar) {
+        const fromMedia = await getParticipantAvatarDisplayUrl(
+          supabase,
+          { media: p.media, avatar_path: p.avatarPath },
+          "original"
+        );
+        if (fromMedia) {
+          avatarRecropContextRef.current = {
+            participantId,
+            existingAssetId: null,
+            cropMetadata: null,
+          };
+          setAvatarImageSrcForCrop(fromMedia);
+          setAvatarCropOpen(true);
+          return;
+        }
+      }
       const source = await getEditableImageSource(supabase, {
         tripId: trip.id,
         ownerType: "participant_avatar",
@@ -580,13 +614,19 @@ export default function TripFormModal({
         legacyPath: p.avatarPath,
       });
       if (!source) {
-        const { data: signed } = await supabase.storage
-          .from(AVATARS_BUCKET)
-          .createSignedUrl(p.avatarPath, 3600);
-        if (signed?.signedUrl) {
-          avatarRecropContextRef.current = { participantId, existingAssetId: null, cropMetadata: null };
-          setAvatarImageSrcForCrop(signed.signedUrl);
-          setAvatarCropOpen(true);
+        if (p.avatarPath) {
+          const { data: signed } = await supabase.storage
+            .from("avatars")
+            .createSignedUrl(p.avatarPath, 3600);
+          if (signed?.signedUrl) {
+            avatarRecropContextRef.current = {
+              participantId,
+              existingAssetId: null,
+              cropMetadata: null,
+            };
+            setAvatarImageSrcForCrop(signed.signedUrl);
+            setAvatarCropOpen(true);
+          }
         }
         return;
       }
@@ -616,35 +656,31 @@ export default function TripFormModal({
     if (recrop && recrop.participantId === participantId) {
       if (!trip?.id) return;
       try {
-        if (recrop.existingAssetId) {
-          await updateEditableImageAssetCrop(supabase, {
-            existingAssetId: recrop.existingAssetId,
-            tripId: trip.id,
-            ownerType: "participant_avatar",
-            participantId,
-            croppedBlob: blob,
-            cropMetadata,
-          });
-        } else {
-          const res = await fetch(srcUrl!);
-          const legacyBlob = await res.blob();
-          const originalFileFromLegacy = new File([legacyBlob], "original.jpg", { type: "image/jpeg" });
-          await saveEditableImageAsset(supabase, {
-            tripId: trip.id,
-            ownerType: "participant_avatar",
-            participantId,
-            originalFile: originalFileFromLegacy,
-            croppedBlob: blob,
-            cropMetadata,
-          });
-        }
+        const { paths } = await uploadParticipantAvatarToMedia(supabase, {
+          tripId: trip.id,
+          participantId,
+          sourceImage: blob,
+        });
+        const newPreviewUrl = await createSignedUrlForCoverLocation(
+          supabase,
+          { bucket: TRIP_MEDIA_BUCKET, path: paths.thumb },
+          3600,
+          "thumb"
+        );
         onSuccess?.();
-        const path = `${trip.id}/${participantId}.jpg`;
-        const { data } = await supabase.storage.from(AVATARS_BUCKET).createSignedUrl(path, 3600);
-        const newPreviewUrl = data?.signedUrl ?? null;
         setParticipants((prev) =>
           prev.map((p) =>
-            p.id === participantId ? { ...p, previewUrl: newPreviewUrl, avatarPath: path } : p
+            p.id === participantId
+              ? {
+                  ...p,
+                  previewUrl: newPreviewUrl,
+                  avatarPath: null,
+                  media: { avatar: { paths } },
+                  avatarOriginalFile: null,
+                  avatarCroppedBlob: null,
+                  avatarCropMetadata: null,
+                }
+              : p
           )
         );
       } catch (err) {
@@ -732,18 +768,11 @@ export default function TripFormModal({
           }
         }
 
-        if (
-          destinationPendingOriginalFile &&
-          destinationPendingCroppedBlob &&
-          destinationPendingCropMetadata
-        ) {
+        if (destinationPendingCroppedBlob) {
           try {
-            await saveEditableImageAsset(supabase, {
+            await uploadTripDestinationToMedia(supabase, {
               tripId,
-              ownerType: "destination_cover",
-              originalFile: destinationPendingOriginalFile,
-              croppedBlob: destinationPendingCroppedBlob,
-              cropMetadata: destinationPendingCropMetadata,
+              sourceImage: destinationPendingCroppedBlob,
             });
           } catch (err) {
             console.error("Destination image upload error", err);
@@ -759,17 +788,15 @@ export default function TripFormModal({
             trip_id: tripId,
             name,
             avatar_path: null,
+            media: null,
             sort_order: i,
           });
-          if (p.avatarOriginalFile && p.avatarCroppedBlob && p.avatarCropMetadata) {
+          if (p.avatarOriginalFile && p.avatarCroppedBlob) {
             try {
-              await saveEditableImageAsset(supabase, {
+              await uploadParticipantAvatarToMedia(supabase, {
                 tripId,
-                ownerType: "participant_avatar",
                 participantId: p.id,
-                originalFile: p.avatarOriginalFile,
-                croppedBlob: p.avatarCroppedBlob,
-                cropMetadata: p.avatarCropMetadata,
+                sourceImage: p.avatarCroppedBlob,
               });
             } catch (err) {
               console.error("Avatar upload error", err);
@@ -818,17 +845,15 @@ export default function TripFormModal({
             trip_id: trip.id,
             name,
             avatar_path: p.avatarOriginalFile ? null : p.avatarPath,
+            media: p.avatarOriginalFile ? null : (p.media ?? null),
             sort_order: i,
           });
-          if (p.avatarOriginalFile && p.avatarCroppedBlob && p.avatarCropMetadata) {
+          if (p.avatarOriginalFile && p.avatarCroppedBlob) {
             try {
-              await saveEditableImageAsset(supabase, {
+              await uploadParticipantAvatarToMedia(supabase, {
                 tripId: trip.id,
-                ownerType: "participant_avatar",
                 participantId: p.id,
-                originalFile: p.avatarOriginalFile,
-                croppedBlob: p.avatarCroppedBlob,
-                cropMetadata: p.avatarCropMetadata,
+                sourceImage: p.avatarCroppedBlob,
               });
             } catch (err) {
               console.error("Avatar upload error", err);
@@ -1088,11 +1113,11 @@ export default function TripFormModal({
                       onChange={(e) => handleParticipantPhotoSelect(e, p.id)}
                     />
                     <div className="flex shrink-0 items-center gap-1.5 text-[#1f1f1f] opacity-70">
-                      {(p.previewUrl || p.avatarPath) && (
+                      {participantHasPersistedAvatar(p) && (
                         <button
                           type="button"
                           onClick={() => {
-                            if (p.avatarPath) {
+                            if (p.avatarPath || parseParticipantMediaAvatarFromRow(p.media ?? null)) {
                               handleEditAvatarCrop(p.id);
                             } else {
                               setAvatarImageSrcForCrop(p.previewUrl!);
@@ -1118,7 +1143,7 @@ export default function TripFormModal({
                       >
                         <ImagePlusIcon className="size-3 sm:size-3.5" />
                       </button>
-                      {(p.previewUrl || p.avatarPath) ? (
+                      {participantHasPersistedAvatar(p) ? (
                         <button
                           type="button"
                           onClick={() => clearParticipantPhoto(p.id)}
@@ -1191,55 +1216,26 @@ export default function TripFormModal({
 
               if (trip?.id) {
                 try {
-                  if (recrop) {
-                    if (recrop.existingAssetId) {
-                      await updateEditableImageAssetCrop(supabase, {
-                        existingAssetId: recrop.existingAssetId,
-                        tripId: trip.id,
-                        ownerType: "destination_cover",
-                        croppedBlob: blob,
-                        cropMetadata,
-                      });
-                    } else {
-                      const res = await fetch(srcUrl!);
-                      const legacyBlob = await res.blob();
-                      const originalFile = new File([legacyBlob], "original.jpg", { type: "image/jpeg" });
-                      await saveEditableImageAsset(supabase, {
-                        tripId: trip.id,
-                        ownerType: "destination_cover",
-                        originalFile,
-                        croppedBlob: blob,
-                        cropMetadata,
-                      });
-                    }
-                  } else {
-                    if (!file) return;
-                    const existingId = await getExistingEditableAssetId(supabase, trip.id, "destination_cover");
-                    await saveEditableImageAsset(supabase, {
-                      tripId: trip.id,
-                      ownerType: "destination_cover",
-                      originalFile: file,
-                      croppedBlob: blob,
-                      cropMetadata,
-                      existingAssetId: existingId,
-                    });
-                  }
+                  const { paths } = await uploadTripDestinationToMedia(supabase, {
+                    tripId: trip.id,
+                    sourceImage: blob,
+                  });
+                  const signed = await createSignedUrlForCoverLocation(
+                    supabase,
+                    { bucket: TRIP_MEDIA_BUCKET, path: paths.preview },
+                    3600,
+                    "preview"
+                  );
                   onSuccess?.();
                   hasJustUploadedDestinationRef.current = true;
-                  const path = `${trip.id}/destination.jpg`;
-                  const { data } = await supabase.storage
-                    .from("trip-covers")
-                    .createSignedUrl(path, 3600);
-                  if (data?.signedUrl) {
-                    setExistingDestinationSignedUrl(data.signedUrl);
-                    setDestinationPendingOriginalFile(null);
-                    setDestinationPendingCroppedBlob(null);
-                    setDestinationPendingCropMetadata(null);
-                    setDestinationPreviewUrl((prev) => {
-                      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-                      return null;
-                    });
-                  }
+                  setExistingDestinationSignedUrl(signed);
+                  setDestinationPendingOriginalFile(null);
+                  setDestinationPendingCroppedBlob(null);
+                  setDestinationPendingCropMetadata(null);
+                  setDestinationPreviewUrl((prev) => {
+                    if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+                    return null;
+                  });
                 } catch (err) {
                   console.error("Destination image save failed", err);
                 }

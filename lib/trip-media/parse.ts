@@ -1,4 +1,9 @@
-import type { TripMedia, TripMediaCover, TripMediaCoverPaths } from "./types";
+import type {
+  TripMedia,
+  TripMediaCover,
+  TripMediaCoverPaths,
+  TripMediaDestination,
+} from "./types";
 
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.trim().length > 0;
@@ -29,6 +34,34 @@ export function parseTripMediaCoverFromRow(media: unknown): TripMediaCover | nul
   return { paths };
 }
 
+/** Returns a validated `media.destination` object or null. */
+export function parseTripMediaDestinationFromRow(media: unknown): TripMediaDestination | null {
+  if (media == null) return null;
+  if (typeof media !== "object" || Array.isArray(media)) return null;
+  const m = media as Record<string, unknown>;
+  const destRaw = m.destination;
+  if (destRaw == null) return null;
+  if (typeof destRaw !== "object" || Array.isArray(destRaw)) return null;
+  const paths = parsePaths((destRaw as Record<string, unknown>).paths);
+  if (!paths) return null;
+  return { paths };
+}
+
+/** Returns validated `trip_participants.media.avatar` or null. */
+export function parseParticipantMediaAvatarFromRow(media: unknown): {
+  paths: TripMediaCoverPaths;
+} | null {
+  if (media == null) return null;
+  if (typeof media !== "object" || Array.isArray(media)) return null;
+  const m = media as Record<string, unknown>;
+  const av = m.avatar;
+  if (av == null) return null;
+  if (typeof av !== "object" || Array.isArray(av)) return null;
+  const paths = parsePaths((av as Record<string, unknown>).paths);
+  if (!paths) return null;
+  return { paths };
+}
+
 /** True if the row has any persisted cover (new `media.cover`, legacy path, or legacy public URL). */
 export function tripHasPersistedCover(
   trip:
@@ -45,6 +78,22 @@ export function tripHasPersistedCover(
   return false;
 }
 
+export function tripHasPersistedDestination(
+  trip:
+    | { media?: unknown; destination_image_url?: string | null }
+    | null
+    | undefined
+): boolean {
+  if (!trip) return false;
+  if (parseTripMediaDestinationFromRow(trip.media ?? null)) return true;
+  if (
+    typeof trip.destination_image_url === "string" &&
+    trip.destination_image_url.trim().length > 0
+  )
+    return true;
+  return false;
+}
+
 /** Safe parse of full `trips.media` jsonb; never throws. */
 export function parseTripMedia(media: unknown): TripMedia {
   if (media == null || typeof media !== "object" || Array.isArray(media)) {
@@ -54,5 +103,8 @@ export function parseTripMedia(media: unknown): TripMedia {
   const cover = parseTripMediaCoverFromRow({ cover: obj.cover });
   if (cover) obj.cover = cover;
   else delete obj.cover;
+  const destination = parseTripMediaDestinationFromRow({ destination: obj.destination });
+  if (destination) obj.destination = destination;
+  else delete obj.destination;
   return obj as TripMedia;
 }

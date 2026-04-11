@@ -32,6 +32,9 @@ import { Sparkles } from "lucide-react";
 import { fetchTripByIdForUser } from "@/lib/fetch-trip-for-user";
 import { useDashboardTripsOptional } from "@/components/dashboard/dashboard-trips-context";
 import { useTripCoverSignedUrl } from "@/app/lib/useTripCoverSignedUrl";
+import { getTripDestinationDisplayUrl } from "@/lib/trip-media/resolve-destination";
+import { getParticipantAvatarDisplayUrl } from "@/lib/trip-media/resolve-participant-avatar";
+import { tripHasPersistedDestination } from "@/lib/trip-media/parse";
 
 function MapPinIcon({ className }: { className?: string }) {
   return (
@@ -415,29 +418,20 @@ export default function TripPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [menuOpen]);
 
-  // Signed URL for destination (hero) image when set
+  // Signed URL for destination (hero) image — preview tier; legacy column fallback inside resolver.
   useEffect(() => {
-    if (!trip?.destination_image_url) {
+    if (!trip || !tripHasPersistedDestination(trip)) {
       setDestinationImageUrl(null);
       return;
     }
     let cancelled = false;
-    supabase.storage
-      .from("trip-covers")
-      .createSignedUrl(trip.destination_image_url, 3600)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          console.error("Destination image signed URL:", error);
-          setDestinationImageUrl(null);
-        } else if (data?.signedUrl) {
-          setDestinationImageUrl(data.signedUrl);
-        }
-      });
+    getTripDestinationDisplayUrl(supabase, trip, "preview").then((url) => {
+      if (!cancelled) setDestinationImageUrl(url);
+    });
     return () => {
       cancelled = true;
     };
-  }, [trip?.destination_image_url]);
+  }, [trip]);
 
   useEffect(() => {
     if (!trip?.id) {
@@ -447,7 +441,7 @@ export default function TripPage() {
     let cancelled = false;
     supabase
       .from("trip_participants")
-      .select("avatar_path, sort_order")
+      .select("avatar_path, media, sort_order")
       .eq("trip_id", trip.id)
       .order("sort_order", { ascending: true })
       .then(({ data, error }) => {
@@ -456,15 +450,14 @@ export default function TripPage() {
           setParticipantAvatarUrls([]);
           return;
         }
-        const rows = (data ?? []) as { avatar_path: string | null }[];
+        const rows = (data ?? []) as {
+          avatar_path: string | null;
+          media?: unknown;
+        }[];
         Promise.all(
-          rows.map(async (r) => {
-            if (!r.avatar_path) return null;
-            const { data: signed } = await supabase.storage
-              .from("avatars")
-              .createSignedUrl(r.avatar_path, 3600);
-            return signed?.signedUrl ?? null;
-          })
+          rows.map(async (r) =>
+            getParticipantAvatarDisplayUrl(supabase, r, "thumb")
+          )
         ).then((urls) => {
           if (!cancelled) setParticipantAvatarUrls(urls);
         });
@@ -520,22 +513,16 @@ export default function TripPage() {
     if (!trip?.id) return;
     const { data, error } = await supabase
       .from("trip_participants")
-      .select("avatar_path, sort_order")
+      .select("avatar_path, media, sort_order")
       .eq("trip_id", trip.id)
       .order("sort_order", { ascending: true });
     if (error || !data) {
       setParticipantAvatarUrls([]);
       return;
     }
-    const rows = (data ?? []) as { avatar_path: string | null }[];
+    const rows = (data ?? []) as { avatar_path: string | null; media?: unknown }[];
     const urls = await Promise.all(
-      rows.map(async (r) => {
-        if (!r.avatar_path) return null;
-        const { data: signed } = await supabase.storage
-          .from("avatars")
-          .createSignedUrl(r.avatar_path, 3600);
-        return signed?.signedUrl ?? null;
-      })
+      rows.map((r) => getParticipantAvatarDisplayUrl(supabase, r, "thumb"))
     );
     setParticipantAvatarUrls(urls);
   };

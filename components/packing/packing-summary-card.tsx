@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabaseClient";
+import { getParticipantAvatarDisplayUrl } from "@/lib/trip-media/resolve-participant-avatar";
 import {
   DASHBOARD_CARD_CLASS,
   DASHBOARD_CARD_LINK_CLASS,
@@ -57,7 +58,7 @@ export function PackingSummaryCard({ tripId, tripCoverImageUrl }: PackingSummary
           .order("sort_order", { ascending: true }),
         supabase
           .from("trip_participants")
-          .select("id, name, avatar_path, sort_order")
+          .select("id, name, avatar_path, media, sort_order")
           .eq("trip_id", tripId)
           .order("sort_order", { ascending: true }),
       ]);
@@ -65,16 +66,15 @@ export function PackingSummaryCard({ tripId, tripCoverImageUrl }: PackingSummary
       if (cancelled) return;
       if (!itemsRes.error && itemsRes.data) setItems((itemsRes.data ?? []) as PackingItemRow[]);
       if (!partRes.error && partRes.data) {
-        const rows = (partRes.data ?? []) as { id: string; name: string; avatar_path: string | null }[];
+        const rows = (partRes.data ?? []) as {
+          id: string;
+          name: string;
+          avatar_path: string | null;
+          media?: unknown;
+        }[];
         setParticipants(rows.map((r) => ({ id: r.id, name: r.name })));
         const urls = await Promise.all(
-          rows.map(async (r) => {
-            if (!r.avatar_path) return null;
-            const { data: signed } = await supabase.storage
-              .from("avatars")
-              .createSignedUrl(r.avatar_path, 3600);
-            return signed?.signedUrl ?? null;
-          })
+          rows.map((r) => getParticipantAvatarDisplayUrl(supabase, r, "thumb"))
         );
         if (!cancelled) setParticipantAvatarUrls(urls);
       }

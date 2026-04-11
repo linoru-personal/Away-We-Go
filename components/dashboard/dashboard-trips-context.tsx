@@ -12,6 +12,8 @@ import {
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/app/lib/supabaseClient";
 import { getTripCoverDisplayUrl } from "@/lib/trip-media/resolve-cover";
+import { getTripDestinationDisplayUrl } from "@/lib/trip-media/resolve-destination";
+import { tripHasPersistedDestination } from "@/lib/trip-media/parse";
 
 export type DashboardTrip = {
   id: string;
@@ -140,26 +142,28 @@ export function DashboardTripsProvider({
   }, [trips]);
 
   useEffect(() => {
-    const withDestination = trips.filter((t) => t.destination_image_url);
+    const withDestination = trips.filter((t) => tripHasPersistedDestination(t));
     if (withDestination.length === 0) {
       void Promise.resolve().then(() => setDestinationSignedUrls({}));
       return;
     }
+    let cancelled = false;
     Promise.all(
       withDestination.map(async (t) => {
-        const { data, error } = await supabase.storage
-          .from("trip-covers")
-          .createSignedUrl(t.destination_image_url!, 3600);
-        if (error || !data?.signedUrl) return { id: t.id, url: null };
-        return { id: t.id, url: data.signedUrl };
+        const url = await getTripDestinationDisplayUrl(supabase, t, "preview");
+        return { id: t.id, url };
       })
     ).then((results) => {
+      if (cancelled) return;
       const next: Record<string, string> = {};
       results.forEach((r) => {
         if (r.url) next[r.id] = r.url;
       });
       setDestinationSignedUrls(next);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [trips]);
 
   const value = useMemo(

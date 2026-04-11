@@ -15,6 +15,7 @@ import { CategoryIcon, getIconKey, PLACES_DEFAULT_ICON } from "@/components/ui/c
 import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
 import { fetchTripByIdForUser } from "@/lib/fetch-trip-for-user";
 import { useTripCoverSignedUrl } from "@/app/lib/useTripCoverSignedUrl";
+import { getParticipantAvatarDisplayUrl } from "@/lib/trip-media/resolve-participant-avatar";
 
 type Trip = {
   id: string;
@@ -81,7 +82,7 @@ export default function TripPlacesPage() {
     let cancelled = false;
     supabase
       .from("trip_participants")
-      .select("avatar_path, sort_order")
+      .select("avatar_path, media, sort_order")
       .eq("trip_id", id)
       .order("sort_order", { ascending: true })
       .then(({ data, error }) => {
@@ -90,15 +91,9 @@ export default function TripPlacesPage() {
           setParticipantAvatarUrls([]);
           return;
         }
-        const rows = (data ?? []) as { avatar_path: string | null }[];
+        const rows = (data ?? []) as { avatar_path: string | null; media?: unknown }[];
         Promise.all(
-          rows.map(async (r) => {
-            if (!r.avatar_path) return null;
-            const { data: signed } = await supabase.storage
-              .from("avatars")
-              .createSignedUrl(r.avatar_path, 3600);
-            return signed?.signedUrl ?? null;
-          })
+          rows.map((r) => getParticipantAvatarDisplayUrl(supabase, r, "thumb"))
         ).then((urls) => {
           if (!cancelled) setParticipantAvatarUrls(urls);
         });

@@ -52,6 +52,19 @@ function extractOgContent(html: string, property: string): string | null {
   return raw || null;
 }
 
+/** Same pattern as `extractOgContent`, but matches `name="..."` (e.g. Twitter cards). */
+function extractMetaNameContent(html: string, name: string): string | null {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(
+    `<meta[^>]*name=["']${escaped}["'][^>]*content=["']([^"']*)["']|` +
+      `<meta[^>]*content=["']([^"']*)["'][^>]*name=["']${escaped}["']`,
+    "i"
+  );
+  const m = html.match(re);
+  const raw = m ? (m[1] || m[2] || "").trim() : null;
+  return raw || null;
+}
+
 function extractTitle(html: string): string | null {
   const m = html.match(/<title[^>]*>([^<]*)<\/title>/i);
   const raw = m ? m[1].trim() : null;
@@ -107,12 +120,19 @@ export async function GET(request: NextRequest) {
     const ogTitle = extractOgContent(html, "og:title");
     const ogDescription = extractOgContent(html, "og:description");
     const ogImage = extractOgContent(html, "og:image");
+    const twitterImageName = extractMetaNameContent(html, "twitter:image");
+    const twitterImageProperty = extractOgContent(html, "twitter:image");
+    const rawImage = ogImage || twitterImageName || twitterImageProperty;
     const pageTitle = extractTitle(html);
     const rawTitle = ogTitle || pageTitle || null;
     const title = rawTitle ? decodeHtmlEntities(rawTitle) : null;
     const rawDescription = ogDescription || null;
     const description = rawDescription ? decodeHtmlEntities(rawDescription) : null;
-    const image = ogImage ? (ogImage.startsWith("http") ? ogImage : new URL(ogImage, trimmed).href) : null;
+    const image = rawImage
+      ? rawImage.startsWith("http")
+        ? rawImage
+        : new URL(rawImage, trimmed).href
+      : null;
 
     const body: LinkPreviewResponse = {
       title,

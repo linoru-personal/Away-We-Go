@@ -1,19 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildTripCoverWebpVariants } from "./image-variants";
-import { parseTripMediaCoverFromRow } from "./parse";
+import { parseTripMediaDestinationFromRow } from "./parse";
 import type { TripMediaVariantPaths } from "./types";
 import { TRIP_MEDIA_BUCKET } from "./types";
-import { removeTripMediaObjects, variantPathsToObjectKeys } from "./storage-helpers";
+import {
+  removeTripCoversBucketObjects,
+  removeTripMediaObjects,
+  variantPathsToObjectKeys,
+} from "./storage-helpers";
 
 const WEBP = "image/webp";
 
 /**
- * Upload three WebP variants to `trip-media`, then set `trips.media.cover` only.
- * Preserves other keys in `trips.media`. `upsert: false` on each upload.
- * On DB failure, removes the newly uploaded objects best-effort.
- * After DB success, best-effort deletes prior `media.cover` objects if they were in this bucket.
+ * Upload three WebP hero variants to `trip-media` under `{tripId}/destination/…`,
+ * merge `trips.media.destination`, clear legacy `destination_image_url`, remove prior files.
  */
-export async function uploadTripCoverToMedia(
+export async function uploadTripDestinationToMedia(
   supabase: SupabaseClient,
   params: { tripId: string; sourceImage: Blob }
 ): Promise<{ paths: TripMediaVariantPaths }> {
@@ -21,9 +23,9 @@ export async function uploadTripCoverToMedia(
   const variants = await buildTripCoverWebpVariants(sourceImage);
   const fileId = crypto.randomUUID();
   const paths: TripMediaVariantPaths = {
-    original: `${tripId}/cover/original/${fileId}.webp`,
-    preview: `${tripId}/cover/preview/${fileId}.webp`,
-    thumb: `${tripId}/cover/thumb/${fileId}.webp`,
+    original: `${tripId}/destination/original/${fileId}.webp`,
+    preview: `${tripId}/destination/preview/${fileId}.webp`,
+    thumb: `${tripId}/destination/thumb/${fileId}.webp`,
   };
 
   const uploads: { path: string; body: Blob }[] = [
@@ -44,7 +46,7 @@ export async function uploadTripCoverToMedia(
 
     const { data: row, error: selErr } = await supabase
       .from("trips")
-      .select("media")
+      .select("media, destination_image_url")
       .eq("id", tripId)
       .single();
     if (selErr) throw new Error(selErr.message);
@@ -54,18 +56,25 @@ export async function uploadTripCoverToMedia(
       rawMedia && typeof rawMedia === "object" && !Array.isArray(rawMedia)
         ? { ...(rawMedia as Record<string, unknown>) }
         : {};
-    const previousCover = parseTripMediaCoverFromRow(rawMedia);
-    const previousPaths = previousCover?.paths;
+    const previousDest = parseTripMediaDestinationFromRow(rawMedia);
+    const previousDestPaths = previousDest?.paths;
+    const previousLegacyUrl =
+      typeof row?.destination_image_url === "string" && row.destination_image_url.trim()
+        ? row.destination_image_url.trim()
+        : null;
 
-    const nextMedia = { ...base, cover: { paths } };
+    const nextMedia = { ...base, destination: { paths } };
     const { error: updErr } = await supabase
       .from("trips")
-      .update({ media: nextMedia })
+      .update({ media: nextMedia, destination_image_url: null })
       .eq("id", tripId);
     if (updErr) throw new Error(updErr.message);
 
-    if (previousPaths) {
-      void removeTripMediaObjects(supabase, variantPathsToObjectKeys(previousPaths));
+    if (previousDestPaths) {
+      void removeTripMediaObjects(supabase, variantPathsToObjectKeys(previousDestPaths));
+    }
+    if (previousLegacyUrl) {
+      void removeTripCoversBucketObjects(supabase, [previousLegacyUrl]);
     }
 
     return { paths };
@@ -75,42 +84,44 @@ export async function uploadTripCoverToMedia(
   }
 }
 
-/**
- * Clear cover from `trips.media`, null legacy cover columns, remove prior trip-media cover objects.
- */
-export async function clearTripCoverMediaAndLegacy(
+export async function clearTripDestinationMediaAndLegacy(
   supabase: SupabaseClient,
   tripId: string
 ): Promise<void> {
   const { data: row, error: selErr } = await supabase
     .from("trips")
-    .select("media")
+    .select("media, destination_image_url")
     .eq("id", tripId)
     .single();
   if (selErr) throw new Error(selErr.message);
 
   const rawMedia = row?.media;
-  const previous = parseTripMediaCoverFromRow(rawMedia);
-  const prevPaths = previous?.paths ? variantPathsToObjectKeys(previous.paths) : [];
+  const previous = parseTripMediaDestinationFromRow(rawMedia);
+  const prevTripMediaPaths = previous?.paths
+    ? variantPathsToObjectKeys(previous.paths)
+    : [];
+  const legacyPath =
+    typeof row?.destination_image_url === "string" && row.destination_image_url.trim()
+      ? row.destination_image_url.trim()
+      : null;
 
   const base: Record<string, unknown> =
     rawMedia && typeof rawMedia === "object" && !Array.isArray(rawMedia)
       ? { ...(rawMedia as Record<string, unknown>) }
       : {};
-  delete base.cover;
+  delete base.destination;
   const nextMedia = Object.keys(base).length > 0 ? base : null;
 
   const { error: updErr } = await supabase
     .from("trips")
-    .update({
-      media: nextMedia,
-      cover_image_path: null,
-      cover_image_url: null,
-    })
+    .update({ media: nextMedia, destination_image_url: null })
     .eq("id", tripId);
   if (updErr) throw new Error(updErr.message);
 
-  if (prevPaths.length > 0) {
-    void removeTripMediaObjects(supabase, prevPaths);
+  if (prevTripMediaPaths.length > 0) {
+    void removeTripMediaObjects(supabase, prevTripMediaPaths);
+  }
+  if (legacyPath) {
+    void removeTripCoversBucketObjects(supabase, [legacyPath]);
   }
 }
