@@ -11,6 +11,7 @@ import {
   parseShareTripWithInvitationRpc,
   type ShareTripWithInvitationRpcResult,
 } from "@/lib/trip-invitations/parse-share-rpc";
+import { getTripCoverDisplayUrl } from "@/lib/trip-media/resolve-cover";
 
 /** Request body: server validates; authorization is done by RPC via caller's session. */
 type InviteRequestBody = {
@@ -245,7 +246,7 @@ export async function POST(request: NextRequest) {
 
       const { data: tripRow } = await supabase
         .from("trips")
-        .select("title, destination, start_date, end_date, cover_image_path")
+        .select("title, destination, start_date, end_date, cover_image_path, cover_image_url, media")
         .eq("id", tripId)
         .maybeSingle();
 
@@ -270,13 +271,9 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
       const inviterName = profileRow?.username?.trim() || inviterEmail || "Someone";
 
-      let coverImageUrl: string | null = null;
-      if (trip.cover_image_path) {
-        const { data: signed } = await supabase.storage
-          .from("trip-covers")
-          .createSignedUrl(trip.cover_image_path, 3600);
-        if (signed?.signedUrl) coverImageUrl = signed.signedUrl;
-      }
+      const coverImageUrl = tripRow
+        ? await getTripCoverDisplayUrl(supabase, tripRow, "preview")
+        : null;
 
       const payload = buildInvitationEmailPayload(
         trip,

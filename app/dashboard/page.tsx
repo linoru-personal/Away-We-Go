@@ -56,7 +56,7 @@ function DashboardInner({ user }: { user: User }) {
     trips,
     loadingTrips,
     refetchTrips,
-    coverSignedUrls,
+    coverPreviewSignedUrls,
     destinationSignedUrls,
   } = useDashboardTrips();
 
@@ -217,7 +217,7 @@ function DashboardInner({ user }: { user: User }) {
                   startDate={t.start_date ?? "—"}
                   endDate={t.end_date ?? "—"}
                   coverImageUrl={
-                    coverSignedUrls[t.id] ??
+                    coverPreviewSignedUrls[t.id] ??
                     destinationSignedUrls[t.id] ??
                     t.cover_image_url ??
                     undefined

@@ -85,14 +85,14 @@ function tripChildLinks(tripId: string): NavChild[] {
 export function DashboardSidebar({
   trips,
   loadingTrips,
-  coverSignedUrls,
+  coverThumbSignedUrls,
   destinationSignedUrls,
   onNavigate,
   embedded,
 }: {
   trips: DashboardTrip[];
   loadingTrips: boolean;
-  coverSignedUrls: Record<string, string>;
+  coverThumbSignedUrls: Record<string, string>;
   destinationSignedUrls: Record<string, string>;
   /** Close mobile drawer after navigation */
   onNavigate?: () => void;
@@ -144,7 +144,7 @@ export function DashboardSidebar({
       <ul className="mt-2 space-y-0.5">
         {list.map((t) => {
           const thumb =
-            coverSignedUrls[t.id] ||
+            coverThumbSignedUrls[t.id] ||
             destinationSignedUrls[t.id] ||
             t.cover_image_url ||
             null;

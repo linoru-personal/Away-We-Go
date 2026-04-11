@@ -24,6 +24,13 @@ import {
   getExistingEditableAssetId,
   updateEditableImageAssetCrop,
 } from "@/lib/editable-image-assets/upload";
+import { uploadTripCoverToMedia, clearTripCoverMediaAndLegacy } from "@/lib/trip-media/upload-trip-cover";
+import {
+  getTripCoverDisplayUrl,
+  createSignedUrlForCoverLocation,
+} from "@/lib/trip-media/resolve-cover";
+import { parseTripMediaCoverFromRow, tripHasPersistedCover } from "@/lib/trip-media/parse";
+import { TRIP_MEDIA_BUCKET } from "@/lib/trip-media/types";
 import {
   DESTINATION_HERO_ASPECT_CLASS,
   TRIP_HERO_ASPECT_CLASS,
@@ -38,6 +45,7 @@ export type TripForForm = {
   end_date: string | null;
   cover_image_url: string | null;
   cover_image_path: string | null;
+  media?: unknown;
   destination_image_url: string | null;
   created_at: string | null;
 };
@@ -104,6 +112,7 @@ export default function TripFormModal({
   const [destinationPreviewUrl, setDestinationPreviewUrl] = useState<string | null>(null);
   const avatarOriginalFileRef = useRef<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [coverBusy, setCoverBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const destinationFileInputRef = useRef<HTMLInputElement>(null);
@@ -124,14 +133,10 @@ export default function TripFormModal({
       setCoverCropMetadata(null);
       setCoverPreviewUrl(null);
       setError(null);
-      if (trip.cover_image_path) {
-        supabase.storage
-          .from("trip-covers")
-          .createSignedUrl(trip.cover_image_path, 3600)
-          .then(({ data }) => {
-            if (data?.signedUrl) setExistingCoverSignedUrl(data.signedUrl);
-            else setExistingCoverSignedUrl(null);
-          });
+      if (tripHasPersistedCover(trip)) {
+        getTripCoverDisplayUrl(supabase, trip, "preview").then((u) => {
+          setExistingCoverSignedUrl(u);
+        });
       } else {
         setExistingCoverSignedUrl(null);
       }
@@ -150,7 +155,19 @@ export default function TripFormModal({
         hasJustUploadedDestinationRef.current = false;
       }
     }
-  }, [open, trip?.id, trip?.title, trip?.destination, trip?.start_date, trip?.end_date, trip?.cover_image_path, trip?.destination_image_url, mode]);
+  }, [
+    open,
+    trip?.id,
+    trip?.title,
+    trip?.destination,
+    trip?.start_date,
+    trip?.end_date,
+    trip?.cover_image_path,
+    trip?.cover_image_url,
+    trip?.media,
+    trip?.destination_image_url,
+    mode,
+  ]);
 
   // Load participants when editing
   useEffect(() => {
@@ -263,13 +280,27 @@ export default function TripFormModal({
     if (!trip?.id) return;
     setCoverSourceLoading(true);
     try {
+      if (parseTripMediaCoverFromRow(trip.media ?? null)) {
+        const fromMedia = await getTripCoverDisplayUrl(supabase, trip, "original");
+        if (fromMedia) {
+          coverRecropContextRef.current = { existingAssetId: null, cropMetadata: null };
+          setCoverImageSrcForCrop(fromMedia);
+          setCoverCropOpen(true);
+          return;
+        }
+      }
       const source = await getEditableImageSource(supabase, {
         tripId: trip.id,
         ownerType: "trip_cover",
         legacyPath: trip.cover_image_path,
       });
       if (!source) {
-        if (existingCoverSignedUrl) {
+        const legacyOriginal = await getTripCoverDisplayUrl(supabase, trip, "original");
+        if (legacyOriginal) {
+          coverRecropContextRef.current = { existingAssetId: null, cropMetadata: null };
+          setCoverImageSrcForCrop(legacyOriginal);
+          setCoverCropOpen(true);
+        } else if (existingCoverSignedUrl) {
           setCoverImageSrcForCrop(existingCoverSignedUrl);
           coverRecropContextRef.current = { existingAssetId: null, cropMetadata: null };
           setCoverCropOpen(true);
@@ -369,19 +400,24 @@ export default function TripFormModal({
 
   const removeCoverImage = async () => {
     if (!trip?.id) return;
-    await supabase
-      .from("trips")
-      .update({ cover_image_path: null })
-      .eq("id", trip.id);
-    setExistingCoverSignedUrl(null);
-    setCoverPreviewUrl((prev) => {
-      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-      return null;
-    });
-    setCoverFile(null);
-    setCoverCroppedBlob(null);
-    setCoverCropMetadata(null);
-    onSuccess?.();
+    setCoverBusy(true);
+    setError(null);
+    try {
+      await clearTripCoverMediaAndLegacy(supabase, trip.id);
+      setExistingCoverSignedUrl(null);
+      setCoverPreviewUrl((prev) => {
+        if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+        return null;
+      });
+      setCoverFile(null);
+      setCoverCroppedBlob(null);
+      setCoverCropMetadata(null);
+      await Promise.resolve(onSuccess?.());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not remove cover image.");
+    } finally {
+      setCoverBusy(false);
+    }
   };
 
   const clearCoverState = () => {
@@ -684,12 +720,9 @@ export default function TripFormModal({
 
         if (coverFile && coverCroppedBlob && coverCropMetadata) {
           try {
-            await saveEditableImageAsset(supabase, {
+            await uploadTripCoverToMedia(supabase, {
               tripId,
-              ownerType: "trip_cover",
-              originalFile: coverFile,
-              croppedBlob: coverCroppedBlob,
-              cropMetadata: coverCropMetadata,
+              sourceImage: coverCroppedBlob,
             });
           } catch (err) {
             console.error("Cover upload error", err);
@@ -764,14 +797,9 @@ export default function TripFormModal({
 
         if (coverFile && coverCroppedBlob && coverCropMetadata && trip.id) {
           try {
-            const existingId = await getExistingEditableAssetId(supabase, trip.id, "trip_cover");
-            await saveEditableImageAsset(supabase, {
+            await uploadTripCoverToMedia(supabase, {
               tripId: trip.id,
-              ownerType: "trip_cover",
-              originalFile: coverFile,
-              croppedBlob: coverCroppedBlob,
-              cropMetadata: coverCropMetadata,
-              existingAssetId: existingId,
+              sourceImage: coverCroppedBlob,
             });
           } catch (err) {
             setError(err instanceof Error ? err.message : "Cover image upload failed.");
@@ -871,18 +899,21 @@ export default function TripFormModal({
                   {displayCoverUrl && (
                     <ImageActionsOverlay
                       onEditCrop={
-                        mode === "edit" && existingCoverSignedUrl
+                        mode === "edit" &&
+                        trip &&
+                        tripHasPersistedCover(trip) &&
+                        !coverCroppedBlob
                           ? handleEditCoverCrop
                           : undefined
                       }
                       onReplace={() => fileInputRef.current?.click()}
                       onRemove={
-                        mode === "edit" && existingCoverSignedUrl
+                        mode === "edit" && trip && tripHasPersistedCover(trip)
                           ? removeCoverImage
                           : clearCoverState
                       }
-                      disabled={saving}
-                      editLoading={coverSourceLoading}
+                      disabled={saving || coverBusy}
+                      editLoading={coverSourceLoading || coverBusy}
                     />
                   )}
                 </div>
@@ -1127,17 +1158,17 @@ export default function TripFormModal({
             <button
               type="button"
               onClick={onClose}
-              disabled={saving}
+              disabled={saving || coverBusy}
               className="flex-1 rounded-full border border-[#e0d9d2] bg-transparent px-4 py-3 text-sm font-medium text-[#1f1f1f] transition hover:bg-[#f6f2ed] focus:outline-none focus:ring-2 focus:ring-[#d97b5e]/30 focus:ring-offset-2 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || coverBusy}
               className="flex-1 rounded-full bg-[#d97b5e] px-4 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(217,123,94,0.25)] transition hover:bg-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#d97b5e] focus:ring-offset-2 focus:ring-offset-white active:bg-[#b85a42] disabled:opacity-60"
             >
-              {saving ? "Please wait…" : isCreate ? "Create Trip" : "Save Changes"}
+              {saving || coverBusy ? "Please wait…" : isCreate ? "Create Trip" : "Save Changes"}
             </button>
           </div>
         </form>
@@ -1237,7 +1268,6 @@ export default function TripFormModal({
             imageSrc={coverImageSrcForCrop}
             initialCropMetadata={coverRecropContextRef.current?.cropMetadata ?? undefined}
             onCropComplete={(blob, cropMetadata) => {
-              const recrop = coverRecropContextRef.current;
               const srcUrl = coverImageSrcForCrop;
               setCoverCroppedBlob(blob);
               setCoverCropMetadata(cropMetadata);
@@ -1249,64 +1279,33 @@ export default function TripFormModal({
               coverRecropContextRef.current = null;
 
               if (mode === "edit" && trip?.id) {
-                (async () => {
+                void (async () => {
+                  setCoverBusy(true);
+                  setError(null);
                   try {
-                    if (recrop) {
-                      if (recrop.existingAssetId) {
-                        await updateEditableImageAssetCrop(supabase, {
-                          existingAssetId: recrop.existingAssetId,
-                          tripId: trip.id,
-                          ownerType: "trip_cover",
-                          croppedBlob: blob,
-                          cropMetadata,
-                        });
-                      } else {
-                        const res = await fetch(srcUrl!);
-                        const legacyBlob = await res.blob();
-                        const originalFile = new File([legacyBlob], "original.jpg", { type: "image/jpeg" });
-                        await saveEditableImageAsset(supabase, {
-                          tripId: trip.id,
-                          ownerType: "trip_cover",
-                          originalFile,
-                          croppedBlob: blob,
-                          cropMetadata,
-                        });
-                      }
-                    } else if (coverFile) {
-                      const existingId = await getExistingEditableAssetId(supabase, trip.id, "trip_cover");
-                      await saveEditableImageAsset(supabase, {
-                        tripId: trip.id,
-                        ownerType: "trip_cover",
-                        originalFile: coverFile,
-                        croppedBlob: blob,
-                        cropMetadata,
-                        existingAssetId: existingId,
-                      });
-                    } else {
-                      const path = `${trip.id}/cover.jpg`;
-                      const { error: uploadError } = await supabase.storage
-                        .from("trip-covers")
-                        .upload(path, blob, { upsert: true, contentType: "image/jpeg" });
-                      if (!uploadError) {
-                        await supabase.from("trips").update({ cover_image_path: path }).eq("id", trip.id);
-                      }
-                    }
-                    onSuccess?.();
-                    const { data } = await supabase.storage
-                      .from("trip-covers")
-                      .createSignedUrl(`${trip.id}/cover.jpg`, 3600);
-                    if (data?.signedUrl) {
-                      setExistingCoverSignedUrl(data.signedUrl);
-                      setCoverPreviewUrl((prev) => {
-                        if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
-                        return null;
-                      });
-                      setCoverFile(null);
-                      setCoverCroppedBlob(null);
-                      setCoverCropMetadata(null);
-                    }
+                    const { paths } = await uploadTripCoverToMedia(supabase, {
+                      tripId: trip.id,
+                      sourceImage: blob,
+                    });
+                    const signed = await createSignedUrlForCoverLocation(
+                      supabase,
+                      { bucket: TRIP_MEDIA_BUCKET, path: paths.preview },
+                      3600
+                    );
+                    setExistingCoverSignedUrl(signed);
+                    setCoverPreviewUrl((prev) => {
+                      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+                      return null;
+                    });
+                    setCoverFile(null);
+                    setCoverCroppedBlob(null);
+                    setCoverCropMetadata(null);
+                    await Promise.resolve(onSuccess?.());
                   } catch (err) {
                     console.error("Cover save failed", err);
+                    setError(err instanceof Error ? err.message : "Cover upload failed.");
+                  } finally {
+                    setCoverBusy(false);
                   }
                 })();
               }

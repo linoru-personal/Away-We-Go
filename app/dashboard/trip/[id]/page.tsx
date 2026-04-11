@@ -31,6 +31,7 @@ import {
 import { Sparkles } from "lucide-react";
 import { fetchTripByIdForUser } from "@/lib/fetch-trip-for-user";
 import { useDashboardTripsOptional } from "@/components/dashboard/dashboard-trips-context";
+import { useTripCoverSignedUrl } from "@/app/lib/useTripCoverSignedUrl";
 
 function MapPinIcon({ className }: { className?: string }) {
   return (
@@ -60,6 +61,7 @@ type Trip = {
   end_date: string | null;
   cover_image_url: string | null;
   cover_image_path: string | null;
+  media?: unknown;
   destination_image_url: string | null;
   created_at: string | null;
 };
@@ -144,7 +146,7 @@ export default function TripPage() {
   const [resendingInvitationId, setResendingInvitationId] = useState<string | null>(null);
   const [revokingInvitationId, setRevokingInvitationId] = useState<string | null>(null);
 
-  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const coverImageUrl = useTripCoverSignedUrl(trip, "preview");
   const [destinationImageUrl, setDestinationImageUrl] = useState<string | null>(null);
   const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
 
@@ -413,30 +415,6 @@ export default function TripPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [menuOpen]);
 
-  // Signed URL for private cover image (1 hour expiry)
-  useEffect(() => {
-    if (!trip?.cover_image_path) {
-      setCoverImageUrl(null);
-      return;
-    }
-    let cancelled = false;
-    supabase.storage
-      .from("trip-covers")
-      .createSignedUrl(trip.cover_image_path, 3600)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          console.error("Cover signed URL:", error);
-          setCoverImageUrl(null);
-        } else if (data?.signedUrl) {
-          setCoverImageUrl(data.signedUrl);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [trip?.cover_image_path]);
-
   // Signed URL for destination (hero) image when set
   useEffect(() => {
     if (!trip?.destination_image_url) {
@@ -613,7 +591,7 @@ export default function TripPage() {
               <TripHero
                 title={trip.title}
                 dates={formatTripDateRange(trip.start_date, trip.end_date)}
-                imageUrl={coverImageUrl ?? trip.cover_image_url ?? undefined}
+                imageUrl={coverImageUrl ?? undefined}
                 onBack={() => router.push("/dashboard")}
                 participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
                 topRight={
@@ -906,7 +884,7 @@ export default function TripPage() {
                 <TripNotesSummaryCard tripId={trip.id} />
 
                 {/* Packing */}
-                <PackingSummaryCard tripId={trip.id} tripCoverImageUrl={coverImageUrl ?? trip.cover_image_url ?? undefined} />
+                <PackingSummaryCard tripId={trip.id} tripCoverImageUrl={coverImageUrl ?? undefined} />
 
                 {/* Tasks */}
                 <TasksSummaryCard tripId={trip.id} />

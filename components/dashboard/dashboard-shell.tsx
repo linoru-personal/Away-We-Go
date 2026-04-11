@@ -12,7 +12,7 @@ function DashboardShellInner({ children }: { children: ReactNode }) {
   const {
     trips,
     loadingTrips,
-    coverSignedUrls,
+    coverThumbSignedUrls,
     destinationSignedUrls,
   } = useDashboardTrips();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -24,7 +24,7 @@ function DashboardShellInner({ children }: { children: ReactNode }) {
         <DashboardSidebar
           trips={trips}
           loadingTrips={loadingTrips}
-          coverSignedUrls={coverSignedUrls}
+          coverThumbSignedUrls={coverThumbSignedUrls}
           destinationSignedUrls={destinationSignedUrls}
         />
       </div>
@@ -63,7 +63,7 @@ function DashboardShellInner({ children }: { children: ReactNode }) {
             embedded
             trips={trips}
             loadingTrips={loadingTrips}
-            coverSignedUrls={coverSignedUrls}
+            coverThumbSignedUrls={coverThumbSignedUrls}
             destinationSignedUrls={destinationSignedUrls}
             onNavigate={() => setMobileOpen(false)}
           />

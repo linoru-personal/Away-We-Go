@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/app/lib/supabaseClient";
+import { getTripCoverDisplayUrl } from "@/lib/trip-media/resolve-cover";
 
 export type DashboardTrip = {
   id: string;
@@ -21,6 +22,8 @@ export type DashboardTrip = {
   end_date: string | null;
   cover_image_url: string | null;
   cover_image_path: string | null;
+  /** Canonical cover metadata (trip-media); optional until populated. */
+  media?: unknown;
   destination_image_url: string | null;
   created_at: string | null;
 };
@@ -29,7 +32,10 @@ type DashboardTripsContextValue = {
   trips: DashboardTrip[];
   loadingTrips: boolean;
   refetchTrips: () => Promise<void>;
-  coverSignedUrls: Record<string, string>;
+  /** Sidebar / small list thumbnails. */
+  coverThumbSignedUrls: Record<string, string>;
+  /** Trip cards and larger previews. */
+  coverPreviewSignedUrls: Record<string, string>;
   destinationSignedUrls: Record<string, string>;
 };
 
@@ -59,9 +65,12 @@ export function DashboardTripsProvider({
 }) {
   const [trips, setTrips] = useState<DashboardTrip[]>([]);
   const [loadingTrips, setLoadingTrips] = useState(true);
-  const [coverSignedUrls, setCoverSignedUrls] = useState<Record<string, string>>(
-    {}
-  );
+  const [coverThumbSignedUrls, setCoverThumbSignedUrls] = useState<
+    Record<string, string>
+  >({});
+  const [coverPreviewSignedUrls, setCoverPreviewSignedUrls] = useState<
+    Record<string, string>
+  >({});
   const [destinationSignedUrls, setDestinationSignedUrls] = useState<
     Record<string, string>
   >({});
@@ -98,32 +107,42 @@ export function DashboardTripsProvider({
   }, [user.id]);
 
   useEffect(() => {
-    const withPath = trips.filter((t) => t.cover_image_path);
-    if (withPath.length === 0) {
-      setCoverSignedUrls({});
+    if (trips.length === 0) {
+      void Promise.resolve().then(() => {
+        setCoverThumbSignedUrls({});
+        setCoverPreviewSignedUrls({});
+      });
       return;
     }
+    let cancelled = false;
     Promise.all(
-      withPath.map(async (t) => {
-        const { data, error } = await supabase.storage
-          .from("trip-covers")
-          .createSignedUrl(t.cover_image_path!, 3600);
-        if (error || !data?.signedUrl) return { id: t.id, url: null };
-        return { id: t.id, url: data.signedUrl };
+      trips.map(async (t) => {
+        const [thumb, preview] = await Promise.all([
+          getTripCoverDisplayUrl(supabase, t, "thumb"),
+          getTripCoverDisplayUrl(supabase, t, "preview"),
+        ]);
+        return { id: t.id, thumb, preview };
       })
     ).then((results) => {
-      const next: Record<string, string> = {};
+      if (cancelled) return;
+      const thumbs: Record<string, string> = {};
+      const previews: Record<string, string> = {};
       results.forEach((r) => {
-        if (r.url) next[r.id] = r.url;
+        if (r.thumb) thumbs[r.id] = r.thumb;
+        if (r.preview) previews[r.id] = r.preview;
       });
-      setCoverSignedUrls(next);
+      setCoverThumbSignedUrls(thumbs);
+      setCoverPreviewSignedUrls(previews);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [trips]);
 
   useEffect(() => {
     const withDestination = trips.filter((t) => t.destination_image_url);
     if (withDestination.length === 0) {
-      setDestinationSignedUrls({});
+      void Promise.resolve().then(() => setDestinationSignedUrls({}));
       return;
     }
     Promise.all(
@@ -148,10 +167,18 @@ export function DashboardTripsProvider({
       trips,
       loadingTrips,
       refetchTrips,
-      coverSignedUrls,
+      coverThumbSignedUrls,
+      coverPreviewSignedUrls,
       destinationSignedUrls,
     }),
-    [trips, loadingTrips, refetchTrips, coverSignedUrls, destinationSignedUrls]
+    [
+      trips,
+      loadingTrips,
+      refetchTrips,
+      coverThumbSignedUrls,
+      coverPreviewSignedUrls,
+      destinationSignedUrls,
+    ]
   );
 
   return (

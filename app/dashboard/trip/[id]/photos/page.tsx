@@ -11,6 +11,7 @@ import { PhotosPageClient } from "./photos-page-client";
 import { formatTripDateRange } from "@/lib/format-trip-dates";
 import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
 import { fetchTripByIdForUser } from "@/lib/fetch-trip-for-user";
+import { useTripCoverSignedUrl } from "@/app/lib/useTripCoverSignedUrl";
 
 type Trip = {
   id: string;
@@ -20,10 +21,10 @@ type Trip = {
   end_date: string | null;
   cover_image_url: string | null;
   cover_image_path: string | null;
+  media?: unknown;
 };
 
 const PHOTOS_BUCKET = "trip-photos";
-const TRIP_COVERS_BUCKET = "trip-covers";
 
 export default function TripPhotosPage() {
   const params = useParams();
@@ -34,7 +35,7 @@ export default function TripPhotosPage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const { canEditContent } = useTripRole(trip, user?.id ?? undefined);
   const [tripLoading, setTripLoading] = useState(true);
-  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const coverImageUrl = useTripCoverSignedUrl(trip, "preview");
   const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
   const [photosWithUrls, setPhotosWithUrls] = useState<PhotoWithUrl[]>([]);
   const [photosLoading, setPhotosLoading] = useState(true);
@@ -55,21 +56,10 @@ export default function TripPhotosPage() {
     fetchTripByIdForUser<Trip>(
       supabase,
       id,
-      "id, user_id, title, start_date, end_date, cover_image_url, cover_image_path"
+      "id, user_id, title, start_date, end_date, cover_image_url, cover_image_path, media"
     ).then(({ trip, error }) => {
       if (cancelled) return;
-      if (!error && trip) {
-        setTrip(trip);
-        if (trip.cover_image_path) {
-          supabase.storage
-            .from(TRIP_COVERS_BUCKET)
-            .createSignedUrl(trip.cover_image_path, 3600)
-            .then(({ data: cover }) => {
-              if (!cancelled && cover?.signedUrl)
-                setCoverImageUrl(cover.signedUrl);
-            });
-        }
-      }
+      if (!error && trip) setTrip(trip);
       setTripLoading(false);
     });
     return () => {
@@ -242,7 +232,7 @@ export default function TripPhotosPage() {
       tripId={trip.id}
       title={trip.title}
       dates={dates}
-      coverImageUrl={coverImageUrl ?? trip.cover_image_url ?? null}
+      coverImageUrl={coverImageUrl ?? null}
       participantAvatarUrls={participantAvatarUrls}
       photos={photosLoading ? [] : photosWithUrls}
       canEditContent={canEditContent}

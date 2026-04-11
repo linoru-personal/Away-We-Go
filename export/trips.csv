@@ -1,0 +1,3 @@
+id,user_id,title,start_date,end_date,cover_image_url,created_at,destination,cover_image_path,destination_image_url
+ef159827-95da-46f4-8524-ea23685b4d61,285b4079-c950-4794-9d3e-68609a8e156a,Munich April 2026,2026-04-19,2026-04-26,,2026-02-19 13:33:53.816501+00,"Bad Feilnbach, Munich",ef159827-95da-46f4-8524-ea23685b4d61/cover.jpg,ef159827-95da-46f4-8524-ea23685b4d61/destination.jpg
+eda21203-1fc9-4daf-9ca3-f0ee856e1e20,285b4079-c950-4794-9d3e-68609a8e156a,Caravan EuroTrip,2025-09-19,2025-10-17,,2026-03-11 21:11:25.624484+00,"Austria, Italy, Germany, Prague",eda21203-1fc9-4daf-9ca3-f0ee856e1e20/cover.jpg,eda21203-1fc9-4daf-9ca3-f0ee856e1e20/destination.jpg
