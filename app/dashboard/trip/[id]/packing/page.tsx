@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
@@ -8,7 +8,7 @@ import { useTripRole } from "@/app/lib/useTripRole";
 import TripHero from "@/components/trip/trip-hero";
 import { formatTripDateRange } from "@/lib/format-trip-dates";
 import { PackingList } from "@/components/packing/packing-list";
-import { getPackingGroupingMode, PACKING_GROUP_KEY_EVERYONE } from "@/lib/list-grouping";
+import { PACKING_GROUP_KEY_EVERYONE } from "@/lib/list-grouping";
 import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
 import { fetchTripByIdForUser } from "@/lib/fetch-trip-for-user";
 import { useTripCoverSignedUrl } from "@/app/lib/useTripCoverSignedUrl";
@@ -67,6 +67,25 @@ export default function PackingPage() {
   const [items, setItems] = useState<PackingItem[]>([]);
   const [participants, setParticipants] = useState<PackingParticipant[]>([]);
   const [listLoading, setListLoading] = useState(true);
+
+  const reloadCategoriesAndItems = useCallback(async () => {
+    if (!id) return;
+    const [catRes, itemsRes] = await Promise.all([
+      supabase
+        .from("packing_categories")
+        .select("id, trip_id, name, icon, sort_order")
+        .eq("trip_id", id)
+        .order("sort_order", { ascending: true })
+        .order("name", { ascending: true }),
+      supabase
+        .from("packing_items")
+        .select("id, trip_id, category_id, title, quantity, is_packed, assigned_to_participant_id, sort_order")
+        .eq("trip_id", id)
+        .order("sort_order", { ascending: true }),
+    ]);
+    if (!catRes.error && catRes.data) setCategories((catRes.data ?? []) as PackingCategory[]);
+    if (!itemsRes.error && itemsRes.data) setItems((itemsRes.data ?? []) as PackingItem[]);
+  }, [id]);
 
   useEffect(() => {
     if (!sessionLoading && !user) {
@@ -206,19 +225,7 @@ export default function PackingPage() {
               tripCoverImageUrl={coverImageUrl ?? null}
               loading={listLoading}
               canEditContent={canEditContent}
-              onRefresh={async () => {
-                const [catRes, itemsRes] = await Promise.all([
-                  supabase
-                    .from("packing_categories")
-                    .select("id, trip_id, name, icon, sort_order")
-                    .eq("trip_id", id)
-                    .order("sort_order", { ascending: true })
-                    .order("name", { ascending: true }),
-                  supabase.from("packing_items").select("id, trip_id, category_id, title, quantity, is_packed, assigned_to_participant_id, sort_order").eq("trip_id", id).order("sort_order", { ascending: true }),
-                ]);
-                if (!catRes.error && catRes.data) setCategories((catRes.data ?? []) as PackingCategory[]);
-                if (!itemsRes.error && itemsRes.data) setItems((itemsRes.data ?? []) as PackingItem[]);
-              }}
+              onRefresh={reloadCategoriesAndItems}
               onReorderGroup={async (newOrderedItems) => {
                 if (newOrderedItems.length === 0) return;
                 const minOrder = Math.min(...newOrderedItems.map((i) => i.sort_order));
@@ -235,14 +242,28 @@ export default function PackingPage() {
                 );
               }}
               onMoveItem={async (viewMode, item, fromGroupKey, toGroupKey, insertIndex) => {
-                const meta = getPackingGroupingMode(viewMode);
-                const field = meta.field as keyof PackingItem;
-                const fieldValue = meta.groupKeyToFieldValue(toGroupKey);
-
                 const getGroupKey = (i: PackingItem) =>
                   viewMode === "category"
                     ? i.category_id
                     : (i.assigned_to_participant_id ?? PACKING_GROUP_KEY_EVERYONE);
+
+                /**
+                 * Persisted assignee must never be `undefined`: PostgREST JSON.stringify drops
+                 * undefined keys, so the PATCH would only update sort_order and leave assignee NULL.
+                 */
+                const nextAssignedTo: string | null =
+                  viewMode === "participant"
+                    ? toGroupKey === PACKING_GROUP_KEY_EVERYONE
+                      ? null
+                      : toGroupKey
+                    : item.assigned_to_participant_id;
+                const nextCategoryId: string =
+                  viewMode === "category" ? toGroupKey : item.category_id;
+
+                const movedItemPreview: PackingItem =
+                  viewMode === "participant"
+                    ? { ...item, assigned_to_participant_id: nextAssignedTo }
+                    : { ...item, category_id: nextCategoryId };
 
                 const groupKeysInOrder: string[] =
                   viewMode === "category"
@@ -253,7 +274,7 @@ export default function PackingPage() {
                 const destItems = items.filter((i) => getGroupKey(i) === toGroupKey);
                 const newDestItems = [
                   ...destItems.slice(0, insertIndex),
-                  { ...item, [field]: fieldValue } as PackingItem,
+                  movedItemPreview,
                   ...destItems.slice(insertIndex),
                 ];
 
@@ -266,26 +287,41 @@ export default function PackingPage() {
                 const flat: PackingItem[] = [];
                 for (const key of groupKeysInOrder) {
                   const list = itemsByKey.get(key) ?? [];
-                  for (let i = 0; i < list.length; i++) {
-                    flat.push({ ...list[i], sort_order: flat.length });
+                  for (let j = 0; j < list.length; j++) {
+                    flat.push({ ...list[j], sort_order: flat.length });
                   }
+                }
+
+                const movedRow = flat.find((i) => i.id === item.id);
+                if (!movedRow) {
+                  await reloadCategoriesAndItems();
+                  return;
                 }
 
                 setItems(flat);
 
-                await supabase
-                  .from("packing_items")
-                  .update({ [field]: fieldValue, sort_order: flat.find((i) => i.id === item.id)!.sort_order })
-                  .eq("id", item.id);
+                const primaryUpdate =
+                  viewMode === "participant"
+                    ? { assigned_to_participant_id: nextAssignedTo, sort_order: movedRow.sort_order }
+                    : { category_id: nextCategoryId, sort_order: movedRow.sort_order };
+
+                const { error: moveErr } = await supabase.from("packing_items").update(primaryUpdate).eq("id", item.id);
+                if (moveErr) {
+                  await reloadCategoriesAndItems();
+                  return;
+                }
 
                 const toUpdate = flat.filter(
                   (i) => i.id !== item.id && (getGroupKey(i) === fromGroupKey || getGroupKey(i) === toGroupKey)
                 );
-                await Promise.all(
+                const sortResults = await Promise.all(
                   toUpdate.map((i) =>
                     supabase.from("packing_items").update({ sort_order: i.sort_order }).eq("id", i.id)
                   )
                 );
+                if (sortResults.some((r) => r.error)) {
+                  await reloadCategoriesAndItems();
+                }
               }}
             />
           </>

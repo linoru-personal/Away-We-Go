@@ -95,19 +95,25 @@ export function PackingSummaryCard({ tripId, tripCoverImageUrl }: PackingSummary
     const assigned = items.filter((i) => i.assigned_to_participant_id === p.id);
     return { participant: p, assigned, packed: assigned.filter((i) => i.is_packed).length };
   });
+
   const participantStats: { key: string; label: string; avatarUrl: string | null; total: number; packed: number }[] = [
     ...(everyoneItems.length > 0
       ? [{ key: "__everyone__", label: "Everyone", avatarUrl: (tripCoverImageUrl ?? null) as string | null, total: everyoneItems.length, packed: everyoneItems.filter((i) => i.is_packed).length }]
       : []),
     ...byParticipant
       .filter((x) => x.assigned.length > 0)
-      .map((x, i) => ({
-        key: x.participant.id,
-        label: x.participant.name,
-        avatarUrl: participantAvatarUrls[i] ?? null,
-        total: x.assigned.length,
-        packed: x.packed,
-      })),
+      .map((x) => {
+        const pIdx = participants.findIndex((p) => p.id === x.participant.id);
+        const avatarUrl =
+          pIdx >= 0 ? (participantAvatarUrls[pIdx] ?? null) : null;
+        return {
+          key: x.participant.id,
+          label: x.participant.name,
+          avatarUrl,
+          total: x.assigned.length,
+          packed: x.packed,
+        };
+      }),
   ];
 
   return (
@@ -115,7 +121,7 @@ export function PackingSummaryCard({ tripId, tripCoverImageUrl }: PackingSummary
       href={`/dashboard/trip/${tripId}/packing`}
       className={`${DASHBOARD_CARD_CLASS} ${DASHBOARD_CARD_LINK_CLASS}`}
     >
-      <div className={DASHBOARD_CARD_CONTENT_CLASS}>
+      <div className={`@container ${DASHBOARD_CARD_CONTENT_CLASS}`}>
         <div className="flex w-full flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <h2 className={SECTION_TITLE_CLASS}>Packing</h2>
@@ -137,9 +143,14 @@ export function PackingSummaryCard({ tripId, tripCoverImageUrl }: PackingSummary
           </div>
 
           {participantStats.length > 0 ? (
-            <ul className={`${CARD_CONTENT_MT} space-y-2`}>
+            <ul
+              className={`${CARD_CONTENT_MT} grid grid-cols-1 gap-x-4 gap-y-2 @md:grid-cols-2 @2xl:grid-cols-3`}
+            >
               {participantStats.map((stat) => (
-                <li key={stat.key} className="flex items-center gap-2">
+                <li
+                  key={stat.key}
+                  className={`flex min-w-0 items-center gap-2${stat.key === "__everyone__" ? " @md:col-span-full" : ""}`}
+                >
                   {stat.avatarUrl ? (
                     <img
                       src={stat.avatarUrl}

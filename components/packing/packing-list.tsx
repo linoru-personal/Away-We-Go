@@ -154,6 +154,8 @@ export function PackingList({
   /** When set, opening the add modal will prefill category/assignee from this group key (via grouping meta). */
   const [addPrefillGroupKey, setAddPrefillGroupKey] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  /** Which list layout (`viewMode`) the user started inline edit from — avoids showing the editor on the wrong branch. */
+  const [editSessionView, setEditSessionView] = useState<"category" | "participant" | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editQuantity, setEditQuantity] = useState(1);
   const [editCategoryId, setEditCategoryId] = useState("");
@@ -304,7 +306,7 @@ export function PackingList({
       title,
       quantity: addQuantity >= 1 ? addQuantity : 1,
       is_packed: false,
-      assigned_to_participant_id: addAssignedTo,
+      assigned_to_participant_id: addAssignedTo ?? null,
     });
     setAddSaving(false);
     if (error) {
@@ -323,13 +325,30 @@ export function PackingList({
     if (!addModalOpen || !addPrefillGroupKey || !canEditContent) return;
     const meta = getPackingGroupingMode(viewMode);
     const value = meta.groupKeyToFieldValue(addPrefillGroupKey);
-    if (meta.field === "category_id") setAddCategoryId(String(value ?? ""));
-    else setAddAssignedTo(value as string | null);
+    if (meta.field === "category_id") {
+      setAddCategoryId(String(value ?? ""));
+    } else {
+      setAddAssignedTo(value as string | null);
+      setAddCategoryId((prev) =>
+        typeof prev === "string" && prev.trim() !== "" ? prev : categories[0]?.id ?? ""
+      );
+    }
     setAddPrefillGroupKey(null);
-  }, [addModalOpen, addPrefillGroupKey, viewMode, canEditContent]);
+  }, [addModalOpen, addPrefillGroupKey, viewMode, canEditContent, categories]);
+
+  useEffect(() => {
+    setEditingId(null);
+    setEditSessionView(null);
+  }, [viewMode]);
+
+  function clearInlineEdit() {
+    setEditingId(null);
+    setEditSessionView(null);
+  }
 
   function openEdit(item: PackingItem) {
     setEditingId(item.id);
+    setEditSessionView(viewMode);
     setEditTitle(item.title);
     setEditQuantity(item.quantity);
     setEditCategoryId(item.category_id);
@@ -339,6 +358,7 @@ export function PackingList({
   function openAddFromGroup(groupKey: string) {
     setAddPrefillGroupKey(groupKey);
     setAddModalMode("add-item");
+    setAddCategoryId((prev) => (typeof prev === "string" && prev.trim() !== "" ? prev : categories[0]?.id ?? ""));
     setAddModalOpen(true);
   }
 
@@ -353,12 +373,12 @@ export function PackingList({
         title,
         quantity: editQuantity >= 1 ? editQuantity : 1,
         category_id: editCategoryId,
-        assigned_to_participant_id: editAssignedTo,
+        assigned_to_participant_id: editAssignedTo ?? null,
       })
       .eq("id", editingId);
     setEditSaving(false);
     if (error) return;
-    setEditingId(null);
+    clearInlineEdit();
     await onRefresh();
   }
 
@@ -368,7 +388,59 @@ export function PackingList({
     setDeleteLoading(false);
     setDeleteConfirmId(null);
     if (error) return;
+    if (editingId === itemId) clearInlineEdit();
     await onRefresh();
+  }
+
+  /** LTR + stable order: list rows may use `dir="rtl"` for titles, which reverses flex and breaks "Delete?". */
+  function renderPackingItemEditDeleteActions(item: PackingItem) {
+    return (
+      <div
+        className="flex shrink-0 flex-row items-center gap-1.5"
+        dir="ltr"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {deleteConfirmId === item.id ? (
+          <span className="inline-flex items-center gap-2 whitespace-nowrap">
+            <span className="text-xs font-medium text-[#6B7280]">Delete?</span>
+            <button
+              type="button"
+              className="rounded-md px-2 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
+              onClick={() => handleDelete(item.id)}
+              disabled={deleteLoading}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              className="rounded-md px-2 py-1 text-xs font-medium text-[#4A4A4A] transition hover:bg-[#F5F3F0]"
+              onClick={() => setDeleteConfirmId(null)}
+            >
+              No
+            </button>
+          </span>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="rounded p-1 text-[#6B7280] transition hover:bg-[#F5F3F0]"
+              onClick={() => openEdit(item)}
+              aria-label="Edit"
+            >
+              <PencilIcon />
+            </button>
+            <button
+              type="button"
+              className="rounded p-1 text-[#6B7280] transition hover:bg-[#F5F3F0]"
+              onClick={() => setDeleteConfirmId(item.id)}
+              aria-label="Delete"
+            >
+              <TrashIcon />
+            </button>
+          </>
+        )}
+      </div>
+    );
   }
 
   if (loading) {
@@ -561,7 +633,7 @@ export function PackingList({
                       >
                         {item.is_packed && <CheckIcon />}
                       </button>
-                      {editingId === item.id ? (
+                      {editingId === item.id && editSessionView === viewMode ? (
                         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                           <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} dir="auto" style={{ unicodeBidi: "plaintext" }} className="min-w-[120px] rounded border border-[#D4C5BA] px-2 py-1 text-sm" />
                           <input type="number" min={1} value={editQuantity} onChange={(e) => setEditQuantity(parseInt(e.target.value, 10) || 1)} className="w-14 rounded border border-[#D4C5BA] px-2 py-1 text-sm" />
@@ -573,7 +645,7 @@ export function PackingList({
                             {participants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                           </select>
                           <button type="button" className="rounded bg-[#E07A5F] px-2 py-1 text-sm text-white disabled:opacity-50" onClick={handleSaveEdit} disabled={editSaving}>Save</button>
-                          <button type="button" className="rounded border border-[#D4C5BA] px-2 py-1 text-sm" onClick={() => setEditingId(null)}>Cancel</button>
+                          <button type="button" className="rounded border border-[#D4C5BA] px-2 py-1 text-sm" onClick={() => clearInlineEdit()}>Cancel</button>
                         </div>
                       ) : (
                         <>
@@ -581,14 +653,7 @@ export function PackingList({
                             <p className={item.is_packed ? "text-sm font-medium text-[#9B7B6B] line-through" : "text-sm font-medium text-[#4A4A4A]"} dir={listRtl ? "rtl" : "ltr"} style={{ unicodeBidi: "plaintext" }}>{item.title}</p>
                             <p className="text-xs text-[#9B7B6B]"><span dir="ltr">{getAssigneeLabel(item, participants)}</span>{item.quantity > 1 && <span dir="ltr" className="ms-1">× {item.quantity}</span>}</p>
                           </div>
-                          <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
-                            <button type="button" className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]" onClick={() => openEdit(item)} aria-label="Edit"><PencilIcon /></button>
-                            {deleteConfirmId === item.id ? (
-                              <><span className="text-xs text-[#6B7280]">Delete?</span><button type="button" className="text-xs text-red-600 hover:underline" onClick={() => handleDelete(item.id)} disabled={deleteLoading}>Yes</button><button type="button" className="text-xs text-[#6B7280] hover:underline" onClick={() => setDeleteConfirmId(null)}>No</button></>
-                            ) : (
-                              <button type="button" className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]" onClick={() => setDeleteConfirmId(item.id)} aria-label="Delete"><TrashIcon /></button>
-                            )}
-                          </div>
+                          {renderPackingItemEditDeleteActions(item)}
                         </>
                       )}
                     </div>
@@ -674,7 +739,7 @@ export function PackingList({
                                 {item.is_packed && <CheckIcon />}
                               </span>
                             )}
-                            {editingId === item.id && canEditContent ? (
+                            {editingId === item.id && editSessionView === viewMode && canEditContent ? (
                               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                                 <input
                                   type="text"
@@ -723,7 +788,7 @@ export function PackingList({
                                 <button
                                   type="button"
                                   className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                  onClick={() => setEditingId(null)}
+                                  onClick={() => clearInlineEdit()}
                                 >
                                   Cancel
                                 </button>
@@ -747,47 +812,7 @@ export function PackingList({
                                     )}
                                   </p>
                                 </div>
-                                {canEditContent && (
-                                  <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
-                                    <button
-                                      type="button"
-                                      className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]"
-                                      onClick={() => openEdit(item)}
-                                      aria-label="Edit"
-                                    >
-                                      <PencilIcon />
-                                    </button>
-                                    {deleteConfirmId === item.id ? (
-                                      <>
-                                        <span className="text-xs text-[#6B7280]">Delete?</span>
-                                        <button
-                                          type="button"
-                                          className="text-xs text-red-600 hover:underline"
-                                          onClick={() => handleDelete(item.id)}
-                                          disabled={deleteLoading}
-                                        >
-                                          Yes
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="text-xs text-[#6B7280] hover:underline"
-                                          onClick={() => setDeleteConfirmId(null)}
-                                        >
-                                          No
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]"
-                                        onClick={() => setDeleteConfirmId(item.id)}
-                                        aria-label="Delete"
-                                      >
-                                        <TrashIcon />
-                                      </button>
-                                    )}
-                                  </div>
-                                )}
+                                {canEditContent && renderPackingItemEditDeleteActions(item)}
                               </>
                             )}
                           </div>
@@ -823,7 +848,7 @@ export function PackingList({
                               {item.is_packed && <CheckIcon />}
                             </span>
                           )}
-                          {editingId === item.id && canEditContent ? (
+                          {editingId === item.id && editSessionView === viewMode && canEditContent ? (
                             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                               <input
                                 type="text"
@@ -872,7 +897,7 @@ export function PackingList({
                               <button
                                 type="button"
                                 className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                onClick={() => setEditingId(null)}
+                                onClick={() => clearInlineEdit()}
                               >
                                 Cancel
                               </button>
@@ -896,47 +921,7 @@ export function PackingList({
                                   )}
                                 </p>
                               </div>
-                              {canEditContent && (
-                                <div className="flex shrink-0 gap-1">
-                                  <button
-                                    type="button"
-                                    className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]"
-                                    onClick={() => openEdit(item)}
-                                    aria-label="Edit"
-                                  >
-                                    <PencilIcon />
-                                  </button>
-                                  {deleteConfirmId === item.id ? (
-                                    <>
-                                      <span className="text-xs text-[#6B7280]">Delete?</span>
-                                      <button
-                                        type="button"
-                                        className="text-xs text-red-600 hover:underline"
-                                        onClick={() => handleDelete(item.id)}
-                                        disabled={deleteLoading}
-                                      >
-                                        Yes
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="text-xs text-[#6B7280] hover:underline"
-                                        onClick={() => setDeleteConfirmId(null)}
-                                      >
-                                        No
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]"
-                                      onClick={() => setDeleteConfirmId(item.id)}
-                                      aria-label="Delete"
-                                    >
-                                      <TrashIcon />
-                                    </button>
-                                  )}
-                                </div>
-                              )}
+                              {canEditContent && renderPackingItemEditDeleteActions(item)}
                             </>
                           )}
                         </div>
@@ -1022,18 +1007,29 @@ export function PackingList({
                       >
                         {item.is_packed && <CheckIcon />}
                       </button>
-                      <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
-                        <p className={item.is_packed ? "text-sm font-medium text-[#9B7B6B] line-through" : "text-sm font-medium text-[#4A4A4A]"} dir={listRtl ? "rtl" : "ltr"} style={{ unicodeBidi: "plaintext" }}>{item.title}</p>
-                        <p className="text-xs text-[#9B7B6B]"><span dir="ltr">{getCategoryName(item.category_id, categories)}</span>{item.quantity > 1 && <span dir="ltr" className="ms-1">× {item.quantity}</span>}</p>
-                      </div>
-                      <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
-                        <button type="button" className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]" onClick={() => openEdit(item)} aria-label="Edit"><PencilIcon /></button>
-                        {deleteConfirmId === item.id ? (
-                          <button type="button" className="text-xs text-red-600" onClick={() => handleDelete(item.id)} disabled={deleteLoading}>Yes</button>
-                        ) : (
-                          <button type="button" className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]" onClick={() => setDeleteConfirmId(item.id)} aria-label="Delete"><TrashIcon /></button>
-                        )}
-                      </div>
+                      {editingId === item.id && editSessionView === viewMode ? (
+                        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                          <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} dir="auto" style={{ unicodeBidi: "plaintext" }} className="min-w-[120px] rounded border border-[#D4C5BA] px-2 py-1 text-sm" />
+                          <input type="number" min={1} value={editQuantity} onChange={(e) => setEditQuantity(parseInt(e.target.value, 10) || 1)} className="w-14 rounded border border-[#D4C5BA] px-2 py-1 text-sm" />
+                          <select value={editCategoryId} onChange={(e) => setEditCategoryId(e.target.value)} className="rounded border border-[#D4C5BA] px-2 py-1 text-sm">
+                            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                          <select value={editAssignedTo ?? "everyone"} onChange={(e) => setEditAssignedTo(e.target.value === "everyone" ? null : e.target.value)} className="rounded border border-[#D4C5BA] px-2 py-1 text-sm">
+                            <option value="everyone">Everyone</option>
+                            {participants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                          <button type="button" className="rounded bg-[#E07A5F] px-2 py-1 text-sm text-white disabled:opacity-50" onClick={handleSaveEdit} disabled={editSaving}>Save</button>
+                          <button type="button" className="rounded border border-[#D4C5BA] px-2 py-1 text-sm" onClick={() => clearInlineEdit()}>Cancel</button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
+                            <p className={item.is_packed ? "text-sm font-medium text-[#9B7B6B] line-through" : "text-sm font-medium text-[#4A4A4A]"} dir={listRtl ? "rtl" : "ltr"} style={{ unicodeBidi: "plaintext" }}>{item.title}</p>
+                            <p className="text-xs text-[#9B7B6B]"><span dir="ltr">{getCategoryName(item.category_id, categories)}</span>{item.quantity > 1 && <span dir="ltr" className="ms-1">× {item.quantity}</span>}</p>
+                          </div>
+                          {renderPackingItemEditDeleteActions(item)}
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1137,53 +1133,81 @@ export function PackingList({
                                 {item.is_packed && <CheckIcon />}
                               </span>
                             )}
-                            <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
-                              <p
-                                className={item.is_packed ? "text-sm font-medium text-[#9B7B6B] line-through" : "text-sm font-medium text-[#4A4A4A]"}
-                                dir={listRtl ? "rtl" : "ltr"}
-                                style={{ unicodeBidi: "plaintext" }}
-                              >
-                                {item.title}
-                              </p>
-                              <p className="text-xs text-[#9B7B6B]">
-                                <span dir="ltr">
-                                  {getCategoryName(item.category_id, categories)}
-                                </span>
-                                {item.quantity > 1 && (
-                                  <span dir="ltr" className="ms-1">× {item.quantity}</span>
-                                )}
-                              </p>
-                            </div>
-                            {canEditContent && (
-                              <div className="flex shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
+                            {editingId === item.id && editSessionView === viewMode && canEditContent ? (
+                              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={editTitle}
+                                  onChange={(e) => setEditTitle(e.target.value)}
+                                  dir="auto"
+                                  style={{ unicodeBidi: "plaintext" }}
+                                  className="min-w-[120px] rounded border border-[#D4C5BA] px-2 py-1 text-sm"
+                                />
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={editQuantity}
+                                  onChange={(e) => setEditQuantity(parseInt(e.target.value, 10) || 1)}
+                                  className="w-14 rounded border border-[#D4C5BA] px-2 py-1 text-sm"
+                                />
+                                <select
+                                  value={editCategoryId}
+                                  onChange={(e) => setEditCategoryId(e.target.value)}
+                                  className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
+                                >
+                                  {categories.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {c.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={editAssignedTo ?? "everyone"}
+                                  onChange={(e) => setEditAssignedTo(e.target.value === "everyone" ? null : e.target.value)}
+                                  className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
+                                >
+                                  <option value="everyone">Everyone</option>
+                                  {participants.map((p) => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                  ))}
+                                </select>
                                 <button
                                   type="button"
-                                  className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]"
-                                  onClick={() => openEdit(item)}
-                                  aria-label="Edit"
+                                  className="rounded bg-[#E07A5F] px-2 py-1 text-sm text-white disabled:opacity-50"
+                                  onClick={handleSaveEdit}
+                                  disabled={editSaving}
                                 >
-                                  <PencilIcon />
+                                  Save
                                 </button>
-                                {deleteConfirmId === item.id ? (
-                                  <button
-                                    type="button"
-                                    className="text-xs text-red-600"
-                                    onClick={() => handleDelete(item.id)}
-                                    disabled={deleteLoading}
-                                  >
-                                    Yes
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]"
-                                    onClick={() => setDeleteConfirmId(item.id)}
-                                    aria-label="Delete"
-                                  >
-                                    <TrashIcon />
-                                  </button>
-                                )}
+                                <button
+                                  type="button"
+                                  className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
+                                  onClick={() => clearInlineEdit()}
+                                >
+                                  Cancel
+                                </button>
                               </div>
+                            ) : (
+                              <>
+                                <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
+                                  <p
+                                    className={item.is_packed ? "text-sm font-medium text-[#9B7B6B] line-through" : "text-sm font-medium text-[#4A4A4A]"}
+                                    dir={listRtl ? "rtl" : "ltr"}
+                                    style={{ unicodeBidi: "plaintext" }}
+                                  >
+                                    {item.title}
+                                  </p>
+                                  <p className="text-xs text-[#9B7B6B]">
+                                    <span dir="ltr">
+                                      {getCategoryName(item.category_id, categories)}
+                                    </span>
+                                    {item.quantity > 1 && (
+                                      <span dir="ltr" className="ms-1">× {item.quantity}</span>
+                                    )}
+                                  </p>
+                                </div>
+                                {canEditContent && renderPackingItemEditDeleteActions(item)}
+                              </>
                             )}
                           </div>
                         </div>
@@ -1218,52 +1242,80 @@ export function PackingList({
                               {item.is_packed && <CheckIcon />}
                             </span>
                           )}
-                          <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
-                            <p
-                              className={item.is_packed ? "text-sm font-medium text-[#9B7B6B] line-through" : "text-sm font-medium text-[#4A4A4A]"}
-                              dir={listRtl ? "rtl" : "ltr"}
-                              style={{ unicodeBidi: "plaintext" }}
-                            >
-                              {item.title}
-                            </p>
-                            <p className="text-xs text-[#9B7B6B]">
-                              <span dir="ltr">
-                                {getCategoryName(item.category_id, categories)}
-                              </span>
-                              {item.quantity > 1 && (
-                                <span dir="ltr" className="ms-1">× {item.quantity}</span>
-                              )}
-                            </p>
-                          </div>
-                          {canEditContent && (
-                            <>
+                          {editingId === item.id && editSessionView === viewMode && canEditContent ? (
+                            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                              <input
+                                type="text"
+                                value={editTitle}
+                                onChange={(e) => setEditTitle(e.target.value)}
+                                dir="auto"
+                                style={{ unicodeBidi: "plaintext" }}
+                                className="min-w-[120px] rounded border border-[#D4C5BA] px-2 py-1 text-sm"
+                              />
+                              <input
+                                type="number"
+                                min={1}
+                                value={editQuantity}
+                                onChange={(e) => setEditQuantity(parseInt(e.target.value, 10) || 1)}
+                                className="w-14 rounded border border-[#D4C5BA] px-2 py-1 text-sm"
+                              />
+                              <select
+                                value={editCategoryId}
+                                onChange={(e) => setEditCategoryId(e.target.value)}
+                                className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
+                              >
+                                {categories.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                value={editAssignedTo ?? "everyone"}
+                                onChange={(e) => setEditAssignedTo(e.target.value === "everyone" ? null : e.target.value)}
+                                className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
+                              >
+                                <option value="everyone">Everyone</option>
+                                {participants.map((p) => (
+                                  <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                              </select>
                               <button
                                 type="button"
-                                className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]"
-                                onClick={() => openEdit(item)}
-                                aria-label="Edit"
+                                className="rounded bg-[#E07A5F] px-2 py-1 text-sm text-white disabled:opacity-50"
+                                onClick={handleSaveEdit}
+                                disabled={editSaving}
                               >
-                                <PencilIcon />
+                                Save
                               </button>
-                              {deleteConfirmId === item.id ? (
-                                <button
-                                  type="button"
-                                  className="text-xs text-red-600"
-                                  onClick={() => handleDelete(item.id)}
-                                  disabled={deleteLoading}
+                              <button
+                                type="button"
+                                className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
+                                onClick={() => clearInlineEdit()}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
+                                <p
+                                  className={item.is_packed ? "text-sm font-medium text-[#9B7B6B] line-through" : "text-sm font-medium text-[#4A4A4A]"}
+                                  dir={listRtl ? "rtl" : "ltr"}
+                                  style={{ unicodeBidi: "plaintext" }}
                                 >
-                                  Yes
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="rounded p-1 text-[#6B7280] hover:bg-[#F5F3F0]"
-                                  onClick={() => setDeleteConfirmId(item.id)}
-                                  aria-label="Delete"
-                                >
-                                  <TrashIcon />
-                                </button>
-                              )}
+                                  {item.title}
+                                </p>
+                                <p className="text-xs text-[#9B7B6B]">
+                                  <span dir="ltr">
+                                    {getCategoryName(item.category_id, categories)}
+                                  </span>
+                                  {item.quantity > 1 && (
+                                    <span dir="ltr" className="ms-1">× {item.quantity}</span>
+                                  )}
+                                </p>
+                              </div>
+                              {canEditContent && renderPackingItemEditDeleteActions(item)}
                             </>
                           )}
                         </div>
