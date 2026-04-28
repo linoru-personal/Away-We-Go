@@ -214,24 +214,24 @@ export function PackingList({
 
   /** Sticky direction when RTL/LTR count is equal; avoid flipping on tie. */
   const [lastDirection, setLastDirection] = useState<"rtl" | "ltr">("ltr");
-  /** When true, (filtered) items are shown RTL; majority wins, on tie keep current. */
+  /** Row direction follows the whole trip list, not assignee filter, so layout stays stable per participant chip. */
   const listRtl = useMemo(() => {
-    if (filteredItems.length === 0) return false;
-    const rtlCount = filteredItems.filter((item) => isRtlText(item.title)).length;
-    const total = filteredItems.length;
+    if (items.length === 0) return false;
+    const rtlCount = items.filter((item) => isRtlText(item.title)).length;
+    const total = items.length;
     const half = total / 2;
     if (rtlCount > half) return true;
     if (rtlCount < half) return false;
     return lastDirection === "rtl";
-  }, [filteredItems, lastDirection]);
+  }, [items, lastDirection]);
   useEffect(() => {
-    if (filteredItems.length === 0) return;
-    const rtlCount = filteredItems.filter((item) => isRtlText(item.title)).length;
-    const total = filteredItems.length;
+    if (items.length === 0) return;
+    const rtlCount = items.filter((item) => isRtlText(item.title)).length;
+    const total = items.length;
     const half = total / 2;
     if (rtlCount > half) setLastDirection("rtl");
     else if (rtlCount < half) setLastDirection("ltr");
-  }, [filteredItems]);
+  }, [items]);
 
   async function handleTogglePacked(item: PackingItem) {
     setToggleErrorId(null);

@@ -3,29 +3,40 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
-import { getTakenAtFromFile } from "@/lib/trip-photos/exif";
-
-const BUCKET = "trip-photos";
-
-function getExtension(file: File): string {
-  const name = file.name;
-  const last = name.split(".").pop()?.toLowerCase();
-  if (last && /^[a-z0-9]+$/.test(last)) return last;
-  const mime = file.type;
-  if (mime === "image/jpeg") return "jpg";
-  if (mime === "image/png") return "png";
-  if (mime === "image/gif") return "gif";
-  if (mime === "image/webp") return "webp";
-  return "jpg";
-}
 
 export interface PhotoUploadFormProps {
   tripId: string;
-  userId: string;
   onUploadSuccess?: () => void;
 }
 
-export function PhotoUploadForm({ tripId, userId, onUploadSuccess }: PhotoUploadFormProps) {
+async function uploadOnePhoto(
+  tripId: string,
+  file: File,
+  accessToken: string
+): Promise<void> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`/api/trips/${tripId}/photos`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: formData,
+  });
+
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+
+  if (!res.ok) {
+    const msg =
+      typeof body.error === "string" && body.error.trim()
+        ? body.error.trim()
+        : `Upload failed (${res.status}).`;
+    throw new Error(msg);
+  }
+}
+
+export function PhotoUploadForm({ tripId, onUploadSuccess }: PhotoUploadFormProps) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -48,34 +59,21 @@ export function PhotoUploadForm({ tripId, userId, onUploadSuccess }: PhotoUpload
       setError("Some files were not images and were skipped.");
     }
 
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      setError("Your session expired. Please sign in again.");
+      e.target.value = "";
+      return;
+    }
+
     setUploading(true);
     const errors: string[] = [];
     for (const file of imageFiles) {
       try {
-        const photoId = crypto.randomUUID();
-        const ext = getExtension(file);
-        const path = `${tripId}/${photoId}.${ext}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from(BUCKET)
-          .upload(path, file, { contentType: file.type, upsert: false });
-
-        if (uploadError) {
-          throw new Error(uploadError.message);
-        }
-
-        const takenAt = await getTakenAtFromFile(file);
-
-        const { error: insertError } = await supabase.from("trip_photos").insert({
-          trip_id: tripId,
-          added_by_user_id: userId,
-          image_path: path,
-          taken_at: takenAt ?? null,
-        });
-
-        if (insertError) {
-          throw new Error(insertError.message);
-        }
+        await uploadOnePhoto(tripId, file, session.access_token);
       } catch (err) {
         errors.push(err instanceof Error ? err.message : "Upload failed.");
       }

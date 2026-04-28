@@ -5,8 +5,9 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
 import { useTripRole } from "@/app/lib/useTripRole";
-import { getTripPhotos } from "@/lib/trip-photos/queries";
-import type { PhotoWithUrl } from "@/components/trips/photos/photos-section";
+import { getTripPhotosPage } from "@/lib/trip-photos/queries";
+import { mapTripPhotosToGalleryUrls } from "@/lib/trip-photos/gallery-urls";
+import type { PhotoWithUrl } from "@/lib/trip-photos/gallery-types";
 import { PhotosPageClient } from "./photos-page-client";
 import { formatTripDateRange } from "@/lib/format-trip-dates";
 import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
@@ -25,8 +26,6 @@ type Trip = {
   media?: unknown;
 };
 
-const PHOTOS_BUCKET = "trip-photos";
-
 export default function TripPhotosPage() {
   const params = useParams();
   const router = useRouter();
@@ -40,6 +39,9 @@ export default function TripPhotosPage() {
   const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
   const [photosWithUrls, setPhotosWithUrls] = useState<PhotoWithUrl[]>([]);
   const [photosLoading, setPhotosLoading] = useState(true);
+  const [photosLoadingMore, setPhotosLoadingMore] = useState(false);
+  const [photosHasMore, setPhotosHasMore] = useState(false);
+  const [nextPhotoOffset, setNextPhotoOffset] = useState(0);
 
   useEffect(() => {
     if (!sessionLoading && !user) {
@@ -101,41 +103,41 @@ export default function TripPhotosPage() {
     if (!id) {
       setPhotosWithUrls([]);
       setPhotosLoading(false);
+      setPhotosHasMore(false);
+      setNextPhotoOffset(0);
       return;
     }
     let cancelled = false;
-    getTripPhotos(id)
-      .then((photos) => {
+    setPhotosLoading(true);
+    getTripPhotosPage(id, 0)
+      .then(({ photos: rows, totalCount }) => {
         if (cancelled) return;
-        if (photos.length === 0) {
+        if (rows.length === 0) {
           setPhotosWithUrls([]);
+          setNextPhotoOffset(0);
+          setPhotosHasMore(false);
           setPhotosLoading(false);
           return;
         }
-        Promise.all(
-          photos.map((p) =>
-            supabase.storage
-              .from(PHOTOS_BUCKET)
-              .createSignedUrl(p.image_path, 3600)
-              .then(({ data: signed }) => ({
-                id: p.id,
-                trip_id: p.trip_id,
-                image_path: p.image_path,
-                caption: p.caption,
-                created_at: p.created_at,
-                imageUrl: signed?.signedUrl ?? "",
-              }))
-          )
-        ).then((withUrls) => {
-          if (!cancelled) {
-            setPhotosWithUrls(withUrls);
-          }
-          setPhotosLoading(false);
-        });
+        return mapTripPhotosToGalleryUrls(supabase, rows)
+          .then((withUrls) => {
+            if (!cancelled) setPhotosWithUrls(withUrls);
+          })
+          .catch(() => {
+            if (!cancelled) setPhotosWithUrls([]);
+          })
+          .finally(() => {
+            if (cancelled) return;
+            setNextPhotoOffset(rows.length);
+            setPhotosHasMore(rows.length < totalCount);
+            setPhotosLoading(false);
+          });
       })
       .catch(() => {
         if (!cancelled) {
           setPhotosWithUrls([]);
+          setPhotosHasMore(false);
+          setNextPhotoOffset(0);
           setPhotosLoading(false);
         }
       });
@@ -144,31 +146,50 @@ export default function TripPhotosPage() {
     };
   }, [id]);
 
+  const loadMorePhotos = useCallback(async () => {
+    if (!id || photosLoadingMore || !photosHasMore) return;
+    setPhotosLoadingMore(true);
+    try {
+      const { photos: rows, totalCount } = await getTripPhotosPage(id, nextPhotoOffset);
+      if (rows.length === 0) {
+        setPhotosHasMore(false);
+        return;
+      }
+      const mapped = await mapTripPhotosToGalleryUrls(supabase, rows);
+      setPhotosWithUrls((prev) => [...prev, ...mapped]);
+      const end = nextPhotoOffset + rows.length;
+      setNextPhotoOffset(end);
+      setPhotosHasMore(end < totalCount);
+    } catch {
+      setPhotosHasMore(false);
+    } finally {
+      setPhotosLoadingMore(false);
+    }
+  }, [id, nextPhotoOffset, photosLoadingMore, photosHasMore]);
+
   const refetchPhotos = useCallback(() => {
     if (!id) return;
-    getTripPhotos(id)
-      .then((photos) => {
-        if (photos.length === 0) {
+    setPhotosLoading(true);
+    getTripPhotosPage(id, 0)
+      .then(({ photos: rows, totalCount }) => {
+        if (rows.length === 0) {
           setPhotosWithUrls([]);
+          setNextPhotoOffset(0);
+          setPhotosHasMore(false);
           return;
         }
-        return Promise.all(
-          photos.map((p) =>
-            supabase.storage
-              .from(PHOTOS_BUCKET)
-              .createSignedUrl(p.image_path, 3600)
-              .then(({ data: signed }) => ({
-                id: p.id,
-                trip_id: p.trip_id,
-                image_path: p.image_path,
-                caption: p.caption,
-                created_at: p.created_at,
-                imageUrl: signed?.signedUrl ?? "",
-              }))
-          )
-        ).then((withUrls) => setPhotosWithUrls(withUrls));
+        return mapTripPhotosToGalleryUrls(supabase, rows).then((mapped) => {
+          setPhotosWithUrls(mapped);
+          setNextPhotoOffset(rows.length);
+          setPhotosHasMore(rows.length < totalCount);
+        });
       })
-      .catch(() => setPhotosWithUrls([]));
+      .catch(() => {
+        setPhotosWithUrls([]);
+        setPhotosHasMore(false);
+        setNextPhotoOffset(0);
+      })
+      .finally(() => setPhotosLoading(false));
   }, [id]);
 
   if (sessionLoading) {
@@ -229,9 +250,14 @@ export default function TripPhotosPage() {
       dates={dates}
       coverImageUrl={coverImageUrl ?? null}
       participantAvatarUrls={participantAvatarUrls}
-      photos={photosLoading ? [] : photosWithUrls}
+      photos={photosWithUrls}
+      photosInitialLoading={photosLoading}
+      photosHasMore={photosHasMore}
+      photosLoadingMore={photosLoadingMore}
+      onLoadMorePhotos={loadMorePhotos}
       canEditContent={canEditContent}
       onUploadSuccess={refetchPhotos}
+      onGalleryChanged={refetchPhotos}
     />
   );
 }

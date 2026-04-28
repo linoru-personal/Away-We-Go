@@ -15,9 +15,16 @@ export interface PhotosPageClientProps {
   /** Signed avatar URLs for trip participants (order preserved). */
   participantAvatarUrls?: (string | null)[];
   photos: PhotoWithUrl[];
+  /** First gallery fetch in progress (avoid empty-state flash). */
+  photosInitialLoading?: boolean;
+  photosHasMore?: boolean;
+  photosLoadingMore?: boolean;
+  onLoadMorePhotos?: () => void | Promise<void>;
   /** When false (e.g. viewer), hide upload and delete. Default true. */
   canEditContent?: boolean;
   onUploadSuccess?: () => void;
+  /** Reset gallery after delete (pagination back to first page). */
+  onGalleryChanged?: () => void;
 }
 
 export function PhotosPageClient({
@@ -27,8 +34,13 @@ export function PhotosPageClient({
   coverImageUrl,
   participantAvatarUrls = [],
   photos,
+  photosInitialLoading = false,
+  photosHasMore = false,
+  photosLoadingMore = false,
+  onLoadMorePhotos,
   canEditContent = true,
   onUploadSuccess,
+  onGalleryChanged,
 }: PhotosPageClientProps) {
   const router = useRouter();
   const { user, loading: sessionLoading } = useSession();
@@ -62,7 +74,17 @@ export function PhotosPageClient({
           participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
         />
         <div className="mt-8">
-          <PhotosSection tripId={tripId} photos={photos} canEditContent={canEditContent} onUploadSuccess={onUploadSuccess} />
+          <PhotosSection
+            tripId={tripId}
+            photos={photos}
+            photosInitialLoading={photosInitialLoading}
+            photosHasMore={photosHasMore}
+            photosLoadingMore={photosLoadingMore}
+            onLoadMorePhotos={onLoadMorePhotos}
+            canEditContent={canEditContent}
+            onUploadSuccess={onUploadSuccess}
+            onGalleryChanged={onGalleryChanged}
+          />
         </div>
       </div>
     </main>

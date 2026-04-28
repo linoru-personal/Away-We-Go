@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabaseClient";
+import { mapTripPhotosToGalleryUrls } from "@/lib/trip-photos/gallery-urls";
 import { getTripPhotosPreview } from "@/lib/trip-photos/queries";
-import type { TripPhotoRow } from "@/lib/trip-photos/queries";
 import {
   DASHBOARD_CARD_CLASS,
   DASHBOARD_CARD_LINK_CLASS,
@@ -18,7 +18,6 @@ import {
   EMPTY_STATE_TEXT_CLASS,
 } from "@/components/trip/dashboard-card-styles";
 
-const PHOTOS_BUCKET = "trip-photos";
 /** Max slots; kept modest so one row fits typical card widths (no wrap). */
 const SLOT_COUNT = 8;
 /** First N slots always visible (narrow screens). */
@@ -129,16 +128,10 @@ export function PhotosSummaryCard({ tripId }: PhotosSummaryCardProps) {
           setLoading(false);
           return;
         }
-        Promise.all(
-          photos.map((p: TripPhotoRow) =>
-            supabase.storage
-              .from(PHOTOS_BUCKET)
-              .createSignedUrl(p.image_path, 3600)
-              .then(({ data }) => data?.signedUrl ?? null)
-          )
-        ).then((urls) => {
-          if (!cancelled) {
-            const valid = urls.filter((u): u is string => u != null);
+        mapTripPhotosToGalleryUrls(supabase, photos)
+          .then((mapped) => {
+            if (cancelled) return;
+            const valid = mapped.map((p) => p.thumbUrl);
             setThumbnailUrls(valid);
             const initial: number[] = Array.from(
               { length: SLOT_COUNT },
@@ -148,8 +141,14 @@ export function PhotosSummaryCard({ tripId }: PhotosSummaryCardProps) {
             setNextSlotToReplace(0);
             setNextPhotoIndex(Math.min(SLOT_COUNT, valid.length));
             setLoading(false);
-          }
-        });
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setThumbnailUrls([]);
+              setSlotIndices([]);
+              setLoading(false);
+            }
+          });
       })
       .catch(() => {
         if (!cancelled) {

@@ -1,14 +1,17 @@
 import { supabase } from "@/app/lib/supabaseServer";
 
+/**
+ * See `lib/trip-photos/queries.ts` — legacy `image_path` may exist in DB but is omitted here.
+ */
 export type TripPhotoRow = {
   id: string;
   trip_id: string;
   added_by_user_id: string;
-  image_path: string;
   caption: string | null;
   created_at: string;
   taken_at: string | null;
   sort_at: string;
+  media?: unknown;
 };
 
 /**
