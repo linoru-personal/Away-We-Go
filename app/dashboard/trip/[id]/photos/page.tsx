@@ -35,7 +35,7 @@ export default function TripPhotosPage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const { canEditContent } = useTripRole(trip, user?.id ?? undefined);
   const [tripLoading, setTripLoading] = useState(true);
-  const coverImageUrl = useTripCoverSignedUrl(trip, "preview");
+  const coverImageUrl = useTripCoverSignedUrl(trip, "original");
   const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
   const [photosWithUrls, setPhotosWithUrls] = useState<PhotoWithUrl[]>([]);
   const [photosLoading, setPhotosLoading] = useState(true);

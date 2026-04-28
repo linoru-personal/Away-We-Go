@@ -61,7 +61,8 @@ export default function PackingPage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const { canEditContent } = useTripRole(trip, user?.id ?? undefined);
   const [tripLoading, setTripLoading] = useState(true);
-  const coverImageUrl = useTripCoverSignedUrl(trip, "preview");
+  const tripHeroCoverUrl = useTripCoverSignedUrl(trip, "original");
+  const tripCoverPreviewUrl = useTripCoverSignedUrl(trip, "preview");
   const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
   const [categories, setCategories] = useState<PackingCategory[]>([]);
   const [items, setItems] = useState<PackingItem[]>([]);
@@ -212,7 +213,7 @@ export default function PackingPage() {
             <TripHero
               title={trip.title}
               dates={formatTripDateRange(trip.start_date, trip.end_date)}
-              imageUrl={coverImageUrl ?? undefined}
+              imageUrl={tripHeroCoverUrl ?? undefined}
               onBack={() => router.push(`/dashboard/trip/${id}`)}
               participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
             />
@@ -222,7 +223,7 @@ export default function PackingPage() {
               items={items}
               participants={participants}
               participantAvatarUrls={participantAvatarUrls}
-              tripCoverImageUrl={coverImageUrl ?? null}
+              tripCoverImageUrl={tripCoverPreviewUrl ?? null}
               loading={listLoading}
               canEditContent={canEditContent}
               onRefresh={reloadCategoriesAndItems}

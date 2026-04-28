@@ -149,7 +149,9 @@ export default function TripPage() {
   const [resendingInvitationId, setResendingInvitationId] = useState<string | null>(null);
   const [revokingInvitationId, setRevokingInvitationId] = useState<string | null>(null);
 
-  const coverImageUrl = useTripCoverSignedUrl(trip, "preview");
+  /** Large TripHero needs full tier; summary cards use preview separately. */
+  const tripHeroCoverUrl = useTripCoverSignedUrl(trip, "original");
+  const tripCoverPreviewUrl = useTripCoverSignedUrl(trip, "preview");
   const [destinationImageUrl, setDestinationImageUrl] = useState<string | null>(null);
   const [participantAvatarUrls, setParticipantAvatarUrls] = useState<(string | null)[]>([]);
 
@@ -578,7 +580,7 @@ export default function TripPage() {
               <TripHero
                 title={trip.title}
                 dates={formatTripDateRange(trip.start_date, trip.end_date)}
-                imageUrl={coverImageUrl ?? undefined}
+                imageUrl={tripHeroCoverUrl ?? undefined}
                 onBack={() => router.push("/dashboard")}
                 participants={participantAvatarUrls.map((avatarUrl) => ({ avatarUrl }))}
                 topRight={
@@ -871,7 +873,7 @@ export default function TripPage() {
                 <TripNotesSummaryCard tripId={trip.id} />
 
                 {/* Packing */}
-                <PackingSummaryCard tripId={trip.id} tripCoverImageUrl={coverImageUrl ?? undefined} />
+                <PackingSummaryCard tripId={trip.id} tripCoverImageUrl={tripCoverPreviewUrl ?? undefined} />
 
                 {/* Tasks */}
                 <TasksSummaryCard tripId={trip.id} />
