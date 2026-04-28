@@ -30,9 +30,11 @@ function formatTripMonthLabel(start: string | null, end: string | null): string 
 }
 
 function tripLabel(t: DashboardTrip): string {
+  const title = t.title?.trim();
+  if (title) return title;
   const dest = t.destination?.trim();
   if (dest) return dest;
-  return t.title?.trim() || "Trip";
+  return "Trip";
 }
 
 type NavChild = {

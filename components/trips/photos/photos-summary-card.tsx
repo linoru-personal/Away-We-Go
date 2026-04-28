@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/app/lib/supabaseClient";
-import { mapTripPhotosToGalleryUrls } from "@/lib/trip-photos/gallery-urls";
+import { mapTripPhotosToGalleryThumbUrls } from "@/lib/trip-photos/gallery-urls";
 import { getTripPhotosPreview } from "@/lib/trip-photos/queries";
 import {
   DASHBOARD_CARD_CLASS,
@@ -128,7 +128,7 @@ export function PhotosSummaryCard({ tripId }: PhotosSummaryCardProps) {
           setLoading(false);
           return;
         }
-        mapTripPhotosToGalleryUrls(supabase, photos)
+        mapTripPhotosToGalleryThumbUrls(supabase, photos)
           .then((mapped) => {
             if (cancelled) return;
             const valid = mapped.map((p) => p.thumbUrl);
