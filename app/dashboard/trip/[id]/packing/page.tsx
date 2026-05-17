@@ -9,6 +9,10 @@ import TripHero from "@/components/trip/trip-hero";
 import { formatTripDateRange } from "@/lib/format-trip-dates";
 import { PackingList } from "@/components/packing/packing-list";
 import { PACKING_GROUP_KEY_EVERYONE } from "@/lib/list-grouping";
+import {
+  updatePackingItem,
+  updatePackingItemsSortOrders,
+} from "@/lib/packing/packing-item-mutations";
 import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
 import { useDashboardTripsOptional } from "@/components/dashboard/dashboard-trips-context";
 import { fetchTripByIdForUser } from "@/lib/fetch-trip-for-user";
@@ -237,6 +241,11 @@ export default function PackingPage() {
               loading={listLoading}
               canEditContent={canEditContent}
               onRefresh={reloadCategoriesAndItems}
+              onItemsPatched={(itemId, patch) => {
+                setItems((prev) =>
+                  prev.map((i) => (i.id === itemId ? { ...i, ...patch } : i))
+                );
+              }}
               onReorderGroup={async (newOrderedItems) => {
                 if (newOrderedItems.length === 0) return;
                 const minOrder = Math.min(...newOrderedItems.map((i) => i.sort_order));
@@ -246,11 +255,12 @@ export default function PackingPage() {
                   const rest = prev.filter((i) => !ids.has(i.id));
                   return [...rest, ...updated].sort((a, b) => a.sort_order - b.sort_order);
                 });
-                await Promise.all(
-                  updated.map((item) =>
-                    supabase.from("packing_items").update({ sort_order: item.sort_order }).eq("id", item.id)
-                  )
+                const { error } = await updatePackingItemsSortOrders(
+                  supabase,
+                  updated.map((item) => ({ id: item.id, sort_order: item.sort_order })),
+                  "reorder-sort"
                 );
+                if (error) await reloadCategoriesAndItems();
               }}
               onMoveItem={async (viewMode, item, fromGroupKey, toGroupKey, insertIndex) => {
                 const getGroupKey = (i: PackingItem) =>
@@ -311,12 +321,32 @@ export default function PackingPage() {
 
                 setItems(flat);
 
-                const primaryUpdate =
-                  viewMode === "participant"
-                    ? { assigned_to_participant_id: nextAssignedTo, sort_order: movedRow.sort_order }
-                    : { category_id: nextCategoryId, sort_order: movedRow.sort_order };
+                const assignmentChanged =
+                  viewMode === "participant" &&
+                  nextAssignedTo !== item.assigned_to_participant_id;
 
-                const { error: moveErr } = await supabase.from("packing_items").update(primaryUpdate).eq("id", item.id);
+                const moveContext =
+                  viewMode === "participant" ? "move-participant" : "move-category";
+
+                const primaryPatch =
+                  viewMode === "participant"
+                    ? {
+                        sort_order: movedRow.sort_order,
+                        ...(assignmentChanged
+                          ? { assigned_to_participant_id: nextAssignedTo }
+                          : {}),
+                      }
+                    : {
+                        category_id: nextCategoryId,
+                        sort_order: movedRow.sort_order,
+                      };
+
+                const { error: moveErr } = await updatePackingItem(
+                  supabase,
+                  item.id,
+                  primaryPatch,
+                  moveContext
+                );
                 if (moveErr) {
                   await reloadCategoriesAndItems();
                   return;
@@ -325,12 +355,12 @@ export default function PackingPage() {
                 const toUpdate = flat.filter(
                   (i) => i.id !== item.id && (getGroupKey(i) === fromGroupKey || getGroupKey(i) === toGroupKey)
                 );
-                const sortResults = await Promise.all(
-                  toUpdate.map((i) =>
-                    supabase.from("packing_items").update({ sort_order: i.sort_order }).eq("id", i.id)
-                  )
+                const { error: sortErr } = await updatePackingItemsSortOrders(
+                  supabase,
+                  toUpdate.map((i) => ({ id: i.id, sort_order: i.sort_order })),
+                  "reorder-sort"
                 );
-                if (sortResults.some((r) => r.error)) {
+                if (sortErr) {
                   await reloadCategoriesAndItems();
                 }
               }}

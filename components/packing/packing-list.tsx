@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   Dialog,
@@ -16,10 +16,18 @@ import {
   type CategoryIconKey,
 } from "@/components/ui/category-icons";
 import { ManagePackingCategoriesDialog } from "@/components/packing/manage-packing-categories-dialog";
+import {
+  PackingTemplatesDialog,
+  type PackingTemplatesDialogMode,
+} from "@/components/packing/packing-templates-dialog";
 import { SortableGroupList } from "@/components/ui/sortable-group-list";
 import { GroupedSortableList } from "@/components/ui/grouped-sortable-list";
 import { DragHandle } from "@/components/ui/drag-handle";
 import { getPackingGroupingMode, PACKING_GROUP_KEY_EVERYONE } from "@/lib/list-grouping";
+import {
+  updatePackingItem,
+  type PackingItemPatch,
+} from "@/lib/packing/packing-item-mutations";
 
 export type PackingCategory = {
   id: string;
@@ -58,6 +66,8 @@ export interface PackingListProps {
   /** When false (e.g. viewer), hide add/edit/delete/toggle and show read-only list. Default true. */
   canEditContent?: boolean;
   onRefresh: () => Promise<void>;
+  /** Apply a local patch after a successful partial DB update (avoids full refetch). */
+  onItemsPatched?: (itemId: string, patch: Partial<PackingItem>) => void;
   /** When provided, enables drag-and-drop reorder within each group. Called with items in new order; parent updates state and persists. */
   onReorderGroup?: (newOrderedItems: PackingItem[]) => Promise<void>;
   /** When provided with onReorderGroup, enables moving items across groups. viewMode is the current list view so parent can set the correct field. */
@@ -99,9 +109,10 @@ function TrashIcon() {
 }
 
 function getAssigneeLabel(item: PackingItem, participants: PackingParticipant[]): string {
-  if (!item.assigned_to_participant_id) return "Everyone";
-  const p = participants.find((x) => x.id === item.assigned_to_participant_id);
-  return p?.name ?? "Everyone";
+  const participantId = item.assigned_to_participant_id;
+  if (!participantId) return "Everyone";
+  const p = participants.find((x) => x.id === participantId);
+  return p?.name ?? "Assigned";
 }
 
 function getCategoryName(categoryId: string, categories: PackingCategory[]): string {
@@ -134,6 +145,7 @@ export function PackingList({
   loading,
   canEditContent = true,
   onRefresh,
+  onItemsPatched,
   onReorderGroup,
   onMoveItem,
 }: PackingListProps) {
@@ -160,11 +172,28 @@ export function PackingList({
   const [editQuantity, setEditQuantity] = useState(1);
   const [editCategoryId, setEditCategoryId] = useState("");
   const [editAssignedTo, setEditAssignedTo] = useState<string | null>(null);
+  const editBaselineRef = useRef<{
+    title: string;
+    quantity: number;
+    category_id: string;
+    assigned_to_participant_id: string | null;
+  } | null>(null);
   const [editSaving, setEditSaving] = useState(false);
   const [toggleErrorId, setToggleErrorId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
+  const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false);
+  const [templatesDialogMode, setTemplatesDialogMode] =
+    useState<PackingTemplatesDialogMode>("manage");
+  const [templateSuccessMessage, setTemplateSuccessMessage] = useState<string | null>(
+    null
+  );
+
+  function openTemplatesDialog(mode: PackingTemplatesDialogMode) {
+    setTemplatesDialogMode(mode);
+    setTemplatesDialogOpen(true);
+  }
 
   const packedCount = items.filter((i) => i.is_packed).length;
   const totalCount = items.length;
@@ -236,19 +265,19 @@ export function PackingList({
   async function handleTogglePacked(item: PackingItem) {
     setToggleErrorId(null);
     const next = !item.is_packed;
-    const prev = items.find((i) => i.id === item.id);
-    if (!prev) return;
 
-    const { error } = await supabase
-      .from("packing_items")
-      .update({ is_packed: next })
-      .eq("id", item.id);
+    const { error } = await updatePackingItem(
+      supabase,
+      item.id,
+      { is_packed: next },
+      "toggle-packed"
+    );
 
     if (error) {
       setToggleErrorId(item.id);
       return;
     }
-    await onRefresh();
+    onItemsPatched?.(item.id, { is_packed: next });
   }
 
   async function handleCreateCategory() {
@@ -300,14 +329,16 @@ export function PackingList({
     }
     setAddError(null);
     setAddSaving(true);
-    const { error } = await supabase.from("packing_items").insert({
+    const insertRow = {
       trip_id: tripId,
       category_id: addCategoryId,
       title,
       quantity: addQuantity >= 1 ? addQuantity : 1,
       is_packed: false,
       assigned_to_participant_id: addAssignedTo ?? null,
-    });
+    };
+    console.log("[packing_items.insert]", insertRow);
+    const { error } = await supabase.from("packing_items").insert(insertRow);
     setAddSaving(false);
     if (error) {
       setAddError(error.message);
@@ -344,6 +375,7 @@ export function PackingList({
   function clearInlineEdit() {
     setEditingId(null);
     setEditSessionView(null);
+    editBaselineRef.current = null;
   }
 
   function openEdit(item: PackingItem) {
@@ -353,6 +385,12 @@ export function PackingList({
     setEditQuantity(item.quantity);
     setEditCategoryId(item.category_id);
     setEditAssignedTo(item.assigned_to_participant_id);
+    editBaselineRef.current = {
+      title: item.title,
+      quantity: item.quantity,
+      category_id: item.category_id,
+      assigned_to_participant_id: item.assigned_to_participant_id,
+    };
   }
 
   function openAddFromGroup(groupKey: string) {
@@ -364,22 +402,49 @@ export function PackingList({
 
   async function handleSaveEdit() {
     if (!editingId) return;
+    const baseline = editBaselineRef.current;
+    if (!baseline) return;
+
     const title = editTitle.trim();
     if (!title) return;
+
+    const quantity = editQuantity >= 1 ? editQuantity : 1;
+    const patch: PackingItemPatch = {};
+
+    if (title !== baseline.title) patch.title = title;
+    if (quantity !== baseline.quantity) patch.quantity = quantity;
+    if (editCategoryId !== baseline.category_id) patch.category_id = editCategoryId;
+
+    const nextAssigned = editAssignedTo ?? null;
+    if (nextAssigned !== baseline.assigned_to_participant_id) {
+      patch.assigned_to_participant_id = nextAssigned;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      clearInlineEdit();
+      return;
+    }
+
     setEditSaving(true);
-    const { error } = await supabase
-      .from("packing_items")
-      .update({
-        title,
-        quantity: editQuantity >= 1 ? editQuantity : 1,
-        category_id: editCategoryId,
-        assigned_to_participant_id: editAssignedTo ?? null,
-      })
-      .eq("id", editingId);
+    const { error } = await updatePackingItem(
+      supabase,
+      editingId,
+      patch,
+      "save-edit"
+    );
     setEditSaving(false);
     if (error) return;
+
+    onItemsPatched?.(editingId, {
+      ...(patch.title !== undefined ? { title: patch.title } : {}),
+      ...(patch.quantity !== undefined ? { quantity: patch.quantity } : {}),
+      ...(patch.category_id !== undefined ? { category_id: patch.category_id } : {}),
+      ...(patch.assigned_to_participant_id !== undefined
+        ? { assigned_to_participant_id: patch.assigned_to_participant_id }
+        : {}),
+    });
+
     clearInlineEdit();
-    await onRefresh();
   }
 
   async function handleDelete(itemId: string) {
@@ -467,6 +532,35 @@ export function PackingList({
         categories={categories}
         onSuccess={onRefresh}
       />
+
+      <PackingTemplatesDialog
+        open={templatesDialogOpen}
+        mode={templatesDialogMode}
+        onOpenChange={setTemplatesDialogOpen}
+        tripId={tripId}
+        categories={categories}
+        items={items}
+        participants={participants}
+        onRefresh={onRefresh}
+        onSuccessMessage={setTemplateSuccessMessage}
+      />
+
+      {templateSuccessMessage ? (
+        <div
+          className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-[#c8e6c9] bg-[#e8f5e9] px-4 py-3 text-sm text-[#2e7d32]"
+          role="status"
+        >
+          <span>{templateSuccessMessage}</span>
+          <button
+            type="button"
+            className="shrink-0 text-[#2e7d32]/70 hover:text-[#2e7d32]"
+            aria-label="Dismiss"
+            onClick={() => setTemplateSuccessMessage(null)}
+          >
+            ×
+          </button>
+        </div>
+      ) : null}
 
       <p className="mt-4 text-2xl font-semibold text-[#E07A5F]">{progressPercent}%</p>
       <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#F5F3F0]">
@@ -559,26 +653,58 @@ export function PackingList({
       </div>
 
       {canEditContent && (
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-        <button
-          type="button"
-          className="text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
-          onClick={() => setManageCategoriesOpen(true)}
-        >
-          Manage Categories
-        </button>
-        <button
-          type="button"
-          className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
-          onClick={() => {
-            setAddCategoryId(categories[0]?.id ?? "");
-            setAddModalMode("add-item");
-            setAddModalOpen(true);
-          }}
-        >
-          + Add Item
-        </button>
-      </div>
+        <>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+            <button
+              type="button"
+              className="text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
+              onClick={() => setManageCategoriesOpen(true)}
+            >
+              Manage Categories
+            </button>
+            <button
+              type="button"
+              className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
+              onClick={() => {
+                setAddCategoryId(categories[0]?.id ?? "");
+                setAddModalMode("add-item");
+                setAddModalOpen(true);
+              }}
+            >
+              + Add Item
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-full border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0]"
+              onClick={() => openTemplatesDialog("import")}
+            >
+              Import from template
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0]"
+              onClick={() => openTemplatesDialog("save-new")}
+            >
+              Save as new template
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0]"
+              onClick={() => openTemplatesDialog("add-to-existing")}
+            >
+              Add to existing template
+            </button>
+            <button
+              type="button"
+              className="rounded-full border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0]"
+              onClick={() => openTemplatesDialog("manage")}
+            >
+              Manage templates
+            </button>
+          </div>
+        </>
       )}
 
       <div className="mt-6 space-y-6">

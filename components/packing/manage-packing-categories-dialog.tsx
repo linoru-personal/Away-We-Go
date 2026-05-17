@@ -144,6 +144,11 @@ export function ManagePackingCategoriesDialog({
     setError(null);
     try {
       const fallbackId = others[0].id;
+      console.log("[packing_items.update]", {
+        context: "category-fallback",
+        categoryId,
+        patch: { category_id: fallbackId },
+      });
       const { error: updateError } = await supabase
         .from("packing_items")
         .update({ category_id: fallbackId })
