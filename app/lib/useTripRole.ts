@@ -65,6 +65,6 @@ export function useTripRole(
     canEditContent: role === "owner" || role === "admin" || role === "editor",
     canEditMetadata: role === "owner" || role === "admin",
     canManageSharing: role === "owner" || role === "admin",
-    canDeleteTrip: role === "owner",
+    canDeleteTrip: role === "owner" || role === "admin",
   };
 }

@@ -11,7 +11,9 @@ import type { PhotoWithUrl } from "@/lib/trip-photos/gallery-types";
 import { PhotosPageClient } from "./photos-page-client";
 import { formatTripDateRange } from "@/lib/format-trip-dates";
 import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
+import { useDashboardTripsOptional } from "@/components/dashboard/dashboard-trips-context";
 import { fetchTripByIdForUser } from "@/lib/fetch-trip-for-user";
+import { syncDashboardAfterTripGone } from "@/lib/dashboard/sync-after-trip-gone";
 import { useTripCoverSignedUrl } from "@/app/lib/useTripCoverSignedUrl";
 import { getParticipantAvatarDisplayUrl } from "@/lib/trip-media/resolve-participant-avatar";
 
@@ -32,6 +34,7 @@ export default function TripPhotosPage() {
   const id = typeof params.id === "string" ? params.id : params.id?.[0] ?? null;
 
   const { user, loading: sessionLoading } = useSession();
+  const dashboardTrips = useDashboardTripsOptional();
   const [trip, setTrip] = useState<Trip | null>(null);
   const { canEditContent } = useTripRole(trip, user?.id ?? undefined);
   const [tripLoading, setTripLoading] = useState(true);
@@ -62,8 +65,15 @@ export default function TripPhotosPage() {
       "id, user_id, title, start_date, end_date, cover_image_url, cover_image_path, media"
     ).then(({ trip, error }) => {
       if (cancelled) return;
-      if (!error && trip) setTrip(trip);
-      setTripLoading(false);
+      if (!error && trip) {
+        setTrip(trip);
+        setTripLoading(false);
+      } else if (!error && !trip) {
+        setTripLoading(false);
+        void syncDashboardAfterTripGone(router, dashboardTrips?.refetchTrips);
+      } else {
+        setTripLoading(false);
+      }
     });
     return () => {
       cancelled = true;

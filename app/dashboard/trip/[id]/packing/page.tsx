@@ -10,7 +10,9 @@ import { formatTripDateRange } from "@/lib/format-trip-dates";
 import { PackingList } from "@/components/packing/packing-list";
 import { PACKING_GROUP_KEY_EVERYONE } from "@/lib/list-grouping";
 import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
+import { useDashboardTripsOptional } from "@/components/dashboard/dashboard-trips-context";
 import { fetchTripByIdForUser } from "@/lib/fetch-trip-for-user";
+import { syncDashboardAfterTripGone } from "@/lib/dashboard/sync-after-trip-gone";
 import { useTripCoverSignedUrl } from "@/app/lib/useTripCoverSignedUrl";
 import { getParticipantAvatarDisplayUrl } from "@/lib/trip-media/resolve-participant-avatar";
 
@@ -58,6 +60,7 @@ export default function PackingPage() {
   const id = typeof params.id === "string" ? params.id : params.id?.[0] ?? null;
 
   const { user, loading: sessionLoading } = useSession();
+  const dashboardTrips = useDashboardTripsOptional();
   const [trip, setTrip] = useState<Trip | null>(null);
   const { canEditContent } = useTripRole(trip, user?.id ?? undefined);
   const [tripLoading, setTripLoading] = useState(true);
@@ -103,8 +106,15 @@ export default function PackingPage() {
     let cancelled = false;
     fetchTripByIdForUser<Trip>(supabase, id).then(({ trip, error }) => {
       if (cancelled) return;
-      if (!error && trip) setTrip(trip);
-      setTripLoading(false);
+      if (!error && trip) {
+        setTrip(trip);
+        setTripLoading(false);
+      } else if (!error && !trip) {
+        setTripLoading(false);
+        void syncDashboardAfterTripGone(router, dashboardTrips?.refetchTrips);
+      } else {
+        setTripLoading(false);
+      }
     });
     return () => {
       cancelled = true;

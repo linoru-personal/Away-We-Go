@@ -31,6 +31,7 @@ import {
 import { Sparkles } from "lucide-react";
 import { fetchTripByIdForUser } from "@/lib/fetch-trip-for-user";
 import { useDashboardTripsOptional } from "@/components/dashboard/dashboard-trips-context";
+import { syncDashboardAfterTripGone } from "@/lib/dashboard/sync-after-trip-gone";
 import { useTripCoverSignedUrl } from "@/app/lib/useTripCoverSignedUrl";
 import { getTripDestinationDisplayUrl } from "@/lib/trip-media/resolve-destination";
 import { getParticipantAvatarDisplayUrl } from "@/lib/trip-media/resolve-participant-avatar";
@@ -195,17 +196,15 @@ export default function TripPage() {
       if (fetchError) {
         setTitleError(fetchError.message ?? "Failed to load trip.");
         setTrip(null);
+        setLoading(false);
       } else if (!row) {
-        setTitleError(
-          noRowVisible
-            ? "Trip not found or you don't have access. If you were invited, open the invite link while signed in with the same email."
-            : "Trip not found."
-        );
         setTrip(null);
+        setLoading(false);
+        void syncDashboardAfterTripGone(router, dashboardTrips?.refetchTrips);
       } else {
         setTrip(row);
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     load();
@@ -529,24 +528,28 @@ export default function TripPage() {
     setParticipantAvatarUrls(urls);
   };
 
-  function deleteTrip() {
+  async function deleteTrip() {
     if (!trip) return;
 
     setTitleError(null);
     setIsDeleting(true);
 
-    supabase
+    const tripId = trip.id;
+    const { error: deleteError } = await supabase
       .from("trips")
       .delete()
-      .eq("id", trip.id)
-      .then(({ error: deleteError }) => {
-        if (deleteError) {
-          setTitleError(deleteError.message);
-          setIsDeleting(false);
-          return;
-        }
-        router.replace("/dashboard");
-      });
+      .eq("id", tripId);
+
+    if (deleteError) {
+      setTitleError(deleteError.message);
+      setIsDeleting(false);
+      return;
+    }
+
+    dashboardTrips?.removeTripFromList(tripId);
+    await dashboardTrips?.refetchTrips();
+    setShowDeleteConfirm(false);
+    router.replace("/dashboard");
   }
 
   if (sessionLoading) {
@@ -1156,6 +1159,9 @@ export default function TripPage() {
             <p className="mt-2 text-sm text-[#6B7280]">
               This cannot be undone.
             </p>
+            {titleError ? (
+              <p className="mt-2 text-sm text-red-600">{titleError}</p>
+            ) : null}
             <div className="mt-6 flex gap-3">
               <button
                 type="button"

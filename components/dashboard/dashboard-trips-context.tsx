@@ -34,6 +34,8 @@ type DashboardTripsContextValue = {
   trips: DashboardTrip[];
   loadingTrips: boolean;
   refetchTrips: () => Promise<void>;
+  /** Drop a trip from sidebar/card state immediately (e.g. after delete). */
+  removeTripFromList: (tripId: string) => void;
   /** Sidebar / small list thumbnails. */
   coverThumbSignedUrls: Record<string, string>;
   /** Trip cards and larger previews. */
@@ -76,6 +78,25 @@ export function DashboardTripsProvider({
   const [destinationSignedUrls, setDestinationSignedUrls] = useState<
     Record<string, string>
   >({});
+
+  const removeTripFromList = useCallback((tripId: string) => {
+    setTrips((prev) => prev.filter((t) => t.id !== tripId));
+    setCoverThumbSignedUrls((prev) => {
+      const next = { ...prev };
+      delete next[tripId];
+      return next;
+    });
+    setCoverPreviewSignedUrls((prev) => {
+      const next = { ...prev };
+      delete next[tripId];
+      return next;
+    });
+    setDestinationSignedUrls((prev) => {
+      const next = { ...prev };
+      delete next[tripId];
+      return next;
+    });
+  }, []);
 
   const refetchTrips = useCallback(async () => {
     const { data, error } = await supabase
@@ -171,6 +192,7 @@ export function DashboardTripsProvider({
       trips,
       loadingTrips,
       refetchTrips,
+      removeTripFromList,
       coverThumbSignedUrls,
       coverPreviewSignedUrls,
       destinationSignedUrls,
@@ -179,6 +201,7 @@ export function DashboardTripsProvider({
       trips,
       loadingTrips,
       refetchTrips,
+      removeTripFromList,
       coverThumbSignedUrls,
       coverPreviewSignedUrls,
       destinationSignedUrls,
