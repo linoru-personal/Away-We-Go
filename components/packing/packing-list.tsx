@@ -16,10 +16,7 @@ import {
   type CategoryIconKey,
 } from "@/components/ui/category-icons";
 import { ManagePackingCategoriesDialog } from "@/components/packing/manage-packing-categories-dialog";
-import {
-  PackingTemplatesDialog,
-  type PackingTemplatesDialogMode,
-} from "@/components/packing/packing-templates-dialog";
+import { ManagePackingListDialog } from "@/components/packing/manage-packing-list-dialog";
 import { SortableGroupList } from "@/components/ui/sortable-group-list";
 import { GroupedSortableList } from "@/components/ui/grouped-sortable-list";
 import { DragHandle } from "@/components/ui/drag-handle";
@@ -183,17 +180,10 @@ export function PackingList({
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
-  const [templatesDialogOpen, setTemplatesDialogOpen] = useState(false);
-  const [templatesDialogMode, setTemplatesDialogMode] =
-    useState<PackingTemplatesDialogMode>("manage");
-  const [templateSuccessMessage, setTemplateSuccessMessage] = useState<string | null>(
+  const [manageListOpen, setManageListOpen] = useState(false);
+  const [listManagementMessage, setListManagementMessage] = useState<string | null>(
     null
   );
-
-  function openTemplatesDialog(mode: PackingTemplatesDialogMode) {
-    setTemplatesDialogMode(mode);
-    setTemplatesDialogOpen(true);
-  }
 
   const packedCount = items.filter((i) => i.is_packed).length;
   const totalCount = items.length;
@@ -533,29 +523,29 @@ export function PackingList({
         onSuccess={onRefresh}
       />
 
-      <PackingTemplatesDialog
-        open={templatesDialogOpen}
-        mode={templatesDialogMode}
-        onOpenChange={setTemplatesDialogOpen}
+      <ManagePackingListDialog
+        open={manageListOpen}
+        onOpenChange={setManageListOpen}
         tripId={tripId}
+        itemCount={items.length}
         categories={categories}
         items={items}
         participants={participants}
         onRefresh={onRefresh}
-        onSuccessMessage={setTemplateSuccessMessage}
+        onSuccessMessage={setListManagementMessage}
       />
 
-      {templateSuccessMessage ? (
+      {listManagementMessage ? (
         <div
           className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-[#c8e6c9] bg-[#e8f5e9] px-4 py-3 text-sm text-[#2e7d32]"
           role="status"
         >
-          <span>{templateSuccessMessage}</span>
+          <span>{listManagementMessage}</span>
           <button
             type="button"
             className="shrink-0 text-[#2e7d32]/70 hover:text-[#2e7d32]"
             aria-label="Dismiss"
-            onClick={() => setTemplateSuccessMessage(null)}
+            onClick={() => setListManagementMessage(null)}
           >
             ×
           </button>
@@ -655,13 +645,22 @@ export function PackingList({
       {canEditContent && (
         <>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-            <button
-              type="button"
-              className="text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
-              onClick={() => setManageCategoriesOpen(true)}
-            >
-              Manage Categories
-            </button>
+            <div className="flex flex-wrap items-center gap-4">
+              <button
+                type="button"
+                className="text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
+                onClick={() => setManageCategoriesOpen(true)}
+              >
+                Manage Categories
+              </button>
+              <button
+                type="button"
+                className="text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
+                onClick={() => setManageListOpen(true)}
+              >
+                Manage packing lists
+              </button>
+            </div>
             <button
               type="button"
               className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
@@ -672,36 +671,6 @@ export function PackingList({
               }}
             >
               + Add Item
-            </button>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="rounded-full border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0]"
-              onClick={() => openTemplatesDialog("import")}
-            >
-              Import from template
-            </button>
-            <button
-              type="button"
-              className="rounded-full border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0]"
-              onClick={() => openTemplatesDialog("save-new")}
-            >
-              Save as new template
-            </button>
-            <button
-              type="button"
-              className="rounded-full border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0]"
-              onClick={() => openTemplatesDialog("add-to-existing")}
-            >
-              Add to existing template
-            </button>
-            <button
-              type="button"
-              className="rounded-full border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0]"
-              onClick={() => openTemplatesDialog("manage")}
-            >
-              Manage templates
             </button>
           </div>
         </>

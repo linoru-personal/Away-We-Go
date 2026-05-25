@@ -4,12 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { supabase } from "@/app/lib/supabaseClient";
 import { useSession } from "@/app/lib/useSession";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import type {
   PackingCategory,
   PackingItem,
@@ -34,16 +28,17 @@ export type PackingTemplatesDialogMode =
   | "save-new"
   | "add-to-existing";
 
-export interface PackingTemplatesDialogProps {
-  open: boolean;
+export interface PackingTemplatesPanelProps {
+  active: boolean;
   mode: PackingTemplatesDialogMode;
-  onOpenChange: (open: boolean) => void;
   tripId: string;
   categories: PackingCategory[];
   items: PackingItem[];
   participants: PackingParticipant[];
   onRefresh: () => Promise<void>;
   onSuccessMessage: (message: string) => void;
+  onBack: () => void;
+  onComplete: () => void;
 }
 
 const BTN_PRIMARY =
@@ -64,7 +59,7 @@ function formatTemplateItemMeta(item: PackingTemplateItemRow): string {
   return parts.join(" · ");
 }
 
-function modeTitle(mode: PackingTemplatesDialogMode): string {
+export function modeTitle(mode: PackingTemplatesDialogMode): string {
   switch (mode) {
     case "manage":
       return "Manage templates";
@@ -77,17 +72,18 @@ function modeTitle(mode: PackingTemplatesDialogMode): string {
   }
 }
 
-export function PackingTemplatesDialog({
-  open,
+export function PackingTemplatesPanel({
+  active,
   mode,
-  onOpenChange,
   tripId,
   categories,
   items,
   participants,
   onRefresh,
   onSuccessMessage,
-}: PackingTemplatesDialogProps) {
+  onBack,
+  onComplete,
+}: PackingTemplatesPanelProps) {
   const { user } = useSession();
   const [templates, setTemplates] = useState<PackingTemplateWithCount[]>([]);
   const [loading, setLoading] = useState(false);
@@ -118,7 +114,7 @@ export function PackingTemplatesDialog({
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     setError(null);
     setSelectedTemplateId(null);
     setTemplateName("");
@@ -126,10 +122,10 @@ export function PackingTemplatesDialog({
     setDeleteConfirmId(null);
     setExpandedTemplateId(null);
     void loadTemplates();
-  }, [open, loadTemplates]);
+  }, [active, loadTemplates]);
 
-  function close() {
-    onOpenChange(false);
+  function finish() {
+    onComplete();
   }
 
   async function handleSaveNew() {
@@ -152,7 +148,7 @@ export function PackingTemplatesDialog({
       onSuccessMessage(
         `Saved template with ${itemCount} ${itemCount === 1 ? "item" : "items"}.`
       );
-      close();
+      finish();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed.");
     } finally {
@@ -183,7 +179,7 @@ export function PackingTemplatesDialog({
             ? ` (${result.skipped} duplicate${result.skipped === 1 ? "" : "s"} skipped).`
             : ".")
       );
-      close();
+      finish();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed.");
     } finally {
@@ -213,7 +209,7 @@ export function PackingTemplatesDialog({
             ? ` (${result.skipped} duplicate${result.skipped === 1 ? "" : "s"} skipped).`
             : ".")
       );
-      close();
+      finish();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not add items.");
     } finally {
@@ -288,7 +284,7 @@ export function PackingTemplatesDialog({
           </ul>
         )}
         <div className="mt-4 flex justify-end gap-2">
-          <button type="button" className={BTN_SECONDARY} onClick={close} disabled={busy}>
+          <button type="button" className={BTN_SECONDARY} onClick={onBack} disabled={busy}>
             Cancel
           </button>
           <button
@@ -305,14 +301,7 @@ export function PackingTemplatesDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="text-xl font-semibold text-[#1f1f1f]">
-            {modeTitle(mode)}
-          </DialogTitle>
-        </DialogHeader>
-
+    <>
         {error ? (
           <p className="text-sm text-red-600" role="alert">
             {error}
@@ -338,7 +327,7 @@ export function PackingTemplatesDialog({
               />
             </label>
             <div className="flex justify-end gap-2">
-              <button type="button" className={BTN_SECONDARY} onClick={close} disabled={busy}>
+              <button type="button" className={BTN_SECONDARY} onClick={onBack} disabled={busy}>
                 Cancel
               </button>
               <button
@@ -516,13 +505,12 @@ export function PackingTemplatesDialog({
               </ul>
             )}
             <div className="flex justify-end">
-              <button type="button" className={BTN_SECONDARY} onClick={close}>
-                Close
+              <button type="button" className={BTN_SECONDARY} onClick={onBack}>
+                Done
               </button>
             </div>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+    </>
   );
 }
