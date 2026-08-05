@@ -51,6 +51,8 @@ export function DialogContent({ children }: DialogContentProps) {
   const { open, onOpenChange } = useDialogContext();
   const contentRef = useRef<HTMLDivElement>(null);
   const innerContentRef = useRef<HTMLDivElement>(null);
+  /** Whether the current press began on the backdrop itself. See onPointerUp. */
+  const pressStartedOnOverlayRef = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -88,8 +90,22 @@ export function DialogContent({ children }: DialogContentProps) {
       role="dialog"
       aria-modal="true"
       className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onOpenChange(false);
+      // Dismiss only when a press both STARTS and ENDS on the backdrop.
+      //
+      // Do not reduce this to a single `onClick` check on `e.target`: per the UI
+      // Events spec, when mousedown and mouseup land on different elements the
+      // `click` event fires on their nearest common ancestor. This overlay IS
+      // that ancestor (overlay > card > field), so selecting text in a field and
+      // dragging past the card edge produced a click targeted at the overlay and
+      // silently closed the dialog — losing whatever the user had typed.
+      onPointerDown={(e) => {
+        pressStartedOnOverlayRef.current = e.target === e.currentTarget;
+      }}
+      onPointerUp={(e) => {
+        const shouldDismiss =
+          pressStartedOnOverlayRef.current && e.target === e.currentTarget;
+        pressStartedOnOverlayRef.current = false;
+        if (shouldDismiss) onOpenChange(false);
       }}
     >
       <div
