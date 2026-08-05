@@ -718,6 +718,7 @@ export function TasksSection({ tripId, canEditContent = true, participantAvatarU
                     <img
                       src={avatarUrl}
                       alt=""
+                      loading="lazy"
                       className="size-6 shrink-0 rounded-full object-cover"
                       aria-hidden
                     />

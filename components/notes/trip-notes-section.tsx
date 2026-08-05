@@ -310,6 +310,7 @@ function NoteImageThumbnail({
     <img
       src={url}
       alt="Note image"
+      loading="lazy"
       className="h-full w-full rounded-lg object-cover"
     />
   );

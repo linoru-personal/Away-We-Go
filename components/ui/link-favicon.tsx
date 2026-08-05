@@ -65,6 +65,7 @@ export function LinkFavicon({ url, size = 24, className = "" }: LinkFaviconProps
     <img
       src={faviconUrl}
       alt=""
+      loading="lazy"
       className={`shrink-0 rounded object-contain ${className}`}
       style={{ width: size, height: size }}
       onError={() => setError(true)}

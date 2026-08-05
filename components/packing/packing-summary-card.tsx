@@ -155,6 +155,7 @@ export function PackingSummaryCard({ tripId, tripCoverImageUrl }: PackingSummary
                     <img
                       src={stat.avatarUrl}
                       alt=""
+                      loading="lazy"
                       className="size-6 shrink-0 rounded-full object-cover"
                       aria-hidden
                     />

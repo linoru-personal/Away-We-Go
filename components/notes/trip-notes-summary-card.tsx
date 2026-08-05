@@ -280,6 +280,7 @@ export function TripNotesSummaryCard({ tripId }: TripNotesSummaryCardProps) {
                 <img
                   src={thumbnailSrc}
                   alt=""
+                  loading="lazy"
                   className="size-12 shrink-0 rounded object-cover"
                 />
               ) : (

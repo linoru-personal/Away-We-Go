@@ -235,6 +235,7 @@ export function AddCurrencyDialog({
                             <img
                               src={`https://flagcdn.com/w40/${option.flagCountry}.png`}
                               alt=""
+                              loading="lazy"
                               className="h-full w-full object-cover"
                             />
                           </div>

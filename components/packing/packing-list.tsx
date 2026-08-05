@@ -625,6 +625,7 @@ export function PackingList({
                 <img
                   src={avatarUrl}
                   alt=""
+                  loading="lazy"
                   className="size-6 shrink-0 rounded-full object-cover"
                   aria-hidden
                 />
@@ -1062,7 +1063,13 @@ export function PackingList({
               return (
                 <div className="mb-3 flex items-center gap-2">
                   {avatarUrl ? (
-                    <img src={avatarUrl} alt="" className="size-8 shrink-0 rounded-full object-cover" aria-hidden />
+                    <img
+                      src={avatarUrl}
+                      alt=""
+                      loading="lazy"
+                      className="size-8 shrink-0 rounded-full object-cover"
+                      aria-hidden
+                    />
                   ) : (
                     <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#E8E4E0] text-sm font-medium text-[#6B7280]" aria-hidden>
                       {part.label.trim().slice(0, 1).toUpperCase() || "?"}
@@ -1164,6 +1171,7 @@ export function PackingList({
                   <img
                     src={avatarUrl}
                     alt=""
+                    loading="lazy"
                     className="size-8 shrink-0 rounded-full object-cover"
                     aria-hidden
                   />

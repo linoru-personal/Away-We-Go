@@ -28,6 +28,7 @@ export function TripCard({
         <img
           src={coverImageUrl}
           alt=""
+          loading="lazy"
           className="h-44 w-full rounded-t-3xl object-cover"
         />
       ) : (
@@ -46,7 +47,12 @@ export function TripCard({
                 className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-neutral-300"
               >
                 {url ? (
-                  <img src={url} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={url}
+                    alt=""
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
                   <span className="text-[10px] font-medium text-neutral-500">?</span>
                 )}
