@@ -165,10 +165,10 @@ export function DashboardSidebar({
               >
                 <div className="relative size-11 shrink-0 overflow-hidden rounded-lg bg-[#ebe5df]">
                   {thumb ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={thumb}
                       alt=""
+                      loading="lazy"
                       className="size-full object-cover"
                     />
                   ) : (

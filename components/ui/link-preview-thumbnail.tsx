@@ -51,10 +51,10 @@ export function LinkPreviewThumbnail({
         />
       </div>
       {tryImage ? (
-        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={url}
           alt=""
+          loading="lazy"
           className={`relative z-10 size-full object-cover transition-opacity duration-300 ease-out ${
             showImage ? "opacity-100" : "opacity-0"
           }`}

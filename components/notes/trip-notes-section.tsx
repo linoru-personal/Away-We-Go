@@ -242,10 +242,10 @@ function NoteImageBlock({
   if (!src) return null;
 
   const img = (
-    /* eslint-disable-next-line @next/next/no-img-element */
     <img
       src={src}
       alt="Note image"
+      loading="lazy"
       className={grid ? NOTE_IMAGE_GRID_CLASS : NOTE_IMAGE_THUMB_CLASS}
     />
   );
@@ -636,7 +636,8 @@ function ImageLightbox({
       >
         ✕
       </button>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {/* Eager: the user clicked to open this lightbox, so deferring it would
+          delay the one image they explicitly asked to see. */}
       <img
         src={src}
         alt=""
