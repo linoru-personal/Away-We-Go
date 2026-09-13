@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/lib/supabaseClient";
 import { claimPendingTripInvitations } from "@/lib/claim-pending-trip-invitations";
+import {
+  validateSignInInput,
+  validateSignUpInput,
+} from "@/lib/auth-form-validation";
 import { AuthShell } from "@/components/auth/auth-shell";
 import {
   INPUT_CLASS,
@@ -59,9 +63,14 @@ export function HomePageContent() {
   const handleLogin = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setError(null);
+    const invalid = validateSignInInput(email, password);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
     setLoading(true);
     const { error: err } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     });
     setLoading(false);
@@ -76,11 +85,25 @@ export function HomePageContent() {
   const handleSignup = async (e: React.MouseEvent) => {
     e.preventDefault();
     setError(null);
+    const invalid = validateSignUpInput(email, password);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
     setLoading(true);
-    const { error: err } = await supabase.auth.signUp({ email, password });
+    const { error: err } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+    });
     setLoading(false);
     if (err) {
-      setError(err.message);
+      // Point an existing account at the Login button rather than repeating
+      // Supabase's bare "User already registered".
+      setError(
+        err.code === "user_already_exists"
+          ? "An account already exists for this email. Use Login instead, or reset your password."
+          : err.message
+      );
       return;
     }
     await claimPendingTripInvitations(supabase, { force: true });
