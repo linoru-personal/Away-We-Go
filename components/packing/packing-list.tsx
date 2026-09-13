@@ -29,6 +29,10 @@ import {
 } from "@/components/packing/packing-item-row";
 import { getPackingGroupingMode, PACKING_GROUP_KEY_EVERYONE } from "@/lib/list-grouping";
 import {
+  readCollapsedGroups,
+  writeCollapsedGroups,
+} from "@/lib/packing/collapsed-groups";
+import {
   updatePackingItem,
   type PackingItemPatch,
 } from "@/lib/packing/packing-item-mutations";
@@ -87,8 +91,12 @@ const GROUP_CARD_CLASS =
 
 const GROUP_HEADER_CLASS = "flex items-center gap-2.5 px-5 pb-3 pt-4";
 
-/** Hairlines between rows, and one above the first row to close off the header. */
-const ITEM_LIST_CLASS = "divide-y divide-[#F0EBE5] border-t border-[#F0EBE5]";
+/**
+ * Hairlines between rows only. The rule closing off the header lives on the
+ * header itself, so a collapsed group — whose rows are all hidden — doesn't
+ * leave a stray line hanging under it.
+ */
+const ITEM_LIST_CLASS = "divide-y divide-[#F0EBE5]";
 
 const ADD_ITEM_BUTTON_CLASS =
   "w-full border-t border-[#F0EBE5] px-5 py-3 text-start text-sm font-medium text-[#9B7B6B] transition-colors duration-150 hover:bg-[#FBF8F5] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#E07A5F]/30";
@@ -172,6 +180,23 @@ export function PackingList({
   const [listManagementMessage, setListManagementMessage] = useState<string | null>(
     null
   );
+  /**
+   * Group keys the viewer has folded shut. Seeded straight from localStorage:
+   * safe as a lazy initializer because the list renders its loading branch on
+   * the server and on first client render, so nothing can mismatch.
+   */
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() =>
+    readCollapsedGroups(tripId)
+  );
+
+  function toggleGroupCollapsed(groupKey: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(groupKey)) next.add(groupKey);
+      writeCollapsedGroups(tripId, next);
+      return next;
+    });
+  }
 
   const packedCount = items.filter((i) => i.is_packed).length;
   const totalCount = items.length;
@@ -453,50 +478,90 @@ export function PackingList({
     );
   }
 
-  function renderCategoryHeader(category: PackingCategory, groupItems: PackingItem[]) {
+  /**
+   * The group header doubles as the collapse control. The count stays visible
+   * while collapsed — that is what makes a folded group still worth reading.
+   */
+  function renderGroupHeader(
+    groupKey: string,
+    leading: React.ReactNode,
+    label: string,
+    groupItems: PackingItem[]
+  ) {
+    const collapsed = collapsedGroups.has(groupKey);
     return (
-      <div className={GROUP_HEADER_CLASS}>
-        <span className="shrink-0 text-[#4A4A4A]">
-          <CategoryIcon iconKey={getIconKey(category.icon, PACKING_DEFAULT_ICON)} size={20} />
-        </span>
-        <h3 className="min-w-0 flex-1 truncate text-base font-semibold text-[#4A4A4A]">
-          {category.name}
+      <button
+        type="button"
+        className={`${GROUP_HEADER_CLASS} ${collapsed ? "" : "border-b border-[#F0EBE5]"}`}
+        onClick={() => toggleGroupCollapsed(groupKey)}
+        aria-expanded={!collapsed}
+      >
+        {leading}
+        <h3 className="min-w-0 flex-1 truncate text-start text-base font-semibold text-[#4A4A4A]">
+          {label}
         </h3>
         {renderGroupCount(groupItems)}
-      </div>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={`size-4 shrink-0 text-[#B5A79C] transition-transform duration-200 ${
+            collapsed ? "" : "rotate-180"
+          }`}
+          aria-hidden
+        >
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+    );
+  }
+
+  function renderCategoryHeader(category: PackingCategory, groupItems: PackingItem[]) {
+    return renderGroupHeader(
+      category.id,
+      <span className="shrink-0 text-[#4A4A4A]">
+        <CategoryIcon iconKey={getIconKey(category.icon, PACKING_DEFAULT_ICON)} size={20} />
+      </span>,
+      category.name,
+      groupItems
     );
   }
 
   function renderParticipantHeader(
+    groupKey: string,
     label: string,
     avatarUrl: string | null,
     groupItems: PackingItem[]
   ) {
-    return (
-      <div className={GROUP_HEADER_CLASS}>
-        {avatarUrl ? (
-          <img
-            src={avatarUrl}
-            alt=""
-            loading="lazy"
-            className="size-8 shrink-0 rounded-full object-cover"
-            aria-hidden
-          />
-        ) : (
-          <span
-            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#E8E4E0] text-sm font-medium text-[#6B7280]"
-            aria-hidden
-          >
-            {label.trim().slice(0, 1).toUpperCase() || "?"}
-          </span>
-        )}
-        <h3 className="min-w-0 flex-1 truncate text-base font-semibold text-[#4A4A4A]">{label}</h3>
-        {renderGroupCount(groupItems)}
-      </div>
+    return renderGroupHeader(
+      groupKey,
+      avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt=""
+          loading="lazy"
+          className="size-8 shrink-0 rounded-full object-cover"
+          aria-hidden
+        />
+      ) : (
+        <span
+          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#E8E4E0] text-sm font-medium text-[#6B7280]"
+          aria-hidden
+        >
+          {label.trim().slice(0, 1).toUpperCase() || "?"}
+        </span>
+      ),
+      label,
+      groupItems
     );
   }
 
   function renderAddItemButton(groupKey: string) {
+    if (collapsedGroups.has(groupKey)) return null;
     return (
       <button type="button" className={ADD_ITEM_BUTTON_CLASS} onClick={() => openAddFromGroup(groupKey)}>
         + Add item
@@ -554,17 +619,24 @@ export function PackingList({
     );
   }
 
-  /** The same row, wrapped as a dnd-kit sortable `<li>`. */
+  /**
+   * The same row, wrapped as a dnd-kit sortable `<li>`.
+   *
+   * A row in a collapsed group is hidden rather than skipped: dnd-kit keeps its
+   * refs attached, so the group stays a valid drop target while folded — the
+   * droppable is the group container, not the row list.
+   */
   function renderSortableRow(
     item: PackingItem,
     { setNodeRef, style, attributes, listeners, isDragging }: SortableGroupListSortableProps,
-    metaLabel: string
+    metaLabel: string,
+    groupKey: string
   ) {
     return (
       <li
         ref={setNodeRef}
         style={style}
-        className="group list-none"
+        className={`group list-none ${collapsedGroups.has(groupKey) ? "hidden" : ""}`}
         dir={listRtl ? "rtl" : undefined}
       >
         {renderItemRow(
@@ -778,7 +850,7 @@ export function PackingList({
               return renderCategoryHeader(entry.category, entry.items);
             }}
             renderItem={(item, sortable) =>
-              renderSortableRow(item, sortable, getAssigneeLabel(item, participants))
+              renderSortableRow(item, sortable, getAssigneeLabel(item, participants), item.category_id)
             }
             listTag="ul"
             listClassName={ITEM_LIST_CLASS}
@@ -799,11 +871,11 @@ export function PackingList({
                   disabled={!canEditContent}
                 >
                   {(item, sortable) =>
-                    renderSortableRow(item, sortable, getAssigneeLabel(item, participants))
+                    renderSortableRow(item, sortable, getAssigneeLabel(item, participants), item.category_id)
                   }
                 </SortableGroupList>
               ) : (
-                <ul className={ITEM_LIST_CLASS} role="list">
+                <ul className={ITEM_LIST_CLASS} role="list" hidden={collapsedGroups.has(category.id)}>
                   {catItems.map((item) => (
                     <li key={item.id} className="group list-none" dir={listRtl ? "rtl" : undefined}>
                       {renderItemRow(item, getAssigneeLabel(item, participants))}
@@ -833,13 +905,19 @@ export function PackingList({
               );
               if (!part) return null;
               return renderParticipantHeader(
+                groupKey,
                 part.label,
                 getParticipantAvatarUrl(part.participantId),
                 part.items
               );
             }}
             renderItem={(item, sortable) =>
-              renderSortableRow(item, sortable, getCategoryName(item.category_id, categories))
+              renderSortableRow(
+                item,
+                sortable,
+                getCategoryName(item.category_id, categories),
+                item.assigned_to_participant_id ?? PACKING_GROUP_KEY_EVERYONE
+              )
             }
             listTag="ul"
             listClassName={ITEM_LIST_CLASS}
@@ -850,7 +928,12 @@ export function PackingList({
         ) : viewMode === "participant" &&
           itemsByParticipant.map(({ label, participantId, items: partItems }) => (
             <div key={participantId ?? "__everyone__"} className={GROUP_CARD_CLASS}>
-              {renderParticipantHeader(label, getParticipantAvatarUrl(participantId), partItems)}
+              {renderParticipantHeader(
+                participantId ?? PACKING_GROUP_KEY_EVERYONE,
+                label,
+                getParticipantAvatarUrl(participantId),
+                partItems
+              )}
               {canEditContent && onReorderGroup ? (
                 <SortableGroupList<PackingItem>
                   items={partItems}
@@ -860,11 +943,20 @@ export function PackingList({
                   disabled={!canEditContent}
                 >
                   {(item, sortable) =>
-                    renderSortableRow(item, sortable, getCategoryName(item.category_id, categories))
+                    renderSortableRow(
+                      item,
+                      sortable,
+                      getCategoryName(item.category_id, categories),
+                      item.assigned_to_participant_id ?? PACKING_GROUP_KEY_EVERYONE
+                    )
                   }
                 </SortableGroupList>
               ) : (
-                <ul className={ITEM_LIST_CLASS} role="list">
+                <ul
+                  className={ITEM_LIST_CLASS}
+                  role="list"
+                  hidden={collapsedGroups.has(participantId ?? PACKING_GROUP_KEY_EVERYONE)}
+                >
                   {partItems.map((item) => (
                     <li key={item.id} className="group list-none" dir={listRtl ? "rtl" : undefined}>
                       {renderItemRow(item, getCategoryName(item.category_id, categories))}
