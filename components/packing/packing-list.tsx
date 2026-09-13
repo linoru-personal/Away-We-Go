@@ -17,9 +17,16 @@ import {
 } from "@/components/ui/category-icons";
 import { ManagePackingCategoriesDialog } from "@/components/packing/manage-packing-categories-dialog";
 import { ManagePackingListDialog } from "@/components/packing/manage-packing-list-dialog";
-import { SortableGroupList } from "@/components/ui/sortable-group-list";
+import {
+  SortableGroupList,
+  type SortableGroupListSortableProps,
+} from "@/components/ui/sortable-group-list";
 import { GroupedSortableList } from "@/components/ui/grouped-sortable-list";
 import { DragHandle } from "@/components/ui/drag-handle";
+import {
+  PackingItemEditor,
+  PackingItemRow,
+} from "@/components/packing/packing-item-row";
 import { getPackingGroupingMode, PACKING_GROUP_KEY_EVERYONE } from "@/lib/list-grouping";
 import {
   updatePackingItem,
@@ -71,39 +78,20 @@ export interface PackingListProps {
   onMoveItem?: (viewMode: "category" | "participant", item: PackingItem, fromGroupKey: string, toGroupKey: string, insertIndex: number) => Promise<void>;
 }
 
-const CARD_CLASS = "bg-white rounded-[24px] p-6 shadow-[0_2px_16px_rgba(0,0,0,0.06)]";
+/**
+ * One card per group. Rows sit flush inside it, separated by hairlines, so the
+ * list reads as a single surface instead of a stack of cards within a card.
+ */
+const GROUP_CARD_CLASS =
+  "overflow-hidden rounded-[24px] bg-white shadow-[0_2px_16px_rgba(0,0,0,0.06)]";
 
-/** Per-item row card (matches budget/tasks list items). */
-const PACKING_LIST_ITEM_CARD_CLASS =
-  "rounded-[24px] bg-white p-5 shadow-[0_2px_16px_rgba(0,0,0,0.06)]";
+const GROUP_HEADER_CLASS = "flex items-center gap-2.5 px-5 pb-3 pt-4";
 
-function CheckIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="size-2.5">
-      <path d="M20 6L9 17l-5-5" />
-    </svg>
-  );
-}
+/** Hairlines between rows, and one above the first row to close off the header. */
+const ITEM_LIST_CLASS = "divide-y divide-[#F0EBE5] border-t border-[#F0EBE5]";
 
-function PencilIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4">
-      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4">
-      <path d="M3 6h18" />
-      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-      <line x1="10" x2="10" y1="11" y2="17" />
-      <line x1="14" x2="14" y1="11" y2="17" />
-    </svg>
-  );
-}
+const ADD_ITEM_BUTTON_CLASS =
+  "w-full border-t border-[#F0EBE5] px-5 py-3 text-start text-sm font-medium text-[#9B7B6B] transition-colors duration-150 hover:bg-[#FBF8F5] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#E07A5F]/30";
 
 function getAssigneeLabel(item: PackingItem, participants: PackingParticipant[]): string {
   const participantId = item.assigned_to_participant_id;
@@ -448,53 +436,150 @@ export function PackingList({
   }
 
   /** LTR + stable order: list rows may use `dir="rtl"` for titles, which reverses flex and breaks "Delete?". */
-  function renderPackingItemEditDeleteActions(item: PackingItem) {
+  /** Avatar for a participant group; the trip cover stands in for "Everyone". */
+  function getParticipantAvatarUrl(participantId: string | null): string | null {
+    if (participantId === null) return tripCoverImageUrl ?? null;
+    const idx = participants.findIndex((p) => p.id === participantId);
+    return idx >= 0 ? participantAvatarUrls[idx] ?? null : null;
+  }
+
+  /** "4/7" for a group, counted over the items actually shown (so it respects the filter). */
+  function renderGroupCount(groupItems: PackingItem[]) {
+    const packed = groupItems.filter((i) => i.is_packed).length;
     return (
-      <div
-        className="flex shrink-0 flex-row items-center gap-1.5"
-        dir="ltr"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {deleteConfirmId === item.id ? (
-          <span className="inline-flex items-center gap-2 whitespace-nowrap">
-            <span className="text-xs font-medium text-[#6B7280]">Delete?</span>
-            <button
-              type="button"
-              className="rounded-md px-2 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
-              onClick={() => handleDelete(item.id)}
-              disabled={deleteLoading}
-            >
-              Yes
-            </button>
-            <button
-              type="button"
-              className="rounded-md px-2 py-1 text-xs font-medium text-[#4A4A4A] transition hover:bg-[#F5F3F0]"
-              onClick={() => setDeleteConfirmId(null)}
-            >
-              No
-            </button>
-          </span>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="rounded p-1 text-[#6B7280] transition hover:bg-[#F5F3F0]"
-              onClick={() => openEdit(item)}
-              aria-label="Edit"
-            >
-              <PencilIcon />
-            </button>
-            <button
-              type="button"
-              className="rounded p-1 text-[#6B7280] transition hover:bg-[#F5F3F0]"
-              onClick={() => setDeleteConfirmId(item.id)}
-              aria-label="Delete"
-            >
-              <TrashIcon />
-            </button>
-          </>
-        )}
+      <span className="shrink-0 text-sm font-medium tabular-nums text-[#9B7B6B]" dir="ltr">
+        {packed}/{groupItems.length}
+      </span>
+    );
+  }
+
+  function renderCategoryHeader(category: PackingCategory, groupItems: PackingItem[]) {
+    return (
+      <div className={GROUP_HEADER_CLASS}>
+        <span className="shrink-0 text-[#4A4A4A]">
+          <CategoryIcon iconKey={getIconKey(category.icon, PACKING_DEFAULT_ICON)} size={20} />
+        </span>
+        <h3 className="min-w-0 flex-1 truncate text-base font-semibold text-[#4A4A4A]">
+          {category.name}
+        </h3>
+        {renderGroupCount(groupItems)}
       </div>
+    );
+  }
+
+  function renderParticipantHeader(
+    label: string,
+    avatarUrl: string | null,
+    groupItems: PackingItem[]
+  ) {
+    return (
+      <div className={GROUP_HEADER_CLASS}>
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt=""
+            loading="lazy"
+            className="size-8 shrink-0 rounded-full object-cover"
+            aria-hidden
+          />
+        ) : (
+          <span
+            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#E8E4E0] text-sm font-medium text-[#6B7280]"
+            aria-hidden
+          >
+            {label.trim().slice(0, 1).toUpperCase() || "?"}
+          </span>
+        )}
+        <h3 className="min-w-0 flex-1 truncate text-base font-semibold text-[#4A4A4A]">{label}</h3>
+        {renderGroupCount(groupItems)}
+      </div>
+    );
+  }
+
+  function renderAddItemButton(groupKey: string) {
+    return (
+      <button type="button" className={ADD_ITEM_BUTTON_CLASS} onClick={() => openAddFromGroup(groupKey)}>
+        + Add item
+      </button>
+    );
+  }
+
+  /**
+   * A single list row. Both view modes and all three drag states route through
+   * here, so the row markup has one home.
+   */
+  function renderItemRow(
+    item: PackingItem,
+    metaLabel: string,
+    dragHandle?: React.ReactNode,
+    isDragging?: boolean
+  ) {
+    const isEditing = editingId === item.id && editSessionView === viewMode && canEditContent;
+    return (
+      <PackingItemRow
+        item={item}
+        metaLabel={metaLabel}
+        rtl={listRtl}
+        canEdit={canEditContent}
+        toggleDisabled={!!toggleErrorId}
+        onToggle={() => handleTogglePacked(item)}
+        onEdit={() => openEdit(item)}
+        onDeleteRequest={() => setDeleteConfirmId(item.id)}
+        confirmingDelete={deleteConfirmId === item.id}
+        deleteLoading={deleteLoading}
+        onDeleteConfirm={() => handleDelete(item.id)}
+        onDeleteCancel={() => setDeleteConfirmId(null)}
+        dragHandle={dragHandle}
+        isDragging={isDragging}
+        editor={
+          isEditing ? (
+            <PackingItemEditor
+              title={editTitle}
+              quantity={editQuantity}
+              categoryId={editCategoryId}
+              assignedTo={editAssignedTo}
+              categories={categories}
+              participants={participants}
+              saving={editSaving}
+              onTitleChange={setEditTitle}
+              onQuantityChange={setEditQuantity}
+              onCategoryChange={setEditCategoryId}
+              onAssignedToChange={setEditAssignedTo}
+              onSave={handleSaveEdit}
+              onCancel={() => clearInlineEdit()}
+            />
+          ) : undefined
+        }
+      />
+    );
+  }
+
+  /** The same row, wrapped as a dnd-kit sortable `<li>`. */
+  function renderSortableRow(
+    item: PackingItem,
+    { setNodeRef, style, attributes, listeners, isDragging }: SortableGroupListSortableProps,
+    metaLabel: string
+  ) {
+    return (
+      <li
+        ref={setNodeRef}
+        style={style}
+        className="group list-none"
+        dir={listRtl ? "rtl" : undefined}
+      >
+        {renderItemRow(
+          item,
+          metaLabel,
+          canEditContent ? (
+            <DragHandle
+              listeners={listeners}
+              attributes={attributes}
+              aria-label="Drag to reorder item"
+            />
+          ) : undefined,
+          isDragging
+        )}
+      </li>
     );
   }
 
@@ -677,7 +762,7 @@ export function PackingList({
         </>
       )}
 
-      <div className="mt-6 space-y-6">
+      <div className="mt-6 space-y-5">
         {viewMode === "category" && canEditContent && onReorderGroup && onMoveItem ? (
           <GroupedSortableList<PackingItem>
             groups={itemsByCategory.map(({ category, items }) => ({ groupKey: category.id, items }))}
@@ -688,353 +773,45 @@ export function PackingList({
             onReorder={(_groupKey, newOrderedItems) => onReorderGroup(newOrderedItems)}
             onMove={(item, fromGroupKey, toGroupKey, insertIndex) => onMoveItem!("category", item, fromGroupKey, toGroupKey, insertIndex)}
             renderGroupHeader={(groupKey) => {
-              const cat = categories.find((c) => c.id === groupKey);
-              if (!cat) return null;
-              return (
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="shrink-0 text-[#4A4A4A]">
-                    <CategoryIcon iconKey={getIconKey(cat.icon, PACKING_DEFAULT_ICON)} size={20} />
-                  </span>
-                  <h3 className="text-base font-semibold text-[#4A4A4A]">{cat.name}</h3>
-                </div>
-              );
+              const entry = itemsByCategory.find(({ category }) => category.id === groupKey);
+              if (!entry) return null;
+              return renderCategoryHeader(entry.category, entry.items);
             }}
-            renderItem={(item, { setNodeRef, style, attributes, listeners, isDragging }) => (
-              <li
-                ref={setNodeRef}
-                style={style}
-                className="group relative list-none"
-                dir={listRtl ? "rtl" : undefined}
-              >
-                <div className={`relative ps-9 transition-all duration-150 ${isDragging ? "scale-[1.01] shadow-lg" : ""}`}>
-                  <span className="absolute start-1 top-4 z-[1] transition-opacity">
-                    <DragHandle
-                      listeners={listeners}
-                      attributes={attributes}
-                      aria-label="Drag to reorder item"
-                    />
-                  </span>
-                  <div className={PACKING_LIST_ITEM_CARD_CLASS}>
-                    <div className="flex min-w-0 items-start gap-3">
-                      <button
-                        type="button"
-                        className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                          item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                        }`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleTogglePacked(item);
-                        }}
-                        disabled={!!toggleErrorId}
-                      >
-                        {item.is_packed && <CheckIcon />}
-                      </button>
-                      {editingId === item.id && editSessionView === viewMode ? (
-                        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                          <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} dir="auto" style={{ unicodeBidi: "plaintext" }} className="min-w-[120px] rounded border border-[#D4C5BA] px-2 py-1 text-sm" />
-                          <input type="number" min={1} value={editQuantity} onChange={(e) => setEditQuantity(parseInt(e.target.value, 10) || 1)} className="w-14 rounded border border-[#D4C5BA] px-2 py-1 text-sm" />
-                          <select value={editCategoryId} onChange={(e) => setEditCategoryId(e.target.value)} className="rounded border border-[#D4C5BA] px-2 py-1 text-sm">
-                            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                          <select value={editAssignedTo ?? "everyone"} onChange={(e) => setEditAssignedTo(e.target.value === "everyone" ? null : e.target.value)} className="rounded border border-[#D4C5BA] px-2 py-1 text-sm">
-                            <option value="everyone">Everyone</option>
-                            {participants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </select>
-                          <button type="button" className="rounded bg-[#E07A5F] px-2 py-1 text-sm text-white disabled:opacity-50" onClick={handleSaveEdit} disabled={editSaving}>Save</button>
-                          <button type="button" className="rounded border border-[#D4C5BA] px-2 py-1 text-sm" onClick={() => clearInlineEdit()}>Cancel</button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
-                            <p className={item.is_packed ? "text-sm font-medium text-[#9B7B6B] line-through" : "text-sm font-medium text-[#4A4A4A]"} dir={listRtl ? "rtl" : "ltr"} style={{ unicodeBidi: "plaintext" }}>{item.title}</p>
-                            <p className="text-xs text-[#9B7B6B]"><span dir="ltr">{getAssigneeLabel(item, participants)}</span>{item.quantity > 1 && <span dir="ltr" className="ms-1">× {item.quantity}</span>}</p>
-                          </div>
-                          {renderPackingItemEditDeleteActions(item)}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </li>
-            )}
-            listTag="ul"
-            listClassName="space-y-3"
-            groupClassName={CARD_CLASS}
-            disabled={!canEditContent}
-            renderGroupFooter={
-              canEditContent
-                ? (groupKey) => (
-                    <button
-                      type="button"
-                      className="mt-2 text-sm text-[#6B7280] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1 rounded transition-colors duration-150"
-                      onClick={() => openAddFromGroup(groupKey)}
-                    >
-                      + Add item
-                    </button>
-                  )
-                : undefined
+            renderItem={(item, sortable) =>
+              renderSortableRow(item, sortable, getAssigneeLabel(item, participants))
             }
+            listTag="ul"
+            listClassName={ITEM_LIST_CLASS}
+            groupClassName={GROUP_CARD_CLASS}
+            disabled={!canEditContent}
+            renderGroupFooter={canEditContent ? (groupKey) => renderAddItemButton(groupKey) : undefined}
           />
         ) : viewMode === "category" &&
           itemsByCategory.map(({ category, items: catItems }) => (
-            <div key={category.id} className={CARD_CLASS}>
-              <div className="mb-3 flex items-center gap-2">
-                <span className="shrink-0 text-[#4A4A4A]">
-                  <CategoryIcon iconKey={getIconKey(category.icon, PACKING_DEFAULT_ICON)} size={20} />
-                </span>
-                <h3 className="text-base font-semibold text-[#4A4A4A]">{category.name}</h3>
-              </div>
+            <div key={category.id} className={GROUP_CARD_CLASS}>
+              {renderCategoryHeader(category, catItems)}
               {canEditContent && onReorderGroup ? (
                 <SortableGroupList<PackingItem>
                   items={catItems}
                   onReorder={onReorderGroup}
                   as="ul"
-                  className="space-y-3"
+                  className={ITEM_LIST_CLASS}
                   disabled={!canEditContent}
                 >
-                  {(item, { setNodeRef, style, attributes, listeners, isDragging }) => (
-                    <li
-                      ref={setNodeRef}
-                      style={style}
-                      className="group relative list-none"
-                      dir={listRtl ? "rtl" : undefined}
-                    >
-                      <div className={`relative ps-9 transition-all duration-150 ${isDragging ? "scale-[1.01] shadow-lg" : ""}`}>
-                        {canEditContent && (
-                          <span className="absolute start-1 top-4 z-[1] transition-opacity">
-                            <DragHandle
-                              listeners={listeners}
-                              attributes={attributes}
-                              aria-label="Drag to reorder item"
-                            />
-                          </span>
-                        )}
-                        <div className={PACKING_LIST_ITEM_CARD_CLASS}>
-                          <div className="flex min-w-0 items-start gap-3">
-                            {canEditContent ? (
-                              <button
-                                type="button"
-                                className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                                  item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleTogglePacked(item);
-                                }}
-                                disabled={!!toggleErrorId}
-                              >
-                                {item.is_packed && <CheckIcon />}
-                              </button>
-                            ) : (
-                              <span
-                                className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 ${
-                                  item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                                }`}
-                                aria-hidden
-                              >
-                                {item.is_packed && <CheckIcon />}
-                              </span>
-                            )}
-                            {editingId === item.id && editSessionView === viewMode && canEditContent ? (
-                              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                                <input
-                                  type="text"
-                                  value={editTitle}
-                                  onChange={(e) => setEditTitle(e.target.value)}
-                                  dir="auto"
-                                  style={{ unicodeBidi: "plaintext" }}
-                                  className="min-w-[120px] rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                />
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={editQuantity}
-                                  onChange={(e) => setEditQuantity(parseInt(e.target.value, 10) || 1)}
-                                  className="w-14 rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                />
-                                <select
-                                  value={editCategoryId}
-                                  onChange={(e) => setEditCategoryId(e.target.value)}
-                                  className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                >
-                                  {categories.map((c) => (
-                                    <option key={c.id} value={c.id}>
-                                      {c.name}
-                                    </option>
-                                  ))}
-                                </select>
-                                <select
-                                  value={editAssignedTo ?? "everyone"}
-                                  onChange={(e) => setEditAssignedTo(e.target.value === "everyone" ? null : e.target.value)}
-                                  className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                >
-                                  <option value="everyone">Everyone</option>
-                                  {participants.map((p) => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                  ))}
-                                </select>
-                                <button
-                                  type="button"
-                                  className="rounded bg-[#E07A5F] px-2 py-1 text-sm text-white disabled:opacity-50"
-                                  onClick={handleSaveEdit}
-                                  disabled={editSaving}
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  type="button"
-                                  className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                  onClick={() => clearInlineEdit()}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <>
-                                <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
-                                  <p
-                                    className={item.is_packed ? "text-sm font-medium text-[#9B7B6B] line-through" : "text-sm font-medium text-[#4A4A4A]"}
-                                    dir={listRtl ? "rtl" : "ltr"}
-                                    style={{ unicodeBidi: "plaintext" }}
-                                  >
-                                    {item.title}
-                                  </p>
-                                  <p className="text-xs text-[#9B7B6B]">
-                                    <span dir="ltr">
-                                      {getAssigneeLabel(item, participants)}
-                                    </span>
-                                    {item.quantity > 1 && (
-                                      <span dir="ltr" className="ms-1">× {item.quantity}</span>
-                                    )}
-                                  </p>
-                                </div>
-                                {canEditContent && renderPackingItemEditDeleteActions(item)}
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </li>
-                  )}
+                  {(item, sortable) =>
+                    renderSortableRow(item, sortable, getAssigneeLabel(item, participants))
+                  }
                 </SortableGroupList>
               ) : (
-                <ul className="space-y-3" role="list">
+                <ul className={ITEM_LIST_CLASS} role="list">
                   {catItems.map((item) => (
-                    <li key={item.id} className="list-none" dir={listRtl ? "rtl" : undefined}>
-                      <div className={PACKING_LIST_ITEM_CARD_CLASS}>
-                        <div className="flex items-start gap-3">
-                          {canEditContent ? (
-                            <button
-                              type="button"
-                              className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                                item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                              }`}
-                              onClick={() => handleTogglePacked(item)}
-                              disabled={!!toggleErrorId}
-                            >
-                              {item.is_packed && <CheckIcon />}
-                            </button>
-                          ) : (
-                            <span
-                              className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 ${
-                                item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                              }`}
-                              aria-hidden
-                            >
-                              {item.is_packed && <CheckIcon />}
-                            </span>
-                          )}
-                          {editingId === item.id && editSessionView === viewMode && canEditContent ? (
-                            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                              <input
-                                type="text"
-                                value={editTitle}
-                                onChange={(e) => setEditTitle(e.target.value)}
-                                dir="auto"
-                                style={{ unicodeBidi: "plaintext" }}
-                                className="min-w-[120px] rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                              />
-                              <input
-                                type="number"
-                                min={1}
-                                value={editQuantity}
-                                onChange={(e) => setEditQuantity(parseInt(e.target.value, 10) || 1)}
-                                className="w-14 rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                              />
-                              <select
-                                value={editCategoryId}
-                                onChange={(e) => setEditCategoryId(e.target.value)}
-                                className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                              >
-                                {categories.map((c) => (
-                                  <option key={c.id} value={c.id}>
-                                    {c.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <select
-                                value={editAssignedTo ?? "everyone"}
-                                onChange={(e) => setEditAssignedTo(e.target.value === "everyone" ? null : e.target.value)}
-                                className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                              >
-                                <option value="everyone">Everyone</option>
-                                {participants.map((p) => (
-                                  <option key={p.id} value={p.id}>{p.name}</option>
-                                ))}
-                              </select>
-                              <button
-                                type="button"
-                                className="rounded bg-[#E07A5F] px-2 py-1 text-sm text-white disabled:opacity-50"
-                                onClick={handleSaveEdit}
-                                disabled={editSaving}
-                              >
-                                Save
-                              </button>
-                              <button
-                                type="button"
-                                className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                onClick={() => clearInlineEdit()}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
-                                <p
-                                  className={item.is_packed ? "text-sm font-medium text-[#9B7B6B] line-through" : "text-sm font-medium text-[#4A4A4A]"}
-                                  dir={listRtl ? "rtl" : "ltr"}
-                                  style={{ unicodeBidi: "plaintext" }}
-                                >
-                                  {item.title}
-                                </p>
-                                <p className="text-xs text-[#9B7B6B]">
-                                  <span dir="ltr">
-                                    {getAssigneeLabel(item, participants)}
-                                  </span>
-                                  {item.quantity > 1 && (
-                                    <span dir="ltr" className="ms-1">× {item.quantity}</span>
-                                  )}
-                                </p>
-                              </div>
-                              {canEditContent && renderPackingItemEditDeleteActions(item)}
-                            </>
-                          )}
-                        </div>
-                      </div>
+                    <li key={item.id} className="group list-none" dir={listRtl ? "rtl" : undefined}>
+                      {renderItemRow(item, getAssigneeLabel(item, participants))}
                     </li>
                   ))}
                 </ul>
               )}
-              {canEditContent && (
-                <button
-                  type="button"
-                  className="mt-2 text-sm text-[#6B7280] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1 rounded transition-colors duration-150"
-                  onClick={() => openAddFromGroup(category.id)}
-                >
-                  + Add item
-                </button>
-              )}
+              {canEditContent && renderAddItemButton(category.id)}
             </div>
           ))}
 
@@ -1051,394 +828,53 @@ export function PackingList({
             onReorder={(_groupKey, newOrderedItems) => onReorderGroup(newOrderedItems)}
             onMove={(item, fromGroupKey, toGroupKey, insertIndex) => onMoveItem!("participant", item, fromGroupKey, toGroupKey, insertIndex)}
             renderGroupHeader={(groupKey) => {
-              const part = itemsByParticipant.find((p) => (p.participantId ?? PACKING_GROUP_KEY_EVERYONE) === groupKey);
+              const part = itemsByParticipant.find(
+                (p) => (p.participantId ?? PACKING_GROUP_KEY_EVERYONE) === groupKey
+              );
               if (!part) return null;
-              const avatarUrl =
-                part.participantId === null
-                  ? tripCoverImageUrl ?? null
-                  : (() => {
-                      const idx = participants.findIndex((p) => p.id === part.participantId);
-                      return idx >= 0 ? participantAvatarUrls[idx] ?? null : null;
-                    })();
-              return (
-                <div className="mb-3 flex items-center gap-2">
-                  {avatarUrl ? (
-                    <img
-                      src={avatarUrl}
-                      alt=""
-                      loading="lazy"
-                      className="size-8 shrink-0 rounded-full object-cover"
-                      aria-hidden
-                    />
-                  ) : (
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#E8E4E0] text-sm font-medium text-[#6B7280]" aria-hidden>
-                      {part.label.trim().slice(0, 1).toUpperCase() || "?"}
-                    </span>
-                  )}
-                  <h3 className="text-base font-semibold text-[#4A4A4A]">{part.label}</h3>
-                </div>
+              return renderParticipantHeader(
+                part.label,
+                getParticipantAvatarUrl(part.participantId),
+                part.items
               );
             }}
-            renderItem={(item, { setNodeRef, style, attributes, listeners, isDragging }) => (
-              <li
-                ref={setNodeRef}
-                style={style}
-                className="group relative list-none"
-                dir={listRtl ? "rtl" : undefined}
-              >
-                <div className={`relative ps-9 transition-all duration-150 ${isDragging ? "scale-[1.01] shadow-lg" : ""}`}>
-                  <span className="absolute start-1 top-4 z-[1] transition-opacity">
-                    <DragHandle
-                      listeners={listeners}
-                      attributes={attributes}
-                      aria-label="Drag to reorder item"
-                    />
-                  </span>
-                  <div className={PACKING_LIST_ITEM_CARD_CLASS}>
-                    <div className="flex min-w-0 items-start gap-3">
-                      <button
-                        type="button"
-                        className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                          item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                        }`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleTogglePacked(item);
-                        }}
-                        disabled={!!toggleErrorId}
-                      >
-                        {item.is_packed && <CheckIcon />}
-                      </button>
-                      {editingId === item.id && editSessionView === viewMode ? (
-                        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                          <input type="text" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} dir="auto" style={{ unicodeBidi: "plaintext" }} className="min-w-[120px] rounded border border-[#D4C5BA] px-2 py-1 text-sm" />
-                          <input type="number" min={1} value={editQuantity} onChange={(e) => setEditQuantity(parseInt(e.target.value, 10) || 1)} className="w-14 rounded border border-[#D4C5BA] px-2 py-1 text-sm" />
-                          <select value={editCategoryId} onChange={(e) => setEditCategoryId(e.target.value)} className="rounded border border-[#D4C5BA] px-2 py-1 text-sm">
-                            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                          <select value={editAssignedTo ?? "everyone"} onChange={(e) => setEditAssignedTo(e.target.value === "everyone" ? null : e.target.value)} className="rounded border border-[#D4C5BA] px-2 py-1 text-sm">
-                            <option value="everyone">Everyone</option>
-                            {participants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </select>
-                          <button type="button" className="rounded bg-[#E07A5F] px-2 py-1 text-sm text-white disabled:opacity-50" onClick={handleSaveEdit} disabled={editSaving}>Save</button>
-                          <button type="button" className="rounded border border-[#D4C5BA] px-2 py-1 text-sm" onClick={() => clearInlineEdit()}>Cancel</button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
-                            <p className={item.is_packed ? "text-sm font-medium text-[#9B7B6B] line-through" : "text-sm font-medium text-[#4A4A4A]"} dir={listRtl ? "rtl" : "ltr"} style={{ unicodeBidi: "plaintext" }}>{item.title}</p>
-                            <p className="text-xs text-[#9B7B6B]"><span dir="ltr">{getCategoryName(item.category_id, categories)}</span>{item.quantity > 1 && <span dir="ltr" className="ms-1">× {item.quantity}</span>}</p>
-                          </div>
-                          {renderPackingItemEditDeleteActions(item)}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </li>
-            )}
-            listTag="ul"
-            listClassName="space-y-3"
-            groupClassName={CARD_CLASS}
-            disabled={!canEditContent}
-            renderGroupFooter={
-              canEditContent
-                ? (groupKey) => (
-                    <button
-                      type="button"
-                      className="mt-2 text-sm text-[#6B7280] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1 rounded transition-colors duration-150"
-                      onClick={() => openAddFromGroup(groupKey)}
-                    >
-                      + Add item
-                    </button>
-                  )
-                : undefined
+            renderItem={(item, sortable) =>
+              renderSortableRow(item, sortable, getCategoryName(item.category_id, categories))
             }
+            listTag="ul"
+            listClassName={ITEM_LIST_CLASS}
+            groupClassName={GROUP_CARD_CLASS}
+            disabled={!canEditContent}
+            renderGroupFooter={canEditContent ? (groupKey) => renderAddItemButton(groupKey) : undefined}
           />
         ) : viewMode === "participant" &&
-          itemsByParticipant.map(({ label, participantId, items: partItems }) => {
-            const avatarUrl =
-              participantId === null
-                ? tripCoverImageUrl ?? null
-                : (() => {
-                    const idx = participants.findIndex((p) => p.id === participantId);
-                    return idx >= 0 ? participantAvatarUrls[idx] ?? null : null;
-                  })();
-            return (
-            <div key={participantId ?? "__everyone__"} className={CARD_CLASS}>
-              <div className="mb-3 flex items-center gap-2">
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt=""
-                    loading="lazy"
-                    className="size-8 shrink-0 rounded-full object-cover"
-                    aria-hidden
-                  />
-                ) : (
-                  <span
-                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#E8E4E0] text-sm font-medium text-[#6B7280]"
-                    aria-hidden
-                  >
-                    {label.trim().slice(0, 1).toUpperCase() || "?"}
-                  </span>
-                )}
-                <h3 className="text-base font-semibold text-[#4A4A4A]">{label}</h3>
-              </div>
+          itemsByParticipant.map(({ label, participantId, items: partItems }) => (
+            <div key={participantId ?? "__everyone__"} className={GROUP_CARD_CLASS}>
+              {renderParticipantHeader(label, getParticipantAvatarUrl(participantId), partItems)}
               {canEditContent && onReorderGroup ? (
                 <SortableGroupList<PackingItem>
                   items={partItems}
                   onReorder={onReorderGroup}
                   as="ul"
-                  className="space-y-3"
+                  className={ITEM_LIST_CLASS}
                   disabled={!canEditContent}
                 >
-                  {(item, { setNodeRef, style, attributes, listeners, isDragging }) => (
-                    <li
-                      ref={setNodeRef}
-                      style={style}
-                      className="group relative list-none"
-                      dir={listRtl ? "rtl" : undefined}
-                    >
-                      <div className={`relative ps-9 transition-all duration-150 ${isDragging ? "scale-[1.01] shadow-lg" : ""}`}>
-                        {canEditContent && (
-                          <span className="absolute start-1 top-4 z-[1] transition-opacity">
-                            <DragHandle
-                              listeners={listeners}
-                              attributes={attributes}
-                              aria-label="Drag to reorder item"
-                            />
-                          </span>
-                        )}
-                        <div className={PACKING_LIST_ITEM_CARD_CLASS}>
-                          <div className="flex min-w-0 items-start gap-3">
-                            {canEditContent ? (
-                              <button
-                                type="button"
-                                className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                                  item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleTogglePacked(item);
-                                }}
-                                disabled={!!toggleErrorId}
-                              >
-                                {item.is_packed && <CheckIcon />}
-                              </button>
-                            ) : (
-                              <span
-                                className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 ${
-                                  item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                                }`}
-                                aria-hidden
-                              >
-                                {item.is_packed && <CheckIcon />}
-                              </span>
-                            )}
-                            {editingId === item.id && editSessionView === viewMode && canEditContent ? (
-                              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                                <input
-                                  type="text"
-                                  value={editTitle}
-                                  onChange={(e) => setEditTitle(e.target.value)}
-                                  dir="auto"
-                                  style={{ unicodeBidi: "plaintext" }}
-                                  className="min-w-[120px] rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                />
-                                <input
-                                  type="number"
-                                  min={1}
-                                  value={editQuantity}
-                                  onChange={(e) => setEditQuantity(parseInt(e.target.value, 10) || 1)}
-                                  className="w-14 rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                />
-                                <select
-                                  value={editCategoryId}
-                                  onChange={(e) => setEditCategoryId(e.target.value)}
-                                  className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                >
-                                  {categories.map((c) => (
-                                    <option key={c.id} value={c.id}>
-                                      {c.name}
-                                    </option>
-                                  ))}
-                                </select>
-                                <select
-                                  value={editAssignedTo ?? "everyone"}
-                                  onChange={(e) => setEditAssignedTo(e.target.value === "everyone" ? null : e.target.value)}
-                                  className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                >
-                                  <option value="everyone">Everyone</option>
-                                  {participants.map((p) => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                  ))}
-                                </select>
-                                <button
-                                  type="button"
-                                  className="rounded bg-[#E07A5F] px-2 py-1 text-sm text-white disabled:opacity-50"
-                                  onClick={handleSaveEdit}
-                                  disabled={editSaving}
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  type="button"
-                                  className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                  onClick={() => clearInlineEdit()}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <>
-                                <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
-                                  <p
-                                    className={item.is_packed ? "text-sm font-medium text-[#9B7B6B] line-through" : "text-sm font-medium text-[#4A4A4A]"}
-                                    dir={listRtl ? "rtl" : "ltr"}
-                                    style={{ unicodeBidi: "plaintext" }}
-                                  >
-                                    {item.title}
-                                  </p>
-                                  <p className="text-xs text-[#9B7B6B]">
-                                    <span dir="ltr">
-                                      {getCategoryName(item.category_id, categories)}
-                                    </span>
-                                    {item.quantity > 1 && (
-                                      <span dir="ltr" className="ms-1">× {item.quantity}</span>
-                                    )}
-                                  </p>
-                                </div>
-                                {canEditContent && renderPackingItemEditDeleteActions(item)}
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </li>
-                  )}
+                  {(item, sortable) =>
+                    renderSortableRow(item, sortable, getCategoryName(item.category_id, categories))
+                  }
                 </SortableGroupList>
               ) : (
-                <ul className="space-y-3" role="list">
+                <ul className={ITEM_LIST_CLASS} role="list">
                   {partItems.map((item) => (
-                    <li key={item.id} className="list-none" dir={listRtl ? "rtl" : undefined}>
-                      <div className={PACKING_LIST_ITEM_CARD_CLASS}>
-                        <div className="flex items-start gap-3">
-                          {canEditContent ? (
-                            <button
-                              type="button"
-                              className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 transition ${
-                                item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                              }`}
-                              onClick={() => handleTogglePacked(item)}
-                              disabled={!!toggleErrorId}
-                            >
-                              {item.is_packed && <CheckIcon />}
-                            </button>
-                          ) : (
-                            <span
-                              className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm border-2 ${
-                                item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
-                              }`}
-                              aria-hidden
-                            >
-                              {item.is_packed && <CheckIcon />}
-                            </span>
-                          )}
-                          {editingId === item.id && editSessionView === viewMode && canEditContent ? (
-                            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                              <input
-                                type="text"
-                                value={editTitle}
-                                onChange={(e) => setEditTitle(e.target.value)}
-                                dir="auto"
-                                style={{ unicodeBidi: "plaintext" }}
-                                className="min-w-[120px] rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                              />
-                              <input
-                                type="number"
-                                min={1}
-                                value={editQuantity}
-                                onChange={(e) => setEditQuantity(parseInt(e.target.value, 10) || 1)}
-                                className="w-14 rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                              />
-                              <select
-                                value={editCategoryId}
-                                onChange={(e) => setEditCategoryId(e.target.value)}
-                                className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                              >
-                                {categories.map((c) => (
-                                  <option key={c.id} value={c.id}>
-                                    {c.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <select
-                                value={editAssignedTo ?? "everyone"}
-                                onChange={(e) => setEditAssignedTo(e.target.value === "everyone" ? null : e.target.value)}
-                                className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                              >
-                                <option value="everyone">Everyone</option>
-                                {participants.map((p) => (
-                                  <option key={p.id} value={p.id}>{p.name}</option>
-                                ))}
-                              </select>
-                              <button
-                                type="button"
-                                className="rounded bg-[#E07A5F] px-2 py-1 text-sm text-white disabled:opacity-50"
-                                onClick={handleSaveEdit}
-                                disabled={editSaving}
-                              >
-                                Save
-                              </button>
-                              <button
-                                type="button"
-                                className="rounded border border-[#D4C5BA] px-2 py-1 text-sm"
-                                onClick={() => clearInlineEdit()}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              <div className={`min-w-0 flex-1 ${listRtl ? "text-right" : ""}`}>
-                                <p
-                                  className={item.is_packed ? "text-sm font-medium text-[#9B7B6B] line-through" : "text-sm font-medium text-[#4A4A4A]"}
-                                  dir={listRtl ? "rtl" : "ltr"}
-                                  style={{ unicodeBidi: "plaintext" }}
-                                >
-                                  {item.title}
-                                </p>
-                                <p className="text-xs text-[#9B7B6B]">
-                                  <span dir="ltr">
-                                    {getCategoryName(item.category_id, categories)}
-                                  </span>
-                                  {item.quantity > 1 && (
-                                    <span dir="ltr" className="ms-1">× {item.quantity}</span>
-                                  )}
-                                </p>
-                              </div>
-                              {canEditContent && renderPackingItemEditDeleteActions(item)}
-                            </>
-                          )}
-                        </div>
-                      </div>
+                    <li key={item.id} className="group list-none" dir={listRtl ? "rtl" : undefined}>
+                      {renderItemRow(item, getCategoryName(item.category_id, categories))}
                     </li>
                   ))}
                 </ul>
               )}
-              {canEditContent && (
-                <button
-                  type="button"
-                  className="mt-2 text-sm text-[#6B7280] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 focus-visible:ring-offset-1 rounded transition-colors duration-150"
-                  onClick={() => openAddFromGroup(participantId ?? PACKING_GROUP_KEY_EVERYONE)}
-                >
-                  + Add item
-                </button>
-              )}
+              {canEditContent && renderAddItemButton(participantId ?? PACKING_GROUP_KEY_EVERYONE)}
             </div>
-            );
-          })}
+          ))}
       </div>
 
       {filteredItems.length === 0 && (
