@@ -103,9 +103,7 @@ export default function TripFormModal({
   const [destination, setDestination] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverCroppedBlob, setCoverCroppedBlob] = useState<Blob | null>(null);
-  const [coverCropMetadata, setCoverCropMetadata] = useState<CropMetadata | null>(null);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [existingCoverSignedUrl, setExistingCoverSignedUrl] = useState<string | null>(null);
   const [existingDestinationSignedUrl, setExistingDestinationSignedUrl] = useState<string | null>(null);
@@ -144,9 +142,7 @@ export default function TripFormModal({
       setDestination(trip.destination ?? "");
       setStartDate(trip.start_date ?? "");
       setEndDate(trip.end_date ?? "");
-      setCoverFile(null);
       setCoverCroppedBlob(null);
-      setCoverCropMetadata(null);
       setCoverPreviewUrl(null);
       setError(null);
       if (tripHasPersistedCover(trip)) {
@@ -242,9 +238,7 @@ export default function TripFormModal({
       setDestination("");
       setStartDate("");
       setEndDate("");
-      setCoverFile(null);
       setCoverCroppedBlob(null);
-      setCoverCropMetadata(null);
       setCoverPreviewUrl((prev) => {
         if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
         return null;
@@ -286,7 +280,6 @@ export default function TripFormModal({
     const file = e.target.files?.[0];
     e.target.value = "";
     if (file && file.type.startsWith("image/")) {
-      setCoverFile(file);
       const url = URL.createObjectURL(file);
       setCoverImageSrcForCrop(url);
       setCoverCropOpen(true);
@@ -340,9 +333,6 @@ export default function TripFormModal({
       if (coverImageSrcForCrop?.startsWith("blob:")) {
         URL.revokeObjectURL(coverImageSrcForCrop);
       }
-      if (!coverCroppedBlob) {
-        setCoverFile(null);
-      }
       coverRecropContextRef.current = null;
     }
     setCoverCropOpen(open);
@@ -353,7 +343,6 @@ export default function TripFormModal({
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith("image/")) {
-      setCoverFile(file);
       const url = URL.createObjectURL(file);
       setCoverImageSrcForCrop(url);
       setCoverCropOpen(true);
@@ -435,9 +424,7 @@ export default function TripFormModal({
         if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
         return null;
       });
-      setCoverFile(null);
       setCoverCroppedBlob(null);
-      setCoverCropMetadata(null);
       await Promise.resolve(onSuccess?.());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not remove cover image.");
@@ -449,9 +436,7 @@ export default function TripFormModal({
   const clearCoverState = () => {
     if (coverPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(coverPreviewUrl);
     setCoverPreviewUrl(null);
-    setCoverFile(null);
     setCoverCroppedBlob(null);
-    setCoverCropMetadata(null);
   };
 
   const removeDestinationImage = async () => {
@@ -754,7 +739,10 @@ export default function TripFormModal({
           return;
         }
 
-        if (coverFile && coverCroppedBlob && coverCropMetadata) {
+        // Gate on the blob alone: it is the only thing uploaded. Requiring
+        // `coverFile` too would silently drop a re-crop of an existing cover,
+        // which produces a blob without ever setting a file.
+        if (coverCroppedBlob) {
           try {
             await uploadTripCoverToMedia(supabase, {
               tripId,
@@ -776,6 +764,11 @@ export default function TripFormModal({
             });
           } catch (err) {
             console.error("Destination image upload error", err);
+            setError(
+              err instanceof Error ? err.message : "Destination image upload failed."
+            );
+            setSaving(false);
+            return;
           }
         }
 
@@ -822,7 +815,9 @@ export default function TripFormModal({
           return;
         }
 
-        if (coverFile && coverCroppedBlob && coverCropMetadata && trip.id) {
+        // See the create branch: the blob is the upload; the other flags only
+        // narrowed it to one of the several ways a cover can be staged.
+        if (coverCroppedBlob && trip.id) {
           try {
             await uploadTripCoverToMedia(supabase, {
               tripId: trip.id,
@@ -1238,6 +1233,11 @@ export default function TripFormModal({
                   });
                 } catch (err) {
                   console.error("Destination image save failed", err);
+                  // This path saves immediately on crop confirm, so a swallowed
+                  // failure leaves the preview looking saved when nothing was.
+                  setError(
+                    err instanceof Error ? err.message : "Destination image save failed."
+                  );
                 }
                 return;
               }
@@ -1263,10 +1263,9 @@ export default function TripFormModal({
             onOpenChange={handleCoverCropClose}
             imageSrc={coverImageSrcForCrop}
             initialCropMetadata={coverRecropContextRef.current?.cropMetadata ?? undefined}
-            onCropComplete={(blob, cropMetadata) => {
+            onCropComplete={(blob) => {
               const srcUrl = coverImageSrcForCrop;
               setCoverCroppedBlob(blob);
-              setCoverCropMetadata(cropMetadata);
               if (srcUrl?.startsWith("blob:")) {
                 URL.revokeObjectURL(srcUrl);
               }
@@ -1293,9 +1292,7 @@ export default function TripFormModal({
                       if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
                       return null;
                     });
-                    setCoverFile(null);
                     setCoverCroppedBlob(null);
-                    setCoverCropMetadata(null);
                     await Promise.resolve(onSuccess?.());
                   } catch (err) {
                     console.error("Cover save failed", err);
