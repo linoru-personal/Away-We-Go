@@ -52,3 +52,6 @@ supabase/.temp
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+
+# Superpowers brainstorming mockups (temporary)
+.superpowers/
