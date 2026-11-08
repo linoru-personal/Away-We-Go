@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
+import { Share2 } from "lucide-react";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   Dialog,
@@ -36,6 +37,7 @@ import {
   updatePackingItem,
   type PackingItemPatch,
 } from "@/lib/packing/packing-item-mutations";
+import { buildPackingShareText, sharePackingText } from "@/lib/packing/share-text";
 
 export type PackingCategory = {
   id: string;
@@ -63,6 +65,8 @@ export type PackingParticipant = {
 
 export interface PackingListProps {
   tripId: string;
+  /** Used in the title of the shared text. */
+  tripTitle: string;
   categories: PackingCategory[];
   items: PackingItem[];
   participants: PackingParticipant[];
@@ -130,6 +134,7 @@ function isRtlText(s: string): boolean {
 
 export function PackingList({
   tripId,
+  tripTitle,
   categories,
   items,
   participants,
@@ -281,6 +286,23 @@ export function PackingList({
       return;
     }
     onItemsPatched?.(item.id, { is_packed: next });
+  }
+
+  async function handleShare() {
+    const { text, summary } = buildPackingShareText({
+      tripTitle,
+      scope: { viewMode, assigneeFilter },
+      categories,
+      participants,
+      items,
+    });
+    try {
+      const result = await sharePackingText(text);
+      if (result === "cancelled") return;
+      setListManagementMessage(result === "shared" ? summary.replace(/^Copied/, "Shared") : summary);
+    } catch {
+      setListManagementMessage("Couldn't copy the list");
+    }
   }
 
   async function handleCreateCategory() {
@@ -665,11 +687,23 @@ export function PackingList({
 
   return (
     <div className="mt-8">
-      <div>
-        <h2 className="text-2xl font-bold text-[#4A4A4A]">Packing</h2>
-        <p className="mt-0.5 text-sm text-[#9B7B6B]">
-          {canEditContent ? "List progress" : "Read-only — you can view but not edit"}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-bold text-[#4A4A4A]">Packing</h2>
+          <p className="mt-0.5 text-sm text-[#9B7B6B]">
+            {canEditContent ? "List progress" : "Read-only — you can view but not edit"}
+          </p>
+        </div>
+        {items.length > 0 && (
+          <button
+            type="button"
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0]"
+            onClick={handleShare}
+          >
+            <Share2 className="size-4" aria-hidden />
+            Share
+          </button>
+        )}
       </div>
 
       <ManagePackingCategoriesDialog

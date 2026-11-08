@@ -233,6 +233,7 @@ export default function PackingPage() {
             />
             <PackingList
               tripId={id}
+              tripTitle={trip.title}
               categories={categories}
               items={items}
               participants={participants}
