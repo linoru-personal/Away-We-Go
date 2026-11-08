@@ -103,7 +103,7 @@ The user thinks of reuse as "my usual stuff", not "what we took to trip X". They
   - At the top of the picker there is one row per distinct person label in the current selection: "Noa's items go to: [▾]".
   - The choices are each trip participant, "Everyone (shared)", and "Don't add their items".
   - If a participant has the same name, that participant is pre-filled. The suggestion is visible and can be changed; matching is never silent.
-  - If there's no match, the row defaults to "Everyone (shared)".
+  - If there's no match, the row starts with **nothing chosen**, and the user must choose before adding. Items are never assigned to Everyone without an explicit choice. (User clarification, 2026-11-08; this replaces the earlier default to "Everyone (shared)".)
   - Items labelled "Everyone" need no row and stay shared.
 - **Categories:** a picked item goes into the trip category with the same name as its usual-stuff category. If there isn't one, that category is created at the end of the trip's category order, with its icon (call).
 - **Order (user + call):** picked items are appended to the end of their trip group, keeping usual-stuff order.
