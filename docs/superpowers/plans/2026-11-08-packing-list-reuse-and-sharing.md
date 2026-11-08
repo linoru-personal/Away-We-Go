@@ -12,7 +12,7 @@
 
 ## Milestones
 
-- **Milestone 1 (Tasks 1–4): ordering, safe category delete, WhatsApp share.** It ships on its own.
+- **Milestone 1 (Tasks 0–4): local test database, then ordering, safe category delete, WhatsApp share.** It ships on its own.
   - After Task 4: a whole-branch review, then the user verifies (preview or `npm run dev`) and decides whether to merge to `main`.
   - **Task 5 doesn't start until the user explicitly approves moving on to Milestone 2.**
 - **Milestone 2 (Tasks 5–12): usual stuff.** It ends with a whole-branch review and the user's verification and merge decision.
@@ -30,7 +30,10 @@ The user approves and applies every migration. Agents only write the files and n
 
 - **Environments:**
   - **Production:** the hosted Supabase project in `.env.local`, which is shared by `main` deployments.
-  - **Non-production:** *pending the user's confirmation; recommended:* a local Supabase stack (`supabase init` + `supabase start`, Docker). Supabase CLI 2.75.0 and Docker 29.3.1 are installed. It is rebuilt from `supabase/migrations/` with `supabase db reset`.
+  - **Non-production (user's choice):** a local Supabase stack in Docker, set up in Task 0. Supabase CLI 2.75.0 and Docker 29.3.1 are installed.
+    - It is rebuilt from `supabase/migrations/` with `supabase db reset`.
+    - New migrations are applied there with `supabase migration up`, and the down scripts with `supabase db query -f supabase/rollbacks/<file>` (or psql against the local DB URL shown by `supabase status`).
+    - The app points at it through `.env.development.local`, which overrides `.env.local` in `npm run dev`. Delete that file to point back at production.
 - **Every migration ships as a pair:**
   - `supabase/migrations/<ts>_<name>.sql` (up)
   - `supabase/rollbacks/<ts>_<name>.down.sql` (down: it restores the exact previous state, including old function bodies)
@@ -82,6 +85,27 @@ The user approves and applies every migration. Agents only write the files and n
 5. **A co-editor added the same item since the picker opened:** the RPC must re-check on the server and skip it, not duplicate it. Owned by Task 5 (SQL check 5.6).
 
 ---
+
+### Task 0: Local Supabase test environment
+
+**Files:**
+- Create: `supabase/config.toml` and the other files from `supabase init` (commit them; `supabase/.temp/` and `.branches/` stay ignored by the generated `.gitignore`)
+- No `.gitignore` change is needed for env files: the existing `.env*` pattern (line 34) already ignores `.env.development.local`.
+
+**Interfaces:**
+- Produces: a local stack whose schema equals `supabase/migrations/`, and the workflow every later migration task uses.
+
+- [ ] **Step 1: Run `supabase init`** in the repo root. Answer no to the VS Code/IntelliJ prompts. This only creates files; it connects to nothing.
+- [ ] **Step 2: Hand off to the user:**
+  1. Start Docker.
+  2. Run `supabase start`, then `supabase db reset`.
+  3. Run `supabase status` to get the local API URL and anon key.
+  4. Create `.env.development.local` with `NEXT_PUBLIC_SUPABASE_URL=<local API URL>` and `NEXT_PUBLIC_SUPABASE_ANON_KEY=<local anon key>`, using the same variable names as `.env.example`.
+- [ ] **Step 3: User checks:**
+  - 0.1 `supabase db reset` finishes with no errors. If a baseline migration fails locally, stop and report it. That is an Opus-level question, and production is not affected.
+  - 0.2 `npm run dev` against the local stack: sign up a test user, create a trip, and open its packing page. The four fixed categories appear.
+  - 0.3 `git status` shows no `.env*` file as untracked.
+- [ ] **Step 4: Commit** `chore: add local Supabase config for migration testing`.
 
 ### Task 1: Trip ordering and category RPCs (migration)
 
