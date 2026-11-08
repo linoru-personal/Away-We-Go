@@ -55,3 +55,6 @@ supabase/.temp
 
 # Superpowers brainstorming mockups (temporary)
 .superpowers/
+
+# Local database backups
+backups/
