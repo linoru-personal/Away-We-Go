@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "away_we_go",
+  "project_id": "6d2c1515-6af9-4097-b881-fd55aa7ac3df"
+}
