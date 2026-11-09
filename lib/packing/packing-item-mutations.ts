@@ -51,19 +51,33 @@ export async function updatePackingItem(
   return { error: null };
 }
 
-export async function updatePackingItemsSortOrders(
+/**
+ * Puts the given items in `categoryId`, in the given order (sort_order = array index),
+ * in one database call. Use for within-category reorder and for moves into a category.
+ */
+export async function reorderPackingItems(
   supabase: SupabaseClient,
-  rows: { id: string; sort_order: number }[],
-  context: PackingItemUpdateContext
+  tripId: string,
+  categoryId: string,
+  orderedIds: string[]
 ): Promise<{ error: Error | null }> {
-  if (rows.length === 0) return { error: null };
+  if (orderedIds.length === 0) return { error: null };
 
-  const results = await Promise.all(
-    rows.map((row) =>
-      updatePackingItem(supabase, row.id, { sort_order: row.sort_order }, context)
-    )
-  );
+  const { error } = await supabase.rpc("reorder_packing_items", {
+    p_trip_id: tripId,
+    p_category_id: categoryId,
+    p_ids: orderedIds,
+  });
 
-  const failed = results.find((r) => r.error);
-  return { error: failed?.error ?? null };
+  if (error) {
+    console.warn("[packing_items.reorder] failed", {
+      tripId,
+      categoryId,
+      count: orderedIds.length,
+      message: error.message,
+    });
+    return { error: new Error(error.message) };
+  }
+
+  return { error: null };
 }

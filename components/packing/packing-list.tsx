@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, Fragment } from "react";
 import { Share2 } from "lucide-react";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
@@ -239,15 +239,42 @@ export function PackingList({
         byParticipant.set(item.assigned_to_participant_id, list);
       }
     }
-    const result: { label: string; participantId: string | null; items: PackingItem[] }[] = [
-      { label: "Everyone", participantId: null, items: everyone },
-    ];
+    const catOrder = [...categories].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    /** Splits one person's items by category, in category order. Item order inside a category is kept (already sort_order, created_at, id). */
+    const byCategory = (list: PackingItem[]) => {
+      const map = new Map<string, PackingItem[]>();
+      for (const item of list) {
+        const inCat = map.get(item.category_id) ?? [];
+        inCat.push(item);
+        map.set(item.category_id, inCat);
+      }
+      const groups = catOrder
+        .filter((c) => map.has(c.id))
+        .map((c) => ({ category: c, items: [...map.get(c.id)!].sort((a, b) => a.sort_order - b.sort_order) }));
+      return { categories: groups, items: groups.flatMap((g) => g.items) };
+    };
+    const result: {
+      label: string;
+      participantId: string | null;
+      categories: { category: PackingCategory; items: PackingItem[] }[];
+      /** All of the person's items, category by category: the flat list the drag-and-drop works on. */
+      items: PackingItem[];
+    }[] = [{ label: "Everyone", participantId: null, ...byCategory(everyone) }];
     for (const p of participants) {
       const list = byParticipant.get(p.id) ?? [];
-      if (list.length > 0) result.push({ label: p.name, participantId: p.id, items: list });
+      if (list.length > 0) result.push({ label: p.name, participantId: p.id, ...byCategory(list) });
     }
     return result;
-  }, [filteredItems, participants]);
+  }, [filteredItems, participants, categories]);
+
+  /** For each person group, the item that opens each category block (that is where the sub-header goes). */
+  const personCategoryStarts = useMemo(() => {
+    const m = new Map<string, PackingCategory>();
+    for (const g of itemsByParticipant) {
+      for (const { category, items: catItems } of g.categories) m.set(catItems[0].id, category);
+    }
+    return m;
+  }, [itemsByParticipant]);
 
   /** Sticky direction when RTL/LTR count is equal; avoid flipping on tie. */
   const [lastDirection, setLastDirection] = useState<"rtl" | "ltr">("ltr");
@@ -354,6 +381,10 @@ export function PackingList({
     }
     setAddError(null);
     setAddSaving(true);
+    // New items go to the bottom of their category.
+    const inCategory = items.filter((i) => i.category_id === addCategoryId);
+    const sortOrder =
+      inCategory.length > 0 ? Math.max(...inCategory.map((i) => i.sort_order)) + 1 : 0;
     const insertRow = {
       trip_id: tripId,
       category_id: addCategoryId,
@@ -361,6 +392,7 @@ export function PackingList({
       quantity: addQuantity >= 1 ? addQuantity : 1,
       is_packed: false,
       assigned_to_participant_id: addAssignedTo ?? null,
+      sort_order: sortOrder,
     };
     console.log("[packing_items.insert]", insertRow);
     const { error } = await supabase.from("packing_items").insert(insertRow);
@@ -579,6 +611,20 @@ export function PackingList({
       ),
       label,
       groupItems
+    );
+  }
+
+  /** Small category label inside a person group (person view). */
+  function renderPersonCategorySubHeader(category: PackingCategory, groupKey: string) {
+    if (collapsedGroups.has(groupKey)) return null;
+    return (
+      <li
+        key={`sub-${category.id}`}
+        className="list-none px-5 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-[#9B7B6B]"
+        dir={listRtl ? "rtl" : undefined}
+      >
+        {category.name}
+      </li>
     );
   }
 
@@ -877,7 +923,14 @@ export function PackingList({
               return { field: meta.field, groupKeyToFieldValue: (k: string) => meta.groupKeyToFieldValue(k) };
             })()}
             onReorder={(_groupKey, newOrderedItems) => onReorderGroup(newOrderedItems)}
-            onMove={(item, fromGroupKey, toGroupKey, insertIndex) => onMoveItem!("category", item, fromGroupKey, toGroupKey, insertIndex)}
+            onMove={(item, fromGroupKey, toGroupKey, insertIndex) => {
+              // insertIndex counts the rows shown (the assignee filter may hide some); the saved order covers the whole category.
+              const shown = itemsByCategory.find(({ category }) => category.id === toGroupKey)?.items ?? [];
+              const anchor = shown[insertIndex];
+              const whole = items.filter((i) => i.category_id === toGroupKey && i.id !== item.id);
+              const wholeIndex = anchor ? whole.findIndex((i) => i.id === anchor.id) : whole.length;
+              return onMoveItem!("category", item, fromGroupKey, toGroupKey, wholeIndex === -1 ? whole.length : wholeIndex);
+            }}
             renderGroupHeader={(groupKey) => {
               const entry = itemsByCategory.find(({ category }) => category.id === groupKey);
               if (!entry) return null;
@@ -931,7 +984,8 @@ export function PackingList({
               const meta = getPackingGroupingMode("participant");
               return { field: meta.field, groupKeyToFieldValue: (k: string) => meta.groupKeyToFieldValue(k) };
             })()}
-            onReorder={(_groupKey, newOrderedItems) => onReorderGroup(newOrderedItems)}
+            // Person view never changes the order: a drop inside the same person does nothing.
+            onReorder={() => {}}
             onMove={(item, fromGroupKey, toGroupKey, insertIndex) => onMoveItem!("participant", item, fromGroupKey, toGroupKey, insertIndex)}
             renderGroupHeader={(groupKey) => {
               const part = itemsByParticipant.find(
@@ -945,14 +999,16 @@ export function PackingList({
                 part.items
               );
             }}
-            renderItem={(item, sortable) =>
-              renderSortableRow(
-                item,
-                sortable,
-                getCategoryName(item.category_id, categories),
-                item.assigned_to_participant_id ?? PACKING_GROUP_KEY_EVERYONE
-              )
-            }
+            renderItem={(item, sortable) => {
+              const groupKey = item.assigned_to_participant_id ?? PACKING_GROUP_KEY_EVERYONE;
+              const startOf = personCategoryStarts.get(item.id);
+              return (
+                <>
+                  {startOf && renderPersonCategorySubHeader(startOf, groupKey)}
+                  {renderSortableRow(item, sortable, getCategoryName(item.category_id, categories), groupKey)}
+                </>
+              );
+            }}
             listTag="ul"
             listClassName={ITEM_LIST_CLASS}
             groupClassName={GROUP_CARD_CLASS}
@@ -971,19 +1027,21 @@ export function PackingList({
               {canEditContent && onReorderGroup ? (
                 <SortableGroupList<PackingItem>
                   items={partItems}
-                  onReorder={onReorderGroup}
+                  onReorder={() => {}}
                   as="ul"
                   className={ITEM_LIST_CLASS}
                   disabled={!canEditContent}
                 >
-                  {(item, sortable) =>
-                    renderSortableRow(
-                      item,
-                      sortable,
-                      getCategoryName(item.category_id, categories),
-                      item.assigned_to_participant_id ?? PACKING_GROUP_KEY_EVERYONE
-                    )
-                  }
+                  {(item, sortable) => {
+                    const groupKey = item.assigned_to_participant_id ?? PACKING_GROUP_KEY_EVERYONE;
+                    const startOf = personCategoryStarts.get(item.id);
+                    return (
+                      <>
+                        {startOf && renderPersonCategorySubHeader(startOf, groupKey)}
+                        {renderSortableRow(item, sortable, getCategoryName(item.category_id, categories), groupKey)}
+                      </>
+                    );
+                  }}
                 </SortableGroupList>
               ) : (
                 <ul
@@ -991,11 +1049,17 @@ export function PackingList({
                   role="list"
                   hidden={collapsedGroups.has(participantId ?? PACKING_GROUP_KEY_EVERYONE)}
                 >
-                  {partItems.map((item) => (
-                    <li key={item.id} className="group list-none" dir={listRtl ? "rtl" : undefined}>
-                      {renderItemRow(item, getCategoryName(item.category_id, categories))}
-                    </li>
-                  ))}
+                  {partItems.map((item) => {
+                    const startOf = personCategoryStarts.get(item.id);
+                    return (
+                      <Fragment key={item.id}>
+                        {startOf && renderPersonCategorySubHeader(startOf, participantId ?? PACKING_GROUP_KEY_EVERYONE)}
+                        <li className="group list-none" dir={listRtl ? "rtl" : undefined}>
+                          {renderItemRow(item, getCategoryName(item.category_id, categories))}
+                        </li>
+                      </Fragment>
+                    );
+                  })}
                 </ul>
               )}
               {canEditContent && renderAddItemButton(participantId ?? PACKING_GROUP_KEY_EVERYONE)}

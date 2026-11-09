@@ -11,7 +11,7 @@ import { PackingList } from "@/components/packing/packing-list";
 import { PACKING_GROUP_KEY_EVERYONE } from "@/lib/list-grouping";
 import {
   updatePackingItem,
-  updatePackingItemsSortOrders,
+  reorderPackingItems,
 } from "@/lib/packing/packing-item-mutations";
 import { DASHBOARD_TRIP_SUBPAGE_SHELL } from "@/components/trip/dashboard-card-styles";
 import { useDashboardTripsOptional } from "@/components/dashboard/dashboard-trips-context";
@@ -89,11 +89,36 @@ export default function PackingPage() {
         .from("packing_items")
         .select("id, trip_id, category_id, title, quantity, is_packed, assigned_to_participant_id, sort_order")
         .eq("trip_id", id)
-        .order("sort_order", { ascending: true }),
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true }),
     ]);
     if (!catRes.error && catRes.data) setCategories((catRes.data ?? []) as PackingCategory[]);
     if (!itemsRes.error && itemsRes.data) setItems((itemsRes.data ?? []) as PackingItem[]);
   }, [id]);
+
+  /**
+   * Saves a category's full item order (one RPC call). Items not yet in the category are moved
+   * into it. Optimistic: update state first, reload if the save fails.
+   */
+  const saveCategoryOrder = useCallback(
+    async (categoryId: string, orderedIds: string[]) => {
+      if (!id) return;
+      const position = new Map(orderedIds.map((itemId, index) => [itemId, index]));
+      setItems((prev) =>
+        prev
+          .map((i) =>
+            position.has(i.id)
+              ? { ...i, category_id: categoryId, sort_order: position.get(i.id)! }
+              : i
+          )
+          .sort((a, b) => a.sort_order - b.sort_order)
+      );
+      const { error } = await reorderPackingItems(supabase, id, categoryId, orderedIds);
+      if (error) await reloadCategoriesAndItems();
+    },
+    [id, reloadCategoriesAndItems]
+  );
 
   useEffect(() => {
     if (!sessionLoading && !user) {
@@ -177,7 +202,7 @@ export default function PackingPage() {
           .eq("trip_id", id)
           .order("sort_order", { ascending: true })
           .order("name", { ascending: true }),
-        supabase.from("packing_items").select("id, trip_id, category_id, title, quantity, is_packed, assigned_to_participant_id, sort_order").eq("trip_id", id).order("sort_order", { ascending: true }),
+        supabase.from("packing_items").select("id, trip_id, category_id, title, quantity, is_packed, assigned_to_participant_id, sort_order").eq("trip_id", id).order("sort_order", { ascending: true }).order("created_at", { ascending: true }).order("id", { ascending: true }),
         supabase
           .from("trip_participants")
           .select("id, name")
@@ -248,122 +273,49 @@ export default function PackingPage() {
                 );
               }}
               onReorderGroup={async (newOrderedItems) => {
-                if (newOrderedItems.length === 0) return;
-                const minOrder = Math.min(...newOrderedItems.map((i) => i.sort_order));
-                const updated = newOrderedItems.map((item, i) => ({ ...item, sort_order: minOrder + i }));
-                setItems((prev) => {
-                  const ids = new Set(updated.map((i) => i.id));
-                  const rest = prev.filter((i) => !ids.has(i.id));
-                  return [...rest, ...updated].sort((a, b) => a.sort_order - b.sort_order);
-                });
-                const { error } = await updatePackingItemsSortOrders(
-                  supabase,
-                  updated.map((item) => ({ id: item.id, sort_order: item.sort_order })),
-                  "reorder-sort"
-                );
-                if (error) await reloadCategoriesAndItems();
+                const categoryId = newOrderedItems[0]?.category_id;
+                if (!categoryId) return;
+                // The list may be filtered by assignee, so newOrderedItems can be a subset of the
+                // category. Put the visible items back into the slots they occupied and keep the
+                // hidden ones where they are, so the saved order covers the whole category.
+                const shown = new Set(newOrderedItems.map((i) => i.id));
+                const queue = newOrderedItems.map((i) => i.id);
+                const orderedIds = items
+                  .filter((i) => i.category_id === categoryId)
+                  .map((i) => (shown.has(i.id) ? queue.shift()! : i.id));
+                await saveCategoryOrder(categoryId, orderedIds);
               }}
               onMoveItem={async (viewMode, item, fromGroupKey, toGroupKey, insertIndex) => {
-                const getGroupKey = (i: PackingItem) =>
-                  viewMode === "category"
-                    ? i.category_id
-                    : (i.assigned_to_participant_id ?? PACKING_GROUP_KEY_EVERYONE);
+                if (fromGroupKey === toGroupKey) return;
 
-                /**
-                 * Persisted assignee must never be `undefined`: PostgREST JSON.stringify drops
-                 * undefined keys, so the PATCH would only update sort_order and leave assignee NULL.
-                 */
-                const nextAssignedTo: string | null =
-                  viewMode === "participant"
-                    ? toGroupKey === PACKING_GROUP_KEY_EVERYONE
-                      ? null
-                      : toGroupKey
-                    : item.assigned_to_participant_id;
-                const nextCategoryId: string =
-                  viewMode === "category" ? toGroupKey : item.category_id;
-
-                const movedItemPreview: PackingItem =
-                  viewMode === "participant"
-                    ? { ...item, assigned_to_participant_id: nextAssignedTo }
-                    : { ...item, category_id: nextCategoryId };
-
-                const groupKeysInOrder: string[] =
-                  viewMode === "category"
-                    ? [...categories].sort((a, b) => a.sort_order - b.sort_order).map((c) => c.id)
-                    : [PACKING_GROUP_KEY_EVERYONE, ...participants.map((p) => p.id)];
-
-                const sourceItems = items.filter((i) => getGroupKey(i) === fromGroupKey && i.id !== item.id);
-                const destItems = items.filter((i) => getGroupKey(i) === toGroupKey);
-                const newDestItems = [
-                  ...destItems.slice(0, insertIndex),
-                  movedItemPreview,
-                  ...destItems.slice(insertIndex),
-                ];
-
-                const itemsByKey = new Map<string, PackingItem[]>();
-                for (const key of groupKeysInOrder) {
-                  if (key === fromGroupKey) itemsByKey.set(key, sourceItems);
-                  else if (key === toGroupKey) itemsByKey.set(key, newDestItems);
-                  else itemsByKey.set(key, items.filter((i) => getGroupKey(i) === key));
-                }
-                const flat: PackingItem[] = [];
-                for (const key of groupKeysInOrder) {
-                  const list = itemsByKey.get(key) ?? [];
-                  for (let j = 0; j < list.length; j++) {
-                    flat.push({ ...list[j], sort_order: flat.length });
-                  }
-                }
-
-                const movedRow = flat.find((i) => i.id === item.id);
-                if (!movedRow) {
-                  await reloadCategoriesAndItems();
+                if (viewMode === "participant") {
+                  /**
+                   * Person view only reassigns. Persisted assignee must never be `undefined`:
+                   * PostgREST JSON.stringify drops undefined keys, so the PATCH would be empty.
+                   */
+                  const nextAssignedTo: string | null =
+                    toGroupKey === PACKING_GROUP_KEY_EVERYONE ? null : toGroupKey;
+                  setItems((prev) =>
+                    prev.map((i) =>
+                      i.id === item.id ? { ...i, assigned_to_participant_id: nextAssignedTo } : i
+                    )
+                  );
+                  const { error } = await updatePackingItem(
+                    supabase,
+                    item.id,
+                    { assigned_to_participant_id: nextAssignedTo },
+                    "move-participant"
+                  );
+                  if (error) await reloadCategoriesAndItems();
                   return;
                 }
 
-                setItems(flat);
-
-                const assignmentChanged =
-                  viewMode === "participant" &&
-                  nextAssignedTo !== item.assigned_to_participant_id;
-
-                const moveContext =
-                  viewMode === "participant" ? "move-participant" : "move-category";
-
-                const primaryPatch =
-                  viewMode === "participant"
-                    ? {
-                        sort_order: movedRow.sort_order,
-                        ...(assignmentChanged
-                          ? { assigned_to_participant_id: nextAssignedTo }
-                          : {}),
-                      }
-                    : {
-                        category_id: nextCategoryId,
-                        sort_order: movedRow.sort_order,
-                      };
-
-                const { error: moveErr } = await updatePackingItem(
-                  supabase,
-                  item.id,
-                  primaryPatch,
-                  moveContext
-                );
-                if (moveErr) {
-                  await reloadCategoriesAndItems();
-                  return;
-                }
-
-                const toUpdate = flat.filter(
-                  (i) => i.id !== item.id && (getGroupKey(i) === fromGroupKey || getGroupKey(i) === toGroupKey)
-                );
-                const { error: sortErr } = await updatePackingItemsSortOrders(
-                  supabase,
-                  toUpdate.map((i) => ({ id: i.id, sort_order: i.sort_order })),
-                  "reorder-sort"
-                );
-                if (sortErr) {
-                  await reloadCategoriesAndItems();
-                }
+                // Category view: save the destination category's full order once.
+                const orderedIds = items
+                  .filter((i) => i.category_id === toGroupKey && i.id !== item.id)
+                  .map((i) => i.id);
+                orderedIds.splice(insertIndex, 0, item.id);
+                await saveCategoryOrder(toGroupKey, orderedIds);
               }}
             />
           </>
