@@ -132,6 +132,7 @@ The user approves and applies every migration. Agents only write the files and n
   - 1.1 `select category_id, array_agg(sort_order order by sort_order) from packing_items where trip_id='<trip>' group by 1;` → each array is `{0,1,2,…}` with no gaps or repeats.
   - 1.2 `select reorder_packing_items('<trip>','<cat>', array[<ids reversed>]);` then re-run 1.1 → reversed order.
   - 1.3 `select delete_packing_category('<cat>','<cat2>');` → the items appear at the end of `<cat2>`, and `<cat>` is gone.
+  - 1.5 **Production preflight (read-only, run on prod before applying; expect 0):** `select count(*) from packing_items pi where assigned_to_user_id is not null and not exists (select 1 from trips t where t.id=pi.trip_id and t.user_id=pi.assigned_to_user_id) and not exists (select 1 from trip_members m where m.trip_id=pi.trip_id and m.user_id=pi.assigned_to_user_id);` The renumber fires the `packing_items_trip_integrity` trigger on every row, so a stale `assigned_to_user_id` would abort the migration (it rolls back safely).
   - 1.4 As a viewer of the trip (or via `set request.jwt.claims`), calling any RPC → error `not allowed`.
 - [ ] **Step 4: Wait for the user to confirm that 1.1–1.4 pass in non-prod and that down-then-up works, then commit.** The production apply happens later, when the user ships Milestone 1.
 
@@ -479,5 +480,7 @@ git commit -m "feat(db): atomic packing reorder and category delete RPCs"
 - [ ] **Step 3: Commit** `feat(packing): retire templates from the UI`, then close Beads issue `away-we-go-nxh.2` as obsolete.
 
 ---
+
+**Milestone 1 ship order (required):** (1) production backup, (2) apply the Task 1 migration to production and run the read-only checks, (3) only then merge to `main`. The Task 2/3 code calls the new RPCs; without the migration, drag-reorder, cross-category drag and ANY category delete (even an empty one) fail. Rollback order is the reverse: revert the code first, then run the down script.
 
 **Shipping:** see Milestones. The user decides when each milestone reaches `main` and when each migration reaches production.
