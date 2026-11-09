@@ -10,13 +10,13 @@ export type ShareScope = {
   assigneeFilter: string;
 };
 
-const LRM = "‎";
-const RLM = "‏";
+const LRM = "\u200E";
+const RLM = "\u200F";
 
 /** Direction of the first strong character; null when there is none. */
 function strongDirection(s: string): "rtl" | "ltr" | null {
   for (const ch of s) {
-    if (/[֐-׿؀-ۿיִ-﷿ﹰ-﻿]/.test(ch)) return "rtl";
+    if (/[\u0590-\u05FF\u0600-\u06FF\uFB1D-\uFDFF\uFE70-\uFEFF]/.test(ch)) return "rtl";
     if (/\p{L}/u.test(ch)) return "ltr";
   }
   return null;

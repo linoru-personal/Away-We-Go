@@ -418,7 +418,7 @@ export function PackingList({
     } else {
       setAddAssignedTo(value as string | null);
       setAddCategoryId((prev) =>
-        typeof prev === "string" && prev.trim() !== "" ? prev : categories[0]?.id ?? ""
+        typeof prev === "string" && categories.some((c) => c.id === prev) ? prev : categories[0]?.id ?? ""
       );
     }
     setAddPrefillGroupKey(null);
@@ -453,7 +453,9 @@ export function PackingList({
   function openAddFromGroup(groupKey: string) {
     setAddPrefillGroupKey(groupKey);
     setAddModalMode("add-item");
-    setAddCategoryId((prev) => (typeof prev === "string" && prev.trim() !== "" ? prev : categories[0]?.id ?? ""));
+    setAddCategoryId((prev) =>
+      typeof prev === "string" && categories.some((c) => c.id === prev) ? prev : categories[0]?.id ?? ""
+    );
     setAddModalOpen(true);
   }
 

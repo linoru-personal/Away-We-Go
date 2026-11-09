@@ -8,6 +8,7 @@ create table if not exists public.packing_items_sort_order_backup_20261108 (
   sort_order integer not null
 );
 alter table public.packing_items_sort_order_backup_20261108 enable row level security;
+revoke all on table public.packing_items_sort_order_backup_20261108 from anon, authenticated;
 
 insert into public.packing_items_sort_order_backup_20261108 (id, sort_order)
 select id, sort_order from public.packing_items
