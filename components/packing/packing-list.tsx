@@ -757,6 +757,7 @@ export function PackingList({
         onOpenChange={setManageCategoriesOpen}
         tripId={tripId}
         categories={categories}
+        items={items}
         onSuccess={onRefresh}
       />
 
