@@ -185,6 +185,12 @@ export function PackingList({
   const [listManagementMessage, setListManagementMessage] = useState<string | null>(
     null
   );
+  // The banner is a toast: it clears itself 3 seconds after it appears.
+  useEffect(() => {
+    if (!listManagementMessage) return;
+    const timer = setTimeout(() => setListManagementMessage(null), 3000);
+    return () => clearTimeout(timer);
+  }, [listManagementMessage]);
   /**
    * Group keys the viewer has folded shut. Seeded straight from localStorage:
    * safe as a lazy initializer because the list renders its loading branch on
