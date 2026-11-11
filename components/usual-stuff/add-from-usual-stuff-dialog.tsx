@@ -163,14 +163,24 @@ function DialogBody({
     );
   }
   return (
-    <UsualStuffPicker
-      items={pickerItems}
-      who={{ participants }}
-      isDisabled={isDisabled}
-      confirmLabel={(n) => `Add ${n} item${n === 1 ? "" : "s"}`}
-      onConfirm={handleConfirm}
-      onCancel={onClose}
-    />
+    <>
+      <UsualStuffPicker
+        items={pickerItems}
+        who={{ participants }}
+        isDisabled={isDisabled}
+        confirmLabel={(n) => `Add ${n} item${n === 1 ? "" : "s"}`}
+        onConfirm={handleConfirm}
+        onCancel={onClose}
+      />
+      <p className="mt-3 text-center text-sm">
+        <Link
+          href="/dashboard/usual-stuff"
+          className="font-medium text-[#E07A5F] hover:text-[#c46950]"
+        >
+          Edit my usual stuff
+        </Link>
+      </p>
+    </>
   );
 }
 

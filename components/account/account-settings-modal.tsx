@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import {
   Dialog,
@@ -315,7 +316,14 @@ export default function AccountSettingsModal({
           </form>
         )}
 
-        <div className="mt-6 border-t border-[#e0d9d2] pt-4">
+        <div className="mt-6 space-y-3 border-t border-[#e0d9d2] pt-4">
+          <Link
+            href="/dashboard/usual-stuff"
+            onClick={() => onOpenChange(false)}
+            className="flex w-full items-center justify-center rounded-full border border-[#e0d9d2] bg-white py-3 text-sm font-medium text-[#4A4A4A] transition hover:bg-[#f6f2ed]"
+          >
+            My usual stuff
+          </Link>
           <button
             type="button"
             onClick={handleLogout}

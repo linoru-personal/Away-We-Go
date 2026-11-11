@@ -137,7 +137,6 @@ export function DashboardSidebar({
   }, []);
 
   const isHome = pathname === "/dashboard";
-  const isUsualStuff = pathname?.startsWith("/dashboard/usual-stuff") ?? false;
 
   const renderTripGroup = (label: string, list: DashboardTrip[]) => (
     <div className="mt-6">
@@ -262,22 +261,6 @@ export function DashboardSidebar({
             strokeWidth={1.75}
           />
           Home
-        </Link>
-
-        <Link
-          href="/dashboard/usual-stuff"
-          onClick={() => onNavigate?.()}
-          className={`mt-1 flex items-center gap-2.5 rounded-full px-4 py-3 text-sm font-medium transition ${
-            isUsualStuff
-              ? "bg-[#fdece5] text-[#c45c3e] shadow-sm"
-              : "text-[#5c4a42] hover:bg-[#faf6f3]"
-          }`}
-        >
-          <Luggage
-            className={`size-5 shrink-0 ${isUsualStuff ? "text-[#d97b5e]" : "text-[#8a7568]"}`}
-            strokeWidth={1.75}
-          />
-          My usual stuff
         </Link>
 
         {loadingTrips ? (

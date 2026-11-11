@@ -555,6 +555,16 @@ export function UsualStuffPage() {
               <button type="button" className={BTN_SECONDARY} onClick={() => setManageOpen(true)}>
                 Manage categories
               </button>
+              <button
+                type="button"
+                className={BTN_SECONDARY}
+                onClick={() => {
+                  setNotice(null);
+                  setStartOpen(true);
+                }}
+              >
+                Start from a trip or template
+              </button>
             </div>
 
             {isEmpty ? (
@@ -571,23 +581,9 @@ export function UsualStuffPage() {
                     />
                   </div>
                 ) : (
-                  <div className="mt-4">
-                    <div className="flex flex-wrap justify-center gap-2">
-                      <button type="button" className={BTN_SECONDARY} onClick={() => openAdd()}>
-                        + Add item
-                      </button>
-                      <button
-                        type="button"
-                        className={BTN_SECONDARY}
-                        onClick={() => {
-                          setNotice(null);
-                          setStartOpen(true);
-                        }}
-                      >
-                        Start from a trip or template
-                      </button>
-                    </div>
-                  </div>
+                  <p className="mt-2 text-sm text-[#6B6B6B]">
+                    Add an item, or start from a trip or template using the buttons above.
+                  </p>
                 )}
               </div>
             ) : (
