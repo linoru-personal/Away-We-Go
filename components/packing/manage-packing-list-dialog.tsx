@@ -9,16 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  PackingTemplatesPanel,
-  type PackingTemplatesDialogMode,
-  modeTitle,
-} from "@/components/packing/packing-templates-dialog";
-import type {
-  PackingCategory,
-  PackingItem,
-  PackingParticipant,
-} from "@/components/packing/packing-list";
 
 const labelClass = "block text-sm font-medium text-[#1f1f1f]";
 const menuBtnClass =
@@ -28,16 +18,13 @@ const BTN_PRIMARY =
 const BTN_SECONDARY =
   "rounded-full border border-[#D4C5BA] bg-white px-4 py-2 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0] disabled:opacity-60";
 
-type ManageView = "menu" | PackingTemplatesDialogMode | "delete-all";
+type ManageView = "menu" | "delete-all";
 
 export interface ManagePackingListDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tripId: string;
   itemCount: number;
-  categories: PackingCategory[];
-  items: PackingItem[];
-  participants: PackingParticipant[];
   onRefresh: () => Promise<void>;
   onSuccessMessage: (message: string) => void;
 }
@@ -47,9 +34,6 @@ export function ManagePackingListDialog({
   onOpenChange,
   tripId,
   itemCount,
-  categories,
-  items,
-  participants,
   onRefresh,
   onSuccessMessage,
 }: ManagePackingListDialogProps) {
@@ -92,7 +76,7 @@ export function ManagePackingListDialog({
 
       await onRefresh();
       onSuccessMessage(
-        `Removed all ${itemCount} ${itemCount === 1 ? "item" : "items"} from this trip. Templates were not changed.`
+        `Removed all ${itemCount} ${itemCount === 1 ? "item" : "items"} from this trip.`
       );
       closeDialog();
     } catch (e) {
@@ -104,10 +88,8 @@ export function ManagePackingListDialog({
 
   const dialogTitle =
     view === "menu"
-      ? "Manage packing lists"
-      : view === "delete-all"
-        ? "Delete all items"
-        : modeTitle(view);
+      ? "Manage packing list"
+      : "Delete all items";
 
   return (
     <Dialog
@@ -136,7 +118,7 @@ export function ManagePackingListDialog({
           </button>
         ) : null}
 
-        {error && view !== "menu" && !["import", "save-new", "add-to-existing", "manage"].includes(view) ? (
+        {error && view !== "menu" ? (
           <p className="mb-3 text-sm text-red-600" role="alert">
             {error}
           </p>
@@ -161,53 +143,6 @@ export function ManagePackingListDialog({
                 </button>
               </section>
 
-              <section className="border-t border-[#ebe5df] pt-4">
-                <p className={`mb-2 ${labelClass}`}>Templates</p>
-                <p className="mb-3 text-sm text-[#6B7280]">
-                  Reusable lists saved to your account. Trip templates are not
-                  deleted when you clear this trip.
-                </p>
-                <ul className="flex flex-col gap-2" role="list">
-                  <li>
-                    <button
-                      type="button"
-                      className={menuBtnClass}
-                      onClick={() => setView("import")}
-                    >
-                      Import from template
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      className={menuBtnClass}
-                      onClick={() => setView("save-new")}
-                      disabled={itemCount === 0}
-                    >
-                      Save as new template
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      className={menuBtnClass}
-                      onClick={() => setView("add-to-existing")}
-                      disabled={itemCount === 0}
-                    >
-                      Add to existing template
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      type="button"
-                      className={menuBtnClass}
-                      onClick={() => setView("manage")}
-                    >
-                      Manage saved templates
-                    </button>
-                  </li>
-                </ul>
-              </section>
             </div>
             <div className="mt-6 flex justify-end border-t border-[#ebe5df] pt-4">
               <button type="button" className={BTN_SECONDARY} onClick={closeDialog}>
@@ -221,8 +156,8 @@ export function ManagePackingListDialog({
           <div className="space-y-4">
             <p className="text-sm text-[#6B7280]">
               Permanently remove every packing item on this trip ({itemCount}{" "}
-              {itemCount === 1 ? "item" : "items"}). Your categories and saved
-              templates stay unchanged.
+              {itemCount === 1 ? "item" : "items"}). Your categories stay
+              unchanged.
             </p>
             {error ? (
               <p className="text-sm text-red-600" role="alert">
@@ -248,21 +183,6 @@ export function ManagePackingListDialog({
               </button>
             </div>
           </div>
-        ) : null}
-
-        {view !== "menu" && view !== "delete-all" ? (
-          <PackingTemplatesPanel
-            active
-            mode={view}
-            tripId={tripId}
-            categories={categories}
-            items={items}
-            participants={participants}
-            onRefresh={onRefresh}
-            onSuccessMessage={onSuccessMessage}
-            onBack={goToMenu}
-            onComplete={closeDialog}
-          />
         ) : null}
       </DialogContent>
     </Dialog>

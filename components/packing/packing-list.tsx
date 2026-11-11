@@ -948,9 +948,6 @@ export function PackingList({
         onOpenChange={setManageListOpen}
         tripId={tripId}
         itemCount={items.length}
-        categories={categories}
-        items={items}
-        participants={participants}
         onRefresh={onRefresh}
         onSuccessMessage={setListManagementMessage}
       />
@@ -1090,7 +1087,7 @@ export function PackingList({
                 className="text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
                 onClick={() => setManageListOpen(true)}
               >
-                Manage packing lists
+                Manage packing list
               </button>
             </div>
             <div className="flex flex-wrap items-center gap-2">
