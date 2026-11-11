@@ -190,7 +190,10 @@ export async function upsertUsualCategory(
       .eq("id", c.id)
       .select(CATEGORY_COLUMNS)
       .single();
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (error.code === "23505") throw new Error("A category with this name already exists");
+      throw new Error(error.message);
+    }
     if (!data) throw new Error("Could not update category.");
     return data as UsualCategory;
   }
@@ -211,7 +214,10 @@ export async function upsertUsualCategory(
     .insert({ list_id: listId, name, icon: c.icon, sort_order: sortOrder })
     .select(CATEGORY_COLUMNS)
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505") throw new Error("A category with this name already exists");
+    throw new Error(error.message);
+  }
   if (!data) throw new Error("Could not create category.");
   return data as UsualCategory;
 }

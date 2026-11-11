@@ -342,6 +342,9 @@ begin
     v_qty := greatest(coalesce((v_row ->> 'quantity')::integer, 1), 1);
     v_cat_icon := nullif(btrim(coalesce(v_row ->> 'category_icon', '')), '');
     v_label := nullif(btrim(coalesce(v_row ->> 'person_label', '')), '');
+    if lower(v_label) = 'everyone' then
+      v_label := null;
+    end if;
 
     -- Find or create the category by normalized name.
     select c.id into v_cat_id
@@ -435,6 +438,7 @@ begin
   if not public.can_edit_trip_content(p_trip_id) then
     raise exception 'not allowed';
   end if;
+  perform pg_advisory_xact_lock(hashtext('usual_to_trip:' || p_trip_id::text));
   if jsonb_typeof(p_rows) is distinct from 'array' then
     raise exception 'p_rows must be a json array';
   end if;

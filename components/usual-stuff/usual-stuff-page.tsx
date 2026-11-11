@@ -13,6 +13,7 @@ import {
   insertUsualItem,
   loadMyUsualStuff,
   reorderUsualItems,
+  sameName,
   updateUsualItem,
   upsertUsualCategory,
 } from "@/lib/usual-stuff/queries";
@@ -116,7 +117,7 @@ function ItemEditor({
         title: trimmed,
         quantity: qty,
         categoryId,
-        person: person.trim() || null,
+        person: person.trim() && !sameName(person, "everyone") ? person.trim() : null,
       });
     } catch (err) {
       setError(errorMessage(err, "Could not save item."));

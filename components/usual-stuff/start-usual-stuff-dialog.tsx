@@ -193,7 +193,7 @@ function DialogBody({
     await Promise.resolve(onRefresh());
     const skipped = result.skipped.length;
     onSuccessMessage(
-      `Added ${result.added} items${skipped > 0 ? `, ${skipped} already there` : ""}`
+      `Added ${result.added} ${result.added === 1 ? "item" : "items"}${skipped > 0 ? `, ${skipped} already there` : ""}`
     );
     onClose();
   }

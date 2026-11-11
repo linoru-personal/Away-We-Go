@@ -16,7 +16,8 @@ export function suggestParticipantId(
   label: string,
   participants: PackingParticipant[]
 ): string | null {
-  return participants.find((p) => sameName(p.name, label))?.id ?? null;
+  const matches = participants.filter((p) => sameName(p.name, label));
+  return matches.length === 1 ? matches[0].id : null;
 }
 
 /** Key of a person label in the who's-who record. */

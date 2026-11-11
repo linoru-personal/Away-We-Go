@@ -136,7 +136,7 @@ function DialogBody({
     const result = await addUsualItemsToTrip(supabase, tripId, rows);
     await Promise.resolve(onRefresh());
     onSuccessMessage(
-      `Added ${result.added} items${
+      `Added ${result.added} ${result.added === 1 ? "item" : "items"}${
         result.skipped > 0 ? `, ${result.skipped} already there` : ""
       }`
     );
