@@ -739,6 +739,20 @@ export default function TripFormModal({
           return;
         }
 
+        // Seed packing categories from the creator's usual stuff. Never fail
+        // trip creation over this: the packing page has its own fallback.
+        try {
+          const { error: seedError } = await supabase.rpc(
+            "seed_trip_categories_from_usual",
+            { p_trip_id: tripId }
+          );
+          if (seedError) {
+            console.error("Seed trip categories error", seedError);
+          }
+        } catch (err) {
+          console.error("Seed trip categories error", err);
+        }
+
         // Gate on the blob alone: it is the only thing uploaded. Requiring
         // `coverFile` too would silently drop a re-crop of an existing cover,
         // which produces a blob without ever setting a file.
