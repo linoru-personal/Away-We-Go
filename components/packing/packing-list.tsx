@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/category-icons";
 import { ManagePackingCategoriesDialog } from "@/components/packing/manage-packing-categories-dialog";
 import { ManagePackingListDialog } from "@/components/packing/manage-packing-list-dialog";
+import { AddFromUsualStuffDialog } from "@/components/usual-stuff/add-from-usual-stuff-dialog";
 import {
   SortableGroupList,
   type SortableGroupListSortableProps,
@@ -182,6 +183,7 @@ export function PackingList({
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [manageListOpen, setManageListOpen] = useState(false);
+  const [fromUsualOpen, setFromUsualOpen] = useState(false);
   const [listManagementMessage, setListManagementMessage] = useState<string | null>(
     null
   );
@@ -781,6 +783,17 @@ export function PackingList({
         onSuccessMessage={setListManagementMessage}
       />
 
+      <AddFromUsualStuffDialog
+        open={fromUsualOpen}
+        onOpenChange={setFromUsualOpen}
+        tripId={tripId}
+        categories={categories}
+        items={items}
+        participants={participants}
+        onRefresh={onRefresh}
+        onSuccessMessage={setListManagementMessage}
+      />
+
       {listManagementMessage ? (
         <div
           className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-[#c8e6c9] bg-[#e8f5e9] px-4 py-3 text-sm text-[#2e7d32]"
@@ -908,17 +921,26 @@ export function PackingList({
                 Manage packing lists
               </button>
             </div>
-            <button
-              type="button"
-              className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
-              onClick={() => {
-                setAddCategoryId(categories[0]?.id ?? "");
-                setAddModalMode("add-item");
-                setAddModalOpen(true);
-              }}
-            >
-              + Add Item
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="rounded-full border border-[#E07A5F] bg-white px-4 py-2 text-sm font-semibold text-[#E07A5F] hover:bg-[#FBF8F5]"
+                onClick={() => setFromUsualOpen(true)}
+              >
+                + From usual stuff
+              </button>
+              <button
+                type="button"
+                className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
+                onClick={() => {
+                  setAddCategoryId(categories[0]?.id ?? "");
+                  setAddModalMode("add-item");
+                  setAddModalOpen(true);
+                }}
+              >
+                + Add Item
+              </button>
+            </div>
           </div>
         </>
       )}
