@@ -18,6 +18,7 @@ import {
 } from "@/lib/usual-stuff/queries";
 import type { UsualCategory, UsualItem } from "@/lib/usual-stuff/types";
 import { ManageUsualCategoriesDialog } from "./manage-usual-categories-dialog";
+import { StartUsualStuffDialog } from "./start-usual-stuff-dialog";
 
 const BTN_PRIMARY =
   "rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F] disabled:opacity-60";
@@ -264,6 +265,8 @@ export function UsualStuffPage() {
   const [editing, setEditing] = useState<EditorTarget>(null);
   const [addCategoryId, setAddCategoryId] = useState<string>("");
   const [manageOpen, setManageOpen] = useState(false);
+  const [startOpen, setStartOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -536,6 +539,12 @@ export function UsualStuffPage() {
           </p>
         )}
 
+        {notice && (
+          <p className="mt-4 text-sm text-green-700" role="status">
+            {notice}
+          </p>
+        )}
+
         {data && (
           <>
             <div className="mt-5 flex flex-wrap gap-2">
@@ -562,9 +571,21 @@ export function UsualStuffPage() {
                   </div>
                 ) : (
                   <div className="mt-4">
-                    <button type="button" className={BTN_SECONDARY} onClick={() => openAdd()}>
-                      + Add item
-                    </button>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <button type="button" className={BTN_SECONDARY} onClick={() => openAdd()}>
+                        + Add item
+                      </button>
+                      <button
+                        type="button"
+                        className={BTN_SECONDARY}
+                        onClick={() => {
+                          setNotice(null);
+                          setStartOpen(true);
+                        }}
+                      >
+                        Start from a trip or template
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -590,6 +611,13 @@ export function UsualStuffPage() {
                 />
               </div>
             )}
+
+            <StartUsualStuffDialog
+              open={startOpen}
+              onOpenChange={setStartOpen}
+              onRefresh={reload}
+              onSuccessMessage={setNotice}
+            />
 
             <ManageUsualCategoriesDialog
               open={manageOpen}
