@@ -24,7 +24,7 @@ create unique index if not exists idx_usual_categories_list_name
 create table if not exists public.usual_items (
   id uuid primary key default gen_random_uuid(),
   list_id uuid not null references public.usual_lists (id) on delete cascade,
-  category_id uuid not null references public.usual_categories (id) on delete restrict,
+  category_id uuid not null references public.usual_categories (id) on delete no action,
   title text not null check (char_length(btrim(title)) > 0),
   quantity integer not null default 1 check (quantity >= 1),
   person_label text,
