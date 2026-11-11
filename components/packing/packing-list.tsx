@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, Fragment } from "react";
-import { Share2 } from "lucide-react";
+import { BookmarkPlus, Share2 } from "lucide-react";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   Dialog,
@@ -38,6 +38,8 @@ import {
   updatePackingItem,
   type PackingItemPatch,
 } from "@/lib/packing/packing-item-mutations";
+import { addToMyUsualStuff, updateUsualItem } from "@/lib/usual-stuff/queries";
+import type { UsualRowInput } from "@/lib/usual-stuff/types";
 import { buildPackingShareText, sharePackingText } from "@/lib/packing/share-text";
 
 export type PackingCategory = {
@@ -184,6 +186,15 @@ export function PackingList({
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [manageListOpen, setManageListOpen] = useState(false);
   const [fromUsualOpen, setFromUsualOpen] = useState(false);
+  /** True while an "add to my usual stuff" call is in flight (guards double clicks). */
+  const [usualBusy, setUsualBusy] = useState(false);
+  /** Inline prompt in the item editor: the item is already in usual stuff. usualItemId is null when the server gave none. */
+  const [usualPrompt, setUsualPrompt] = useState<{
+    itemId: string;
+    usualItemId: string | null;
+    quantity: number;
+  } | null>(null);
+  const [usualError, setUsualError] = useState<{ key: string; message: string } | null>(null);
   const [listManagementMessage, setListManagementMessage] = useState<string | null>(
     null
   );
@@ -437,7 +448,100 @@ export function PackingList({
     setEditSessionView(null);
   }, [viewMode]);
 
+  function usualRowFor(item: PackingItem): UsualRowInput {
+    const person = item.assigned_to_participant_id
+      ? participants.find((x) => x.id === item.assigned_to_participant_id)?.name ?? null
+      : null;
+    return {
+      title: item.title,
+      quantity: item.quantity,
+      category_name: getCategoryName(item.category_id, categories),
+      category_icon: getCategoryIcon(item.category_id, categories),
+      person_label: person,
+    };
+  }
+
+  async function handleAddItemToUsual(item: PackingItem) {
+    if (usualBusy) return;
+    setUsualBusy(true);
+    setUsualPrompt(null);
+    setUsualError(null);
+    try {
+      const result = await addToMyUsualStuff(supabase, [usualRowFor(item)]);
+      if (result.added === 1) {
+        setListManagementMessage("Added to your usual stuff");
+      } else {
+        // We sent one row, so skipped[0] (index 0, 0-based) is the only entry.
+        setUsualPrompt({
+          itemId: item.id,
+          usualItemId: result.skipped[0]?.usual_item_id ?? null,
+          quantity: item.quantity,
+        });
+      }
+    } catch (e) {
+      setUsualError({
+        key: item.id,
+        message: e instanceof Error ? e.message : "Couldn't add to your usual stuff",
+      });
+    } finally {
+      setUsualBusy(false);
+    }
+  }
+
+  async function handleUpdateUsualQuantity() {
+    if (usualBusy || !usualPrompt?.usualItemId) return;
+    const { itemId, usualItemId, quantity } = usualPrompt;
+    setUsualBusy(true);
+    setUsualError(null);
+    try {
+      await updateUsualItem(supabase, usualItemId, { quantity });
+      setUsualPrompt(null);
+      setListManagementMessage("Updated quantity in your usual stuff");
+    } catch (e) {
+      setUsualError({
+        key: itemId,
+        message: e instanceof Error ? e.message : "Couldn't update your usual stuff",
+      });
+    } finally {
+      setUsualBusy(false);
+    }
+  }
+
+  async function handleAddCategoryToUsual(category: PackingCategory) {
+    if (usualBusy) return;
+    setUsualError(null);
+    // The whole category in display order, whatever the assignee chip shows.
+    const catItems = items
+      .filter((i) => i.category_id === category.id)
+      .sort((a, b) => a.sort_order - b.sort_order);
+    if (catItems.length === 0) {
+      setListManagementMessage("This category has no items yet");
+      return;
+    }
+    setUsualBusy(true);
+    try {
+      const result = await addToMyUsualStuff(supabase, catItems.map(usualRowFor));
+      const skipped = result.skipped.length;
+      setListManagementMessage(
+        result.added === 0
+          ? `Nothing new: all ${catItems.length} were already there`
+          : `Added ${result.added} ${result.added === 1 ? "item" : "items"}${
+              skipped > 0 ? `, ${skipped} ${skipped === 1 ? "was" : "were"} already there` : ""
+            }`
+      );
+    } catch (e) {
+      setUsualError({
+        key: category.id,
+        message: e instanceof Error ? e.message : "Couldn't add to your usual stuff",
+      });
+    } finally {
+      setUsualBusy(false);
+    }
+  }
+
   function clearInlineEdit() {
+    setUsualPrompt(null);
+    setUsualError(null);
     setEditingId(null);
     setEditSessionView(null);
     editBaselineRef.current = null;
@@ -550,13 +654,15 @@ export function PackingList({
     groupKey: string,
     leading: React.ReactNode,
     label: string,
-    groupItems: PackingItem[]
+    groupItems: PackingItem[],
+    action?: React.ReactNode
   ) {
     const collapsed = collapsedGroups.has(groupKey);
     return (
+      <div className={`flex items-center ${collapsed ? "" : "border-b border-[#F0EBE5]"}`}>
       <button
         type="button"
-        className={`${GROUP_HEADER_CLASS} ${collapsed ? "" : "border-b border-[#F0EBE5]"}`}
+        className={`${GROUP_HEADER_CLASS} min-w-0 flex-1 ${action ? "pe-2" : ""}`}
         onClick={() => toggleGroupCollapsed(groupKey)}
         aria-expanded={!collapsed}
       >
@@ -581,6 +687,8 @@ export function PackingList({
           <path d="m6 9 6 6 6-6" />
         </svg>
       </button>
+      {action ? <div className="shrink-0 pe-4">{action}</div> : null}
+      </div>
     );
   }
 
@@ -591,7 +699,26 @@ export function PackingList({
         <CategoryIcon iconKey={getIconKey(category.icon, PACKING_DEFAULT_ICON)} size={20} />
       </span>,
       category.name,
-      groupItems
+      groupItems,
+      canEditContent ? (
+        <div className="flex items-center gap-2">
+          {usualError?.key === category.id ? (
+            <span className="text-xs text-red-600" role="alert">
+              {usualError.message}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="rounded-md p-1 text-[#9B7B6B] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 disabled:opacity-50"
+            aria-label="Add category to my usual stuff"
+            title="Add category to my usual stuff"
+            disabled={usualBusy}
+            onClick={() => handleAddCategoryToUsual(category)}
+          >
+            <BookmarkPlus className="size-4" aria-hidden />
+          </button>
+        </div>
+      ) : undefined
     );
   }
 
@@ -676,6 +803,7 @@ export function PackingList({
         isDragging={isDragging}
         editor={
           isEditing ? (
+            <>
             <PackingItemEditor
               title={editTitle}
               quantity={editQuantity}
@@ -691,6 +819,50 @@ export function PackingList({
               onSave={handleSaveEdit}
               onCancel={() => clearInlineEdit()}
             />
+            <div className="px-5 pb-3 text-sm" dir="ltr">
+              {usualPrompt?.itemId === item.id ? (
+                <div className="flex flex-wrap items-center gap-2 text-[#4A4A4A]">
+                  {usualPrompt.usualItemId ? (
+                    <>
+                      <span>Already in your usual stuff. Update quantity to {usualPrompt.quantity}?</span>
+                      <button
+                        type="button"
+                        className="font-medium text-[#E07A5F] hover:text-[#c46950] disabled:opacity-50"
+                        disabled={usualBusy}
+                        onClick={handleUpdateUsualQuantity}
+                      >
+                        Update
+                      </button>
+                      <button
+                        type="button"
+                        className="font-medium text-[#9B7B6B] hover:text-[#4A4A4A] disabled:opacity-50"
+                        disabled={usualBusy}
+                        onClick={() => setUsualPrompt(null)}
+                      >
+                        Keep
+                      </button>
+                    </>
+                  ) : (
+                    <span>Already in your usual stuff.</span>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="font-medium text-[#E07A5F] hover:text-[#c46950] disabled:opacity-50"
+                  disabled={usualBusy}
+                  onClick={() => handleAddItemToUsual(item)}
+                >
+                  Add to my usual stuff
+                </button>
+              )}
+              {usualError?.key === item.id ? (
+                <p className="mt-1 text-red-600" role="alert">
+                  {usualError.message}
+                </p>
+              ) : null}
+            </div>
+            </>
           ) : undefined
         }
       />
