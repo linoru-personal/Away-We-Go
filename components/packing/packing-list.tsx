@@ -205,7 +205,8 @@ export function PackingList({
     assigned_to_participant_id: string | null;
   } | null>(null);
   const [editSaving, setEditSaving] = useState(false);
-  const [toggleErrorId, setToggleErrorId] = useState<string | null>(null);
+  /** Last failed toggle/edit/delete, shown on that item's row only. */
+  const [itemError, setItemError] = useState<{ id: string; message: string } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
@@ -343,7 +344,7 @@ export function PackingList({
   }, [items]);
 
   async function handleTogglePacked(item: PackingItem) {
-    setToggleErrorId(null);
+    setItemError(null);
     const next = !item.is_packed;
 
     const { error } = await updatePackingItem(
@@ -354,7 +355,7 @@ export function PackingList({
     );
 
     if (error) {
-      setToggleErrorId(item.id);
+      setItemError({ id: item.id, message: "Couldn't update this item. Tap to try again." });
       return;
     }
     onItemsPatched?.(item.id, { is_packed: next });
@@ -817,7 +818,7 @@ export function PackingList({
         metaLabel={metaLabel}
         rtl={listRtl}
         canEdit={canEditContent}
-        toggleDisabled={!!toggleErrorId}
+        error={itemError?.id === item.id ? itemError.message : null}
         onToggle={() => handleTogglePacked(item)}
         onEdit={() => openEdit(item)}
         onDeleteRequest={() => setDeleteConfirmId(item.id)}

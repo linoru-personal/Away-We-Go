@@ -152,8 +152,8 @@ export interface PackingItemRowProps {
   /** Whole-list text direction, decided by the parent from the item titles. */
   rtl: boolean;
   canEdit: boolean;
-  /** Blocks the checkbox while a toggle elsewhere in the list is failing. */
-  toggleDisabled: boolean;
+  /** Error from the last failed action on this item, shown under the row. */
+  error?: string | null;
   onToggle: () => void;
   onEdit: () => void;
   onDeleteRequest: () => void;
@@ -174,7 +174,7 @@ export function PackingItemRow({
   metaLabel,
   rtl,
   canEdit,
-  toggleDisabled,
+  error,
   onToggle,
   onEdit,
   onDeleteRequest,
@@ -191,6 +191,7 @@ export function PackingItemRow({
   }`;
 
   return (
+    <div className="bg-white">
     <div
       className={`flex min-w-0 items-center gap-3 bg-white py-3 pe-4 transition-shadow duration-150 ${
         dragHandle ? "ps-1" : "ps-5"
@@ -206,7 +207,6 @@ export function PackingItemRow({
             e.stopPropagation();
             onToggle();
           }}
-          disabled={toggleDisabled}
           aria-pressed={item.is_packed}
           aria-label={item.is_packed ? `Mark ${item.title} as not packed` : `Mark ${item.title} as packed`}
         >
@@ -294,6 +294,12 @@ export function PackingItemRow({
           )}
         </>
       )}
+    </div>
+    {error ? (
+      <p className="pb-3 pe-4 ps-5 text-sm text-red-600" role="alert">
+        {error}
+      </p>
+    ) : null}
     </div>
   );
 }
