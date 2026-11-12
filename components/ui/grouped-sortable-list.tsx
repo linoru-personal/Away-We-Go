@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useCallback, useId, useMemo } from "react";
+import React, { useCallback, useId, useMemo, useState } from "react";
 import {
   DndContext,
   type DragEndEvent,
+  type DragStartEvent,
+  DragOverlay,
   KeyboardSensor,
   MouseSensor,
   TouchSensor,
@@ -90,6 +92,8 @@ function SortableRow<T extends SortableItem>({
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
+    // The DragOverlay shows the dragged row; keep the source row as a faint placeholder.
+    ...(isDragging ? { opacity: 0.3 } : null),
   };
 
   return (
@@ -179,6 +183,7 @@ export function GroupedSortableList<T extends SortableItem>({
   groupClassName,
 }: GroupedSortableListProps<T>) {
   const dndId = useId();
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const itemIdToGroupKey = useMemo(() => {
     const m = new Map<string, string>();
@@ -199,8 +204,11 @@ export function GroupedSortableList<T extends SortableItem>({
     [groups]
   );
 
+  const activeItem = activeId ? getItemById(activeId) : null;
+
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
+      setActiveId(null);
       const { active, over } = event;
       if (!over) return;
       const activeId = String(active.id);
@@ -258,6 +266,8 @@ export function GroupedSortableList<T extends SortableItem>({
       sensors={sensors}
       collisionDetection={closestCenter}
       modifiers={[restrictToVerticalAxis]}
+      onDragStart={(event: DragStartEvent) => setActiveId(String(event.active.id))}
+      onDragCancel={() => setActiveId(null)}
       onDragEnd={handleDragEnd}
     >
       <div className="space-y-6">
@@ -275,6 +285,17 @@ export function GroupedSortableList<T extends SortableItem>({
         />
       ))}
       </div>
+      <DragOverlay dropAnimation={null}>
+        {activeItem
+          ? renderItem(activeItem, {
+              setNodeRef: () => {},
+              attributes: {},
+              listeners: {},
+              style: {},
+              isDragging: true,
+            })
+          : null}
+      </DragOverlay>
     </DndContext>
   );
 }
