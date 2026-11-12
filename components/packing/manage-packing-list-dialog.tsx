@@ -25,6 +25,7 @@ export interface ManagePackingListDialogProps {
   onOpenChange: (open: boolean) => void;
   tripId: string;
   itemCount: number;
+  startAtDelete?: boolean;
   onRefresh: () => Promise<void>;
   onSuccessMessage: (message: string) => void;
 }
@@ -34,6 +35,7 @@ export function ManagePackingListDialog({
   onOpenChange,
   tripId,
   itemCount,
+  startAtDelete = false,
   onRefresh,
   onSuccessMessage,
 }: ManagePackingListDialogProps) {
@@ -43,10 +45,11 @@ export function ManagePackingListDialog({
 
   useEffect(() => {
     if (open) {
-      setView("menu");
+      setView(startAtDelete ? "delete-all" : "menu");
       setError(null);
       setBusy(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   function closeDialog() {

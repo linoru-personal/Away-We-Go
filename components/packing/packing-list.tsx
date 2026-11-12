@@ -185,6 +185,7 @@ export function PackingList({
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [manageListOpen, setManageListOpen] = useState(false);
+  const [manageListStartAtDelete, setManageListStartAtDelete] = useState(false);
   const [fromUsualOpen, setFromUsualOpen] = useState(false);
   /** True while an "add to my usual stuff" call is in flight (guards double clicks). */
   const [usualBusy, setUsualBusy] = useState(false);
@@ -948,6 +949,7 @@ export function PackingList({
         onOpenChange={setManageListOpen}
         tripId={tripId}
         itemCount={items.length}
+        startAtDelete={manageListStartAtDelete}
         onRefresh={onRefresh}
         onSuccessMessage={setListManagementMessage}
       />
@@ -1085,10 +1087,25 @@ export function PackingList({
               <button
                 type="button"
                 className="text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
-                onClick={() => setManageListOpen(true)}
+                onClick={() => {
+                  setManageListStartAtDelete(false);
+                  setManageListOpen(true);
+                }}
               >
                 Manage packing list
               </button>
+              {items.length > 0 ? (
+                <button
+                  type="button"
+                  className="text-sm font-medium text-red-700 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2"
+                  onClick={() => {
+                    setManageListStartAtDelete(true);
+                    setManageListOpen(true);
+                  }}
+                >
+                  Delete all items
+                </button>
+              ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
