@@ -158,7 +158,24 @@ export function PackingList({
   onReorderGroup,
   onMoveItem,
 }: PackingListProps) {
-  const [viewMode, setViewMode] = useState<"category" | "participant">("category");
+  const [viewMode, setViewModeState] = useState<"category" | "participant">("category");
+  // Remembered per browser (one key for all trips). Read after mount so server and client HTML match.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("packing-view-mode");
+      if (saved === "category" || saved === "participant") setViewModeState(saved);
+    } catch {
+      // localStorage unavailable: stay on the default view.
+    }
+  }, []);
+  function setViewMode(mode: "category" | "participant") {
+    setViewModeState(mode);
+    try {
+      window.localStorage.setItem("packing-view-mode", mode);
+    } catch {
+      // Ignore: the choice just won't be remembered.
+    }
+  }
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addModalMode, setAddModalMode] = useState<"add-item" | "create-category">("add-item");
