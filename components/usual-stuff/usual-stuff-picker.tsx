@@ -62,6 +62,29 @@ function valueToChoice(v: string): WhoChoice {
   return { kind: "participant", id: v };
 }
 
+const EVERYONE_KEY = "__everyone_group__";
+
+/** Group/filter key for an item's person; no label (or "Everyone") is the shared group. */
+function personKeyOf(item: PickerItem): string {
+  if (!item.personLabel || !item.personLabel.trim()) return EVERYONE_KEY;
+  const key = whoKey(item.personLabel);
+  return key === "everyone" ? EVERYONE_KEY : key;
+}
+
+const chipClass = (on: boolean) =>
+  `min-h-9 rounded-full px-3 py-1 text-sm ${
+    on
+      ? "bg-[#E07A5F] text-white"
+      : "bg-[#F5F3F0] text-[#4A4A4A] hover:bg-[#E8E4E0]"
+  }`;
+
+const toggleClass = (on: boolean) =>
+  `min-h-9 rounded-lg border px-3 py-1.5 text-sm font-medium ${
+    on
+      ? "border-[#E07A5F] bg-[#E07A5F] text-white"
+      : "border-[#D4C5BA] bg-white text-[#4A4A4A] hover:bg-[#F5F3F0]"
+  }`;
+
 function CategoryCheckbox({
   checked,
   indeterminate,
@@ -151,18 +174,92 @@ export function UsualStuffPicker({
   );
   const count = countable.length;
 
-  const groups = useMemo(() => {
-    const out: { name: string; icon: string | null; items: PickerItem[] }[] = [];
+  /** View only: grouping and filters change what is rendered, never what is selected. */
+  const [viewMode, setViewMode] = useState<"category" | "participant">(
+    "category"
+  );
+  const [catFilter, setCatFilter] = useState<string | null>(null);
+  /** Person key (whoKey of the label) or EVERYONE_KEY; null = all. */
+  const [personFilter, setPersonFilter] = useState<string | null>(null);
+
+  const categoryOptions = useMemo(() => {
+    const seen: string[] = [];
     for (const item of items) {
-      let g = out.find((x) => x.name === item.categoryName);
+      if (!seen.includes(item.categoryName)) seen.push(item.categoryName);
+    }
+    return seen;
+  }, [items]);
+
+  const personOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    let hasEveryone = false;
+    for (const item of items) {
+      const key = personKeyOf(item);
+      if (key === EVERYONE_KEY) {
+        hasEveryone = true;
+        continue;
+      }
+      if (!seen.has(key)) seen.set(key, item.personLabel!.trim());
+    }
+    const out = [...seen.entries()].map(([key, label]) => ({ key, label }));
+    if (hasEveryone) out.push({ key: EVERYONE_KEY, label: "Everyone" });
+    return out;
+  }, [items]);
+
+  const visibleItems = useMemo(
+    () =>
+      items.filter(
+        (i) =>
+          (catFilter === null || i.categoryName === catFilter) &&
+          (personFilter === null || personKeyOf(i) === personFilter)
+      ),
+    [items, catFilter, personFilter]
+  );
+
+  const groups = useMemo(() => {
+    const out: {
+      key: string;
+      name: string;
+      icon: string | null;
+      items: PickerItem[];
+    }[] = [];
+    if (viewMode === "category") {
+      for (const item of visibleItems) {
+        let g = out.find((x) => x.name === item.categoryName);
+        if (!g) {
+          g = {
+            key: item.categoryName,
+            name: item.categoryName,
+            icon: item.categoryIcon,
+            items: [],
+          };
+          out.push(g);
+        }
+        g.items.push(item);
+      }
+      return out;
+    }
+    for (const item of visibleItems) {
+      const key = personKeyOf(item);
+      let g = out.find((x) => x.key === key);
       if (!g) {
-        g = { name: item.categoryName, icon: item.categoryIcon, items: [] };
+        g = {
+          key,
+          name: key === EVERYONE_KEY ? "Everyone" : item.personLabel!.trim(),
+          icon: null,
+          items: [],
+        };
         out.push(g);
       }
       g.items.push(item);
     }
+    // Everyone first, then labels in first-seen order (sort is stable).
+    out.sort(
+      (a, b) =>
+        Number(b.key === EVERYONE_KEY) - Number(a.key === EVERYONE_KEY)
+    );
     return out;
-  }, [items]);
+  }, [visibleItems, viewMode]);
 
   /** Who's-who rows: distinct labels among the selected (and not greyed out) items. */
   const whoLabels = useMemo(() => {
@@ -266,12 +363,89 @@ export function UsualStuffPicker({
           </div>
         ) : null}
 
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              aria-pressed={viewMode === "category"}
+              className={toggleClass(viewMode === "category")}
+              onClick={() => setViewMode("category")}
+            >
+              By category
+            </button>
+            <button
+              type="button"
+              aria-pressed={viewMode === "participant"}
+              className={toggleClass(viewMode === "participant")}
+              onClick={() => setViewMode("participant")}
+            >
+              By participant
+            </button>
+          </div>
+          {categoryOptions.length >= 2 ? (
+            <div
+              className="flex flex-wrap gap-2"
+              role="group"
+              aria-label="Filter by category"
+            >
+              {[null, ...categoryOptions].map((c) => (
+                <button
+                  key={c ?? "__all__"}
+                  type="button"
+                  aria-pressed={catFilter === c}
+                  className={chipClass(catFilter === c)}
+                  onClick={() => setCatFilter(c)}
+                >
+                  {c ?? "All"}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {personOptions.length >= 2 ? (
+            <div
+              className="flex flex-wrap gap-2"
+              role="group"
+              aria-label="Filter by person"
+            >
+              {[{ key: null, label: "All" }, ...personOptions].map((p) => (
+                <button
+                  key={p.key ?? "__all__"}
+                  type="button"
+                  aria-pressed={personFilter === p.key}
+                  className={chipClass(personFilter === p.key)}
+                  onClick={() => setPersonFilter(p.key)}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+        {groups.length === 0 ? (
+          <div className="space-y-2 py-2">
+            <p className="text-sm text-[#9B7B6B]">
+              No items match these filters.
+            </p>
+            <button
+              type="button"
+              className={BTN_SECONDARY}
+              onClick={() => {
+                setCatFilter(null);
+                setPersonFilter(null);
+              }}
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : null}
+
         {groups.map((group) => {
           const enabled = group.items.filter((i) => !reasons.get(i.key));
           const k = enabled.filter((i) => selected.has(i.key)).length;
           const n = enabled.length;
           return (
-            <section key={group.name}>
+            <section key={group.key}>
               <div className="flex items-center gap-2 pb-1">
                 <CategoryCheckbox
                   checked={n > 0 && k === n}
@@ -280,11 +454,20 @@ export function UsualStuffPicker({
                   onChange={() => toggleGroup(group)}
                   label={`Select all in ${group.name}`}
                 />
-                <CategoryIcon
-                  iconKey={group.icon}
-                  size={16}
-                  className="text-[#9B7B6B]"
-                />
+                {viewMode === "category" ? (
+                  <CategoryIcon
+                    iconKey={group.icon}
+                    size={16}
+                    className="text-[#9B7B6B]"
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="flex size-5 items-center justify-center rounded-full bg-[#F5F3F0] text-[10px] font-semibold uppercase text-[#9B7B6B]"
+                  >
+                    {group.name.charAt(0)}
+                  </span>
+                )}
                 <h3 className="text-sm font-semibold text-[#4A4A4A]">
                   {group.name}
                 </h3>
@@ -313,7 +496,12 @@ export function UsualStuffPicker({
                       <span className="min-w-0 flex-1 truncate">
                         {item.title}
                         {item.quantity > 1 ? ` ×${item.quantity}` : ""}
-                        {item.personLabel ? (
+                        {viewMode === "participant" ? (
+                          <span className="text-xs text-[#9B7B6B]">
+                            {" "}
+                            {item.categoryName}
+                          </span>
+                        ) : item.personLabel ? (
                           <span className="text-[#9B7B6B]">
                             {" "}
                             ({item.personLabel})
