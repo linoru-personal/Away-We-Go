@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, Fragment } from "react";
-import { BookmarkPlus, Share2 } from "lucide-react";
+import {
+  BookmarkPlus,
+  ListChecks,
+  Luggage,
+  Plus,
+  Share2,
+  Tags,
+  Trash2,
+} from "lucide-react";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   Dialog,
@@ -1079,53 +1087,59 @@ export function PackingList({
             <div className="flex flex-wrap items-center gap-4">
               <button
                 type="button"
-                className="text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
                 onClick={() => setManageCategoriesOpen(true)}
               >
+                <Tags className="size-4" strokeWidth={1.75} aria-hidden />
                 Manage Categories
               </button>
               <button
                 type="button"
-                className="text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
                 onClick={() => {
                   setManageListStartAtDelete(false);
                   setManageListOpen(true);
                 }}
               >
+                <ListChecks className="size-4" strokeWidth={1.75} aria-hidden />
                 Manage packing list
               </button>
-              {items.length > 0 ? (
-                <button
-                  type="button"
-                  className="text-sm font-medium text-red-700 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2"
-                  onClick={() => {
-                    setManageListStartAtDelete(true);
-                    setManageListOpen(true);
-                  }}
-                >
-                  Delete all items
-                </button>
-              ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                className="rounded-full border border-[#E07A5F] bg-white px-4 py-2 text-sm font-semibold text-[#E07A5F] hover:bg-[#FBF8F5]"
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#E07A5F] bg-white px-4 py-2 text-sm font-semibold text-[#E07A5F] hover:bg-[#FBF8F5]"
                 onClick={() => setFromUsualOpen(true)}
               >
-                + From usual stuff
+                <Luggage className="size-4" strokeWidth={1.75} aria-hidden />
+                From usual stuff
               </button>
               <button
                 type="button"
-                className="rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
+                className="inline-flex items-center gap-1.5 rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
                 onClick={() => {
                   setAddCategoryId(categories[0]?.id ?? "");
                   setAddModalMode("add-item");
                   setAddModalOpen(true);
                 }}
               >
-                + Add Item
+                <Plus className="size-4" strokeWidth={2} aria-hidden />
+                Add Item
               </button>
+              {items.length > 0 ? (
+                <button
+                  type="button"
+                  aria-label="Delete all items"
+                  title="Delete all items"
+                  className="rounded-full p-2 text-[#E07A5F] hover:bg-[#FBF8F5] hover:text-[#D96A4F] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
+                  onClick={() => {
+                    setManageListStartAtDelete(true);
+                    setManageListOpen(true);
+                  }}
+                >
+                  <Trash2 className="size-5" strokeWidth={1.75} aria-hidden />
+                </button>
+              ) : null}
             </div>
           </div>
         </>
