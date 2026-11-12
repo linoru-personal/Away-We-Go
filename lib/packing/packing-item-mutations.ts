@@ -51,6 +51,23 @@ export async function updatePackingItem(
   return { error: null };
 }
 
+/** Deletes a single packing item. Logs failures like the other mutations here. */
+export async function deletePackingItem(
+  supabase: SupabaseClient,
+  itemId: string
+): Promise<{ error: Error | null }> {
+  console.log("[packing_items.delete]", { itemId });
+
+  const { error } = await supabase.from("packing_items").delete().eq("id", itemId);
+
+  if (error) {
+    console.warn("[packing_items.delete] failed", { itemId, message: error.message });
+    return { error: new Error(error.message) };
+  }
+
+  return { error: null };
+}
+
 /**
  * Puts the given items in `categoryId`, in the given order (sort_order = array index),
  * in one database call. Use for within-category reorder and for moves into a category.

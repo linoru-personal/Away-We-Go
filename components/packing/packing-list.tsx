@@ -43,6 +43,7 @@ import {
   writeCollapsedGroups,
 } from "@/lib/packing/collapsed-groups";
 import {
+  deletePackingItem,
   updatePackingItem,
   type PackingItemPatch,
 } from "@/lib/packing/packing-item-mutations";
@@ -208,7 +209,7 @@ export function PackingList({
   /** Last failed toggle/edit/delete, shown on that item's row only. */
   const [itemError, setItemError] = useState<{ id: string; message: string } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [manageListOpen, setManageListOpen] = useState(false);
   const [manageListStartAtDelete, setManageListStartAtDelete] = useState(false);
@@ -567,6 +568,7 @@ export function PackingList({
   }
 
   function clearInlineEdit() {
+    setItemError(null);
     setUsualPrompt(null);
     setUsualError(null);
     setEditingId(null);
@@ -623,6 +625,7 @@ export function PackingList({
       return;
     }
 
+    setItemError(null);
     setEditSaving(true);
     const { error } = await updatePackingItem(
       supabase,
@@ -631,7 +634,11 @@ export function PackingList({
       "save-edit"
     );
     setEditSaving(false);
-    if (error) return;
+    if (error) {
+      // Editor stays open with the user's values so they can retry.
+      setItemError({ id: editingId, message: "Couldn't save your changes. Please try again." });
+      return;
+    }
 
     onItemsPatched?.(editingId, {
       ...(patch.title !== undefined ? { title: patch.title } : {}),
@@ -646,11 +653,16 @@ export function PackingList({
   }
 
   async function handleDelete(itemId: string) {
-    setDeleteLoading(true);
-    const { error } = await supabase.from("packing_items").delete().eq("id", itemId);
-    setDeleteLoading(false);
+    setItemError(null);
+    setDeletingId(itemId);
+    const { error } = await deletePackingItem(supabase, itemId);
+    setDeletingId(null);
+    if (error) {
+      // Item stays and the confirm UI stays open, so "Yes" retries.
+      setItemError({ id: itemId, message: "Couldn't delete this item. Please try again." });
+      return;
+    }
     setDeleteConfirmId(null);
-    if (error) return;
     if (editingId === itemId) clearInlineEdit();
     await onRefresh();
   }
@@ -823,7 +835,7 @@ export function PackingList({
         onEdit={() => openEdit(item)}
         onDeleteRequest={() => setDeleteConfirmId(item.id)}
         confirmingDelete={deleteConfirmId === item.id}
-        deleteLoading={deleteLoading}
+        deleteLoading={deletingId === item.id}
         onDeleteConfirm={() => handleDelete(item.id)}
         onDeleteCancel={() => setDeleteConfirmId(null)}
         dragHandle={dragHandle}
