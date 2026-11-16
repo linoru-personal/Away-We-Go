@@ -58,6 +58,50 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 - If a required sync or push is blocked, stop and report the exact command and error.
 <!-- END BEADS INTEGRATION -->
 
+## Development Workflow
+
+<!-- Keep this section identical in CLAUDE.md and AGENTS.md. -->
+
+These rules apply every session. They give agents more autonomy for routine
+Beads management only. They do not override existing safety rules, tool
+permissions, or other project instructions; where anything else here is
+stricter, the stricter rule applies.
+
+### Beads task management (do this without being asked)
+
+- At the start of any substantial task, search Beads (`bd search`, `bd ready`,
+  `bd list --status=open`) for a matching issue before creating one.
+- If one exists, claim it (`bd update <id> --claim`). If not, create one scoped
+  to the task, under the relevant epic (`--parent=<epic>`), with a description
+  and acceptance criteria.
+- Keep Beads in step with real progress: update status, add dependencies
+  (`bd dep add`), and file follow-ups as they come up. Don't create duplicates
+  or tasks for trivial steps.
+- Record important findings, decisions and outcomes in the issue's notes or
+  design fields (`bd update <id> --notes/--design`).
+- Close an issue only when its acceptance criteria are met and any approval it
+  needed has been given.
+- Routine local Beads management (create, claim, update, note, close) needs no
+  approval. Syncing Beads to the remote (`bd dolt push`) needs approval, like
+  any other push.
+
+### What needs the user's approval
+
+- Product requirements, UX decisions, designs and implementation plans.
+- No implementation before the user approves both the design and the plan.
+- No commit, push, merge or destructive action (deleting data, branches or
+  files; force operations) without the user's approval.
+
+### Superpowers
+
+- Use the Superpowers skills for brainstorming, design, planning and
+  implementation where they apply.
+- Track each meaningful Superpowers stage that has a clear deliverable (such as
+  the approved design, or the approved plan) as its own Beads task under the
+  epic, with the outcome recorded there or linked (for example, a file in
+  `docs/superpowers/`). Don't split stages further than that.
+- Create implementation tasks only after the design and the plan are approved,
+  and make them match the plan's tasks.
 
 ## Build & Test
 
