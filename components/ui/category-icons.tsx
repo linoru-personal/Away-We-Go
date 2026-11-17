@@ -2,41 +2,7 @@
 
 import * as React from "react";
 import { createPortal } from "react-dom";
-import {
-  Ticket,
-  Sparkles,
-  Gift,
-  ShoppingBag,
-  Heart,
-  Star,
-  UtensilsCrossed,
-  Wine,
-  Camera,
-  MapPin,
-  Calendar,
-  Compass,
-  Plane,
-  Car,
-  Shirt,
-  CircleDollarSign,
-  Luggage,
-  Tent,
-  BedDouble,
-  House,
-  Building2,
-  Castle,
-  FerrisWheel,
-  Mountain,
-  LeafyGreen,
-  TreePalm,
-  TramFront,
-  Bus,
-  Ship,
-  Waves,
-  Umbrella,
-  Telescope,
-  LucideIcon,
-} from "lucide-react";
+import { HandDrawnIcon } from "./hand-drawn-icons";
 
 /** Icon keys for category icons (outline only, no bookmark). */
 export const CATEGORY_ICON_KEYS = [
@@ -73,6 +39,23 @@ export const CATEGORY_ICON_KEYS = [
   "waves",
   "umbrella",
   "telescope",
+  /* suggested additions */
+  "passport",
+  "first_aid",
+  "toothbrush",
+  "charger",
+  "laptop",
+  "sunglasses",
+  "shoes",
+  "backpack",
+  "baby",
+  "pet",
+  "snow",
+  "sun",
+  "bike",
+  "book",
+  "coffee",
+  "music",
 ] as const;
 
 export type CategoryIconKey = (typeof CATEGORY_ICON_KEYS)[number];
@@ -80,41 +63,6 @@ export type CategoryIconKey = (typeof CATEGORY_ICON_KEYS)[number];
 export const BUDGET_DEFAULT_ICON: CategoryIconKey = "money";
 export const PACKING_DEFAULT_ICON: CategoryIconKey = "luggage";
 export const PLACES_DEFAULT_ICON: CategoryIconKey = "map_pin";
-
-const ICON_MAP: Record<CategoryIconKey, LucideIcon> = {
-  ticket: Ticket,
-  sparkles: Sparkles,
-  gift: Gift,
-  shopping_bag: ShoppingBag,
-  heart: Heart,
-  star: Star,
-  utensils: UtensilsCrossed,
-  wine: Wine,
-  camera: Camera,
-  map_pin: MapPin,
-  calendar: Calendar,
-  compass: Compass,
-  plane: Plane,
-  car: Car,
-  shirt: Shirt,
-  money: CircleDollarSign,
-  luggage: Luggage,
-  tent: Tent,
-  hotel: BedDouble,
-  house: House,
-  building_2: Building2,
-  landmark: Castle,
-  ferris_wheel: FerrisWheel,
-  mountain: Mountain,
-  trees: LeafyGreen,
-  tree_palm: TreePalm,
-  train_front: TramFront,
-  bus: Bus,
-  ship: Ship,
-  waves: Waves,
-  umbrella: Umbrella,
-  telescope: Telescope,
-};
 
 /** Legacy budget icon keys → new key */
 const LEGACY_KEY_MAP: Record<string, CategoryIconKey> = {
@@ -199,15 +147,11 @@ export function CategoryIcon({
   className = "",
   size = 20,
 }: CategoryIconProps) {
-  const key = getIconKey(iconKey, "star");
-  const Icon = ICON_MAP[key];
-  if (!Icon) return null;
   return (
-    <Icon
+    <HandDrawnIcon
+      name={getIconKey(iconKey, "star")}
       size={size}
       className={className}
-      strokeWidth={2}
-      aria-hidden
     />
   );
 }

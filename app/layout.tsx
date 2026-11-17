@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Rubik } from "next/font/google";
 import "./globals.css";
+import { HandDrawnFilterDefs } from "@/components/ui/hand-drawn-icons";
 
 const rubik = Rubik({
   subsets: ["latin", "hebrew"],
@@ -22,6 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={rubik.variable}>
       <body className="font-sans antialiased">
+        <HandDrawnFilterDefs />
         {children}
       </body>
     </html>
