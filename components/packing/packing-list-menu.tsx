@@ -35,7 +35,7 @@ export function PackingListMenu({
   }, [open]);
 
   const itemClass =
-    "block w-full rounded-xl px-3 py-2.5 text-start text-sm font-semibold hover:bg-[#FDEDE6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/40 disabled:opacity-50 disabled:hover:bg-transparent";
+    "block min-h-[46px] w-full rounded-xl px-3 py-2.5 text-start text-sm font-semibold hover:bg-[#FDEDE6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/40 disabled:opacity-50 disabled:hover:bg-transparent";
 
   return (
     <div ref={rootRef} className="relative">

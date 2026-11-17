@@ -973,7 +973,7 @@ export function PackingList({
     <button
       type="button"
       aria-pressed={showPacked}
-      className={`inline-flex items-center gap-2.5 rounded-lg text-sm font-semibold text-[#2E2A27] ${PACKING_FOCUS}`}
+      className={`inline-flex min-h-11 items-center gap-2.5 rounded-lg text-sm font-semibold text-[#2E2A27] ${PACKING_FOCUS}`}
       onClick={() => setShowPacked(!showPacked)}
     >
       <span
@@ -1146,14 +1146,16 @@ export function PackingList({
           </div>
 
           {items.length > 0 && (
-            <button
-              type="button"
-              className={`${PACKING_SECONDARY_BUTTON_CLASS} ${PACKING_FOCUS} hidden md:inline-flex`}
-              onClick={handleShare}
-            >
-              <HandDrawnIcon name="share" size={20} />
-              Share list
-            </button>
+            <div className="hidden md:block">
+              <button
+                type="button"
+                className={`${PACKING_SECONDARY_BUTTON_CLASS} ${PACKING_FOCUS}`}
+                onClick={handleShare}
+              >
+                <HandDrawnIcon name="share" size={20} />
+                Share list
+              </button>
+            </div>
           )}
         </div>
 
@@ -1214,7 +1216,7 @@ export function PackingList({
                 key={chip.key}
                 type="button"
                 aria-pressed={assigneeFilter === chip.key}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold ${PACKING_FOCUS} ${
+                className={`flex shrink-0 items-center min-h-11 gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold md:min-h-9 ${PACKING_FOCUS} ${
                   assigneeFilter === chip.key
                     ? "bg-[#E07A5F] text-[#2B1610]"
                     : "border border-[#EFE3D8] bg-white text-[#2E2A27] hover:bg-[#FDEDE6]"
@@ -1434,8 +1436,8 @@ export function PackingList({
           ))}
       </div>
 
-      {filteredItems.length === 0 && (
-        <p className="mt-6 text-sm text-[#6B7280]">No packing items yet. Add your first one.</p>
+      {items.length > 0 && filteredItems.length === 0 && (
+        <p className="mt-6 text-sm text-[#6B5B50]">No items match.</p>
       )}
         </div>
       </div>
