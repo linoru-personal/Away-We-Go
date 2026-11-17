@@ -87,7 +87,9 @@ function EditorBody({
           <button
             type="button"
             className={`${PACKING_SECONDARY_BUTTON_CLASS} ${FOCUS_RING}`}
-            onClick={() => setConfirming(false)}
+            // Opened straight on the confirmation (trash button): Cancel closes the dialog.
+            // Reached from the edit form: Cancel goes back to it.
+            onClick={() => (initialConfirmDelete ? onCancel() : setConfirming(false))}
           >
             Cancel
           </button>

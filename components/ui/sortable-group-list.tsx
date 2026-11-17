@@ -49,6 +49,8 @@ export interface SortableGroupListProps<T extends SortableItem> {
   as?: "ul" | "div";
   /** Class name for the list container. */
   className?: string;
+  /** Press-and-hold time (ms) before a touch starts a drag. Default 200. */
+  touchDelayMs?: number;
 }
 
 function SortableRow<T extends SortableItem>({
@@ -101,6 +103,7 @@ export function SortableGroupList<T extends SortableItem>({
   disabled = false,
   as: ListTag = "ul",
   className,
+  touchDelayMs = 200,
 }: SortableGroupListProps<T>) {
   const dndId = useId();
   const itemIds = items.map((i) => i.id);
@@ -108,7 +111,7 @@ export function SortableGroupList<T extends SortableItem>({
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 200, tolerance: 8 },
+      activationConstraint: { delay: touchDelayMs, tolerance: 8 },
     }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );

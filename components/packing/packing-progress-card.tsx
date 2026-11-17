@@ -1,10 +1,21 @@
 "use client";
 
-export function PackingProgressCard({ packed, total }: { packed: number; total: number }) {
+export function PackingProgressCard({
+  packed,
+  total,
+  canEdit = true,
+}: {
+  packed: number;
+  total: number;
+  /** Read-only viewers can't add, so the empty state doesn't invite them to. */
+  canEdit?: boolean;
+}) {
   if (total === 0) {
     return (
       <div className="rounded-[22px] bg-[#E07A5F] px-5 py-5 text-[#2B1610] shadow-[0_6px_16px_rgba(224,122,95,0.25)]">
-        <p className="font-bold">Nothing packed yet. Add your first item.</p>
+        <p className="font-bold">
+          {canEdit ? "Nothing packed yet. Add your first item." : "Nothing on the list yet."}
+        </p>
       </div>
     );
   }

@@ -130,6 +130,12 @@ const ITEM_LIST_CLASS = "";
 const GROUP_GRID_CLASS =
   "grid grid-cols-1 items-start gap-4 md:grid-cols-[repeat(auto-fill,minmax(320px,1fr))] md:gap-5";
 
+/**
+ * Press-and-hold before a touch drag starts. The whole row is the touch handle, so this is longer
+ * than the 200 ms default: a slow start of a scroll must not pick an item up.
+ */
+const TOUCH_DRAG_DELAY_MS = 450;
+
 /** How long a just-ticked item stays on screen while packed items are hidden. */
 const LINGER_MS = 4000;
 
@@ -208,10 +214,11 @@ export function PackingList({
     showPackedRef.current = showPacked;
   }, [showPacked]);
   /**
-   * Items just ticked while packed items are hidden: they stay on screen (crossed out, then
-   * fading) for LINGER_MS before they disappear. One timer per item.
+   * Items just ticked while packed items are hidden, with when their linger started (Date.now()).
+   * They stay on screen (crossed out, then fading) for LINGER_MS before they disappear; the start
+   * time lets a row that remounts resume its fade at the right point. One timer per item.
    */
-  const [lingering, setLingering] = useState<Set<string>>(() => new Set());
+  const [lingering, setLingering] = useState<Map<string, number>>(() => new Map());
   const lingerTimersRef = useRef<Map<string, number>>(new Map());
   function stopLingering(itemId: string) {
     const timer = lingerTimersRef.current.get(itemId);
@@ -219,7 +226,7 @@ export function PackingList({
     lingerTimersRef.current.delete(itemId);
     setLingering((prev) => {
       if (!prev.has(itemId)) return prev;
-      const next = new Set(prev);
+      const next = new Map(prev);
       next.delete(itemId);
       return next;
     });
@@ -231,12 +238,14 @@ export function PackingList({
       itemId,
       window.setTimeout(() => stopLingering(itemId), LINGER_MS)
     );
-    setLingering((prev) => (prev.has(itemId) ? prev : new Set(prev).add(itemId)));
+    // A new start time also restarts the fade of a row that was already lingering.
+    const startedAt = Date.now();
+    setLingering((prev) => new Map(prev).set(itemId, startedAt));
   }
   function clearAllLingering() {
     for (const timer of lingerTimersRef.current.values()) window.clearTimeout(timer);
     lingerTimersRef.current.clear();
-    setLingering((prev) => (prev.size === 0 ? prev : new Set()));
+    setLingering((prev) => (prev.size === 0 ? prev : new Map()));
   }
   useEffect(() => {
     const timers = lingerTimersRef.current;
@@ -347,13 +356,13 @@ export function PackingList({
       .map((c) => {
         const allItems = map.get(c.id)!;
         const counts = { packed: allItems.filter((i) => i.is_packed).length, total: allItems.length };
-        const catItems = visibleItems(allItems, showPacked, lingering);
+        const catItems = visibleItems(allItems, showPacked, lingering, itemError?.id ?? null);
         if (!showPersonGroups) return { category: c, items: catItems, blocks: [] as PersonBlock[], ...counts };
         // Displayed order: person by person (Everyone first); the order inside a person is the saved order.
         const blocks = splitByPerson(catItems, participants);
         return { category: c, items: blocks.flatMap((b) => b.items), blocks, ...counts };
       });
-  }, [filteredItems, categories, participants, showPersonGroups, showPacked, lingering]);
+  }, [filteredItems, categories, participants, showPersonGroups, showPacked, lingering, itemError]);
 
   /** The item that opens each person block in By category view (that is where the person sub-header goes). */
   const personBlockStarts = useMemo(() => {
@@ -394,7 +403,7 @@ export function PackingList({
     const group = (list: PackingItem[]) => ({
       packed: list.filter((i) => i.is_packed).length,
       total: list.length,
-      ...byCategory(visibleItems(list, showPacked, lingering)),
+      ...byCategory(visibleItems(list, showPacked, lingering, itemError?.id ?? null)),
     });
     const result: {
       label: string;
@@ -410,7 +419,7 @@ export function PackingList({
       if (list.length > 0) result.push({ label: p.name, participantId: p.id, ...group(list) });
     }
     return result;
-  }, [filteredItems, participants, categories, showPacked, lingering]);
+  }, [filteredItems, participants, categories, showPacked, lingering, itemError]);
 
   /** For each person group, the item that opens each category block (that is where the sub-header goes). */
   const personCategoryStarts = useMemo(() => {
@@ -424,14 +433,10 @@ export function PackingList({
   const editorItem = editorItemId ? items.find((i) => i.id === editorItemId) ?? null : null;
 
   async function handleTogglePacked(item: PackingItem) {
-    setItemError(null);
+    // Clear other rows' errors now; this row's error (which keeps a packed row on screen) is
+    // cleared only once the retry succeeds, so the row doesn't vanish while it is in flight.
+    setItemError((prev) => (prev && prev.id !== item.id ? null : prev));
     const next = !item.is_packed;
-    // Un-ticking within the linger: stop its timer now, so it can't vanish while the update is in flight.
-    const wasLingering = !next && lingerTimersRef.current.has(item.id);
-    if (wasLingering) {
-      window.clearTimeout(lingerTimersRef.current.get(item.id));
-      lingerTimersRef.current.delete(item.id);
-    }
 
     const { error } = await updatePackingItem(
       supabase,
@@ -442,8 +447,9 @@ export function PackingList({
 
     if (error) {
       setItemError({ id: item.id, message: "Couldn't update this item. Tap to try again." });
-      // Un-ticking a lingering item failed: it is still packed, so give it its 4 seconds again.
-      if (!next && wasLingering && !showPackedRef.current) startLingering(item.id);
+      // The row stays on screen with its error until the user acts: visibleItems keeps the
+      // item with the error, and it stops lingering so it no longer fades out.
+      stopLingering(item.id);
       return;
     }
     // Order matters if React ever renders these updates apart: a packed item must already be
@@ -453,6 +459,7 @@ export function PackingList({
       // Packed items are hidden: keep this one on screen, crossed out, for a moment before it goes.
       startLingering(item.id);
     }
+    setItemError((prev) => (prev?.id === item.id ? null : prev));
     onItemsPatched?.(item.id, { is_packed: next });
     if (!next) stopLingering(item.id);
   }
@@ -913,7 +920,7 @@ export function PackingList({
         onToggle={() => handleTogglePacked(item)}
         onOpenEditor={() => openEditor(item)}
         onDeleteRequest={() => openEditor(item, true)}
-        fading={lingering.has(item.id)}
+        lingerStartedAt={lingering.get(item.id)}
         dragHandle={dragHandle}
         isDragging={isDragging}
       />
@@ -1024,15 +1031,11 @@ export function PackingList({
     >
       <span
         className={`flex size-6 items-center justify-center rounded-md border-2 ${
-          showPacked ? "border-[#E07A5F] bg-[#E07A5F] text-[#2B1610]" : "border-[#E9D5C6] bg-white"
+          showPacked ? "border-[#E07A5F] bg-[#E07A5F] text-white" : "border-[#E9D5C6] bg-white"
         }`}
         aria-hidden
       >
-        {showPacked && (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 12.5l4.5 4.5L19 7" />
-          </svg>
-        )}
+        {showPacked && <HandDrawnIcon name="check" size={15} />}
       </span>
       Show packed items ({packedCount})
     </button>
@@ -1185,7 +1188,7 @@ export function PackingList({
             </div>
           </div>
 
-          <PackingProgressCard packed={packedCount} total={totalCount} />
+          <PackingProgressCard packed={packedCount} total={totalCount} canEdit={canEditContent} />
 
           <div className="hidden md:block">
             <PackingPeopleProgress people={peopleProgress} />
@@ -1206,19 +1209,19 @@ export function PackingList({
         </div>
 
         <div className="min-w-0" style={{ flex: "999 1 560px" }}>
-          {canEditContent && (
-            <div className="mb-4">
-              <PackingToolbar
-                onAddItem={openAddItem}
-                onFromUsual={() => setFromUsualOpen(true)}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                onManageCategories={() => setManageCategoriesOpen(true)}
-                onDeleteAll={openDeleteAll}
-                canDeleteAll={items.length > 0}
-              />
-            </div>
-          )}
+          {/* Read-only viewers still get the desktop search; the phone has nothing else to show them. */}
+          <div className={canEditContent ? "mb-4" : "mb-4 hidden md:block"}>
+            <PackingToolbar
+              onAddItem={openAddItem}
+              onFromUsual={() => setFromUsualOpen(true)}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onManageCategories={() => setManageCategoriesOpen(true)}
+              onDeleteAll={openDeleteAll}
+              canDeleteAll={items.length > 0}
+              canEdit={canEditContent}
+            />
+          </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="inline-flex rounded-full bg-[#F6EEE7] p-1" role="group" aria-label="Group items">
@@ -1341,6 +1344,7 @@ export function PackingList({
             }}
             listTag="ul"
             listClassName={ITEM_LIST_CLASS}
+            touchDelayMs={TOUCH_DRAG_DELAY_MS}
             groupClassName={PACKING_GROUP_CARD_CLASS}
             containerClassName={GROUP_GRID_CLASS}
             // Every category here has items; an empty list means they are all packed and hidden.
@@ -1367,6 +1371,7 @@ export function PackingList({
                       onReorder={handleCategoryReorder}
                       as="ul"
                       className={ITEM_LIST_CLASS}
+                      touchDelayMs={TOUCH_DRAG_DELAY_MS}
                       disabled={!canEditContent}
                     >
                       {(item, sortable) => {
@@ -1440,6 +1445,7 @@ export function PackingList({
             }}
             listTag="ul"
             listClassName={ITEM_LIST_CLASS}
+            touchDelayMs={TOUCH_DRAG_DELAY_MS}
             groupClassName={PACKING_GROUP_CARD_CLASS}
             containerClassName={GROUP_GRID_CLASS}
             renderEmptyGroup={(groupKey) => {
@@ -1480,6 +1486,7 @@ export function PackingList({
                       onReorder={() => {}}
                       as="ul"
                       className={ITEM_LIST_CLASS}
+                      touchDelayMs={TOUCH_DRAG_DELAY_MS}
                       disabled={!canEditContent}
                     >
                       {(item, sortable) => {

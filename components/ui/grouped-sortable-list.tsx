@@ -73,6 +73,8 @@ export interface GroupedSortableListProps<T extends SortableItem> {
    * Return null to show nothing (the group itself is still a drop target).
    */
   renderEmptyGroup?: (groupKey: string) => React.ReactNode;
+  /** Press-and-hold time (ms) before a touch starts a drag. Default 200. */
+  touchDelayMs?: number;
 }
 
 function SortableRow<T extends SortableItem>({
@@ -194,6 +196,7 @@ export function GroupedSortableList<T extends SortableItem>({
   groupClassName,
   containerClassName = "space-y-6",
   renderEmptyGroup,
+  touchDelayMs = 200,
 }: GroupedSortableListProps<T>) {
   const dndId = useId();
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -268,7 +271,7 @@ export function GroupedSortableList<T extends SortableItem>({
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 200, tolerance: 8 },
+      activationConstraint: { delay: touchDelayMs, tolerance: 8 },
     }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );

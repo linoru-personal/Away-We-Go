@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { HandDrawnIcon } from "@/components/ui/hand-drawn-icons";
 import type { PackingItem } from "./packing-list";
 
@@ -27,8 +27,11 @@ export interface PackingItemRowProps {
   onToggle: () => void;
   onOpenEditor: () => void;
   onDeleteRequest: () => void;
-  /** Packed row on its way out when packed items are hidden. */
-  fading?: boolean;
+  /**
+   * When the item started lingering (Date.now() ms), if it is lingering: a just-ticked row on its
+   * way out while packed items are hidden. It stays visible, then fades out at the end of the linger.
+   */
+  lingerStartedAt?: number;
   /** Drag handle (shown on fine pointers only). */
   dragHandle?: ReactNode;
   isDragging?: boolean;
@@ -42,7 +45,7 @@ export function PackingItemRow({
   onToggle,
   onOpenEditor,
   onDeleteRequest,
-  fading = false,
+  lingerStartedAt,
   dragHandle,
   isDragging = false,
 }: PackingItemRowProps) {
@@ -55,14 +58,31 @@ export function PackingItemRow({
     packed ? "text-[#7A6A5E] line-through" : "text-[#2E2A27]"
   }`;
   const nameStyle = { unicodeBidi: "plaintext" } as const;
+  const lingering = lingerStartedAt !== undefined;
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  // The fade is the .packing-linger-fade keyframes (app/globals.css), timed against when the linger
+  // started, not when this row mounted: a row that remounts mid-linger (view switch, drag to another
+  // group) resumes at the right point, and a re-armed linger (new start time) starts over.
+  useLayoutEffect(() => {
+    const el = rowRef.current;
+    if (!el || lingerStartedAt === undefined) return;
+    el.style.animationDelay = `${-(Date.now() - lingerStartedAt)}ms`;
+    // Restart the animation so the delay counts from now.
+    el.classList.remove("packing-linger-fade");
+    void el.offsetWidth;
+    el.classList.add("packing-linger-fade");
+    return () => {
+      el.style.animationDelay = "";
+    };
+  }, [lingerStartedAt]);
 
   return (
     <div
-      // fading: stays fully visible (crossed out) for 3.7 s, then fades out over the last 0.3 s of the
-      // 4 s linger. The delay sits on the fading state only, so un-ticking restores it at once.
-      className={`group/row border-t border-[#F6EEE7] transition-opacity ${
-        packed ? "bg-[#FFFBF7]" : "bg-white"
-      } ${fading ? "opacity-0 delay-[3700ms] duration-300" : "duration-500"} ${
+      ref={rowRef}
+      className={`group/row border-t border-[#F6EEE7] ${packed ? "bg-[#FFFBF7]" : "bg-white"} ${
+        lingering ? "packing-linger-fade" : ""
+      } ${
         isDragging ? "relative z-10 rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)]" : ""
       }`}
     >

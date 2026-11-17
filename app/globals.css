@@ -24,3 +24,23 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+/*
+ * Packing list: a just-ticked item lingers 4 s while packed items are hidden.
+ * Fully visible for 3.7 s, then fades out over the last 0.3 s; the list removes
+ * it at 4 s. The row sets a negative animation-delay so a remounted row resumes
+ * where its linger is.
+ */
+@keyframes packing-linger-fade {
+  0%,
+  92.5% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.packing-linger-fade {
+  animation: packing-linger-fade 4000ms linear forwards;
+}
