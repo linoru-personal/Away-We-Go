@@ -1,15 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, Fragment } from "react";
-import {
-  BookmarkPlus,
-  ListChecks,
-  Luggage,
-  Plus,
-  Share2,
-  Tags,
-  Trash2,
-} from "lucide-react";
+import { BookmarkPlus } from "lucide-react";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   Dialog,
@@ -34,6 +26,18 @@ import {
 import { GroupedSortableList } from "@/components/ui/grouped-sortable-list";
 import { DragHandle } from "@/components/ui/drag-handle";
 import { PackingItemRow } from "@/components/packing/packing-item-row";
+import { HandDrawnIcon } from "@/components/ui/hand-drawn-icons";
+import { PackingProgressCard } from "@/components/packing/packing-progress-card";
+import { PackingListMenu } from "@/components/packing/packing-list-menu";
+import { PackingToolbar } from "@/components/packing/packing-toolbar";
+import {
+  PackingPeopleProgress,
+  type PackingPersonProgress,
+} from "@/components/packing/packing-people-progress";
+import {
+  PACKING_ICON_BUTTON_CLASS,
+  PACKING_SECONDARY_BUTTON_CLASS,
+} from "@/components/packing/packing-styles";
 import {
   PackingItemEditorDialog,
   type PackingItemEditorValues,
@@ -56,6 +60,9 @@ import {
   splitByPerson,
   type PersonBlock,
 } from "@/lib/packing/person-groups";
+
+const PACKING_FOCUS =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/40 disabled:opacity-50";
 
 export type PackingCategory = {
   id: string;
@@ -165,6 +172,26 @@ export function PackingList({
     }
   }
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
+  /** Desktop "Find an item" filter. */
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showPacked, setShowPackedState] = useState(false);
+  // Remembered per browser, read after mount so server and client HTML match.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("packing-show-packed");
+      if (saved === "true" || saved === "false") setShowPackedState(saved === "true");
+    } catch {
+      // localStorage unavailable: stay on the default.
+    }
+  }, []);
+  function setShowPacked(next: boolean) {
+    setShowPackedState(next);
+    try {
+      window.localStorage.setItem("packing-show-packed", String(next));
+    } catch {
+      // Ignore: the choice just won't be remembered.
+    }
+  }
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addModalMode, setAddModalMode] = useState<"add-item" | "create-category">("add-item");
   const [addTitle, setAddTitle] = useState("");
@@ -234,16 +261,16 @@ export function PackingList({
 
   const packedCount = items.filter((i) => i.is_packed).length;
   const totalCount = items.length;
-  const progressPercent = totalCount > 0 ? Math.round((packedCount / totalCount) * 100) : 0;
 
   const filteredItems = useMemo(() => {
-    if (assigneeFilter === "all") return items;
+    const needle = searchQuery.trim().toLowerCase();
     return items.filter((i) => {
       const aid = i.assigned_to_participant_id;
-      if (assigneeFilter === "everyone") return !aid;
-      return aid === assigneeFilter;
+      if (assigneeFilter === "everyone" && aid) return false;
+      if (assigneeFilter !== "all" && assigneeFilter !== "everyone" && aid !== assigneeFilter) return false;
+      return !needle || i.title.toLowerCase().includes(needle);
     });
-  }, [items, assigneeFilter]);
+  }, [items, assigneeFilter, searchQuery]);
 
   /** Person sub-headers show in every category when the trip (all items, not the filtered ones) has two or more assignees. */
   const showPersonGroups = useMemo(() => hasMultipleAssignees(items), [items]);
@@ -896,27 +923,77 @@ export function PackingList({
     );
   }
 
+  const peopleProgress: PackingPersonProgress[] = [];
+  {
+    const everyone = items.filter((i) => !i.assigned_to_participant_id);
+    if (everyone.length > 0) {
+      peopleProgress.push({
+        key: PACKING_GROUP_KEY_EVERYONE,
+        label: "Everyone",
+        avatarUrl: getParticipantAvatarUrl(null),
+        packed: everyone.filter((i) => i.is_packed).length,
+        total: everyone.length,
+      });
+    }
+    participants.forEach((p) => {
+      const mine = items.filter((i) => i.assigned_to_participant_id === p.id);
+      if (mine.length === 0) return;
+      peopleProgress.push({
+        key: p.id,
+        label: p.name,
+        avatarUrl: getParticipantAvatarUrl(p.id),
+        packed: mine.filter((i) => i.is_packed).length,
+        total: mine.length,
+      });
+    });
+  }
+
+  function openAddItem() {
+    setAddCategoryId(categories[0]?.id ?? "");
+    setAddModalMode("add-item");
+    setAddModalOpen(true);
+  }
+  function openDeleteAll() {
+    setManageListStartAtDelete(true);
+    setManageListOpen(true);
+  }
+
+  const titleUnderline = (
+    <svg width="96" height="10" viewBox="0 0 96 10" fill="none" aria-hidden="true" className="-mt-0.5">
+      <path
+        d="M2 6.5c10-3.2 21-3.6 31-1.4 9 2 17 1.6 26-.6 11-2.6 22-2.4 35 .4"
+        stroke="#E07A5F"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+
+  const showPackedCheckbox = (
+    <button
+      type="button"
+      aria-pressed={showPacked}
+      className={`inline-flex items-center gap-2.5 rounded-lg text-sm font-semibold text-[#2E2A27] ${PACKING_FOCUS}`}
+      onClick={() => setShowPacked(!showPacked)}
+    >
+      <span
+        className={`flex size-6 items-center justify-center rounded-md border-2 ${
+          showPacked ? "border-[#E07A5F] bg-[#E07A5F] text-[#2B1610]" : "border-[#E9D5C6] bg-white"
+        }`}
+        aria-hidden
+      >
+        {showPacked && (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12.5l4.5 4.5L19 7" />
+          </svg>
+        )}
+      </span>
+      Show packed items ({packedCount})
+    </button>
+  );
+
   return (
     <div className="mt-8">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold text-[#4A4A4A]">Packing</h2>
-          <p className="mt-0.5 text-sm text-[#9B7B6B]">
-            {canEditContent ? "List progress" : "Read-only — you can view but not edit"}
-          </p>
-        </div>
-        {items.length > 0 && (
-          <button
-            type="button"
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#D4C5BA] bg-white px-3 py-1.5 text-sm font-medium text-[#4A4A4A] hover:bg-[#F5F3F0]"
-            onClick={handleShare}
-          >
-            <Share2 className="size-4" aria-hidden />
-            Share
-          </button>
-        )}
-      </div>
-
       <ManagePackingCategoriesDialog
         open={manageCategoriesOpen}
         onOpenChange={setManageCategoriesOpen}
@@ -1014,7 +1091,7 @@ export function PackingList({
 
       {listManagementMessage ? (
         <div
-          className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-[#c8e6c9] bg-[#e8f5e9] px-4 py-3 text-sm text-[#2e7d32]"
+          className="mt-4 flex items-start justify-between gap-3 rounded-2xl border border-[#c8e6c9] bg-[#e8f5e9] px-4 py-3 text-sm text-[#2e7d32]"
           role="status"
         >
           <span>{listManagementMessage}</span>
@@ -1029,160 +1106,144 @@ export function PackingList({
         </div>
       ) : null}
 
-      <p className="mt-4 text-2xl font-semibold text-[#E07A5F]">{progressPercent}%</p>
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#F5F3F0]">
-        <div
-          className="h-full rounded-full bg-[#E07A5F] transition-all duration-500"
-          style={{ width: `${progressPercent}%` }}
-        />
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
-            viewMode === "category"
-              ? "border-[#E07A5F] bg-[#E07A5F] text-white"
-              : "border-[#D4C5BA] bg-white text-[#4A4A4A] hover:bg-[#F5F3F0]"
-          }`}
-          onClick={() => setViewMode("category")}
-        >
-          By Category
-        </button>
-        <button
-          type="button"
-          className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
-            viewMode === "participant"
-              ? "border-[#E07A5F] bg-[#E07A5F] text-white"
-              : "border-[#D4C5BA] bg-white text-[#4A4A4A] hover:bg-[#F5F3F0]"
-          }`}
-          onClick={() => setViewMode("participant")}
-        >
-          By Participant
-        </button>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          className={`rounded-full px-3 py-1 text-sm ${
-            assigneeFilter === "all"
-              ? "bg-[#E07A5F] text-white"
-              : "bg-[#F5F3F0] text-[#4A4A4A] hover:bg-[#E8E4E0]"
-          }`}
-          onClick={() => setAssigneeFilter("all")}
-        >
-          All
-        </button>
-        <button
-          type="button"
-          className={`rounded-full px-3 py-1 text-sm ${
-            assigneeFilter === "everyone"
-              ? "bg-[#E07A5F] text-white"
-              : "bg-[#F5F3F0] text-[#4A4A4A] hover:bg-[#E8E4E0]"
-          }`}
-          onClick={() => setAssigneeFilter("everyone")}
-        >
-          Everyone
-        </button>
-        {participants.map((p, i) => {
-          const avatarUrl = participantAvatarUrls[i] ?? null;
-          return (
-            <button
-              key={p.id}
-              type="button"
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm ${
-                assigneeFilter === p.id
-                  ? "bg-[#E07A5F] text-white"
-                  : "bg-[#F5F3F0] text-[#4A4A4A] hover:bg-[#E8E4E0]"
-              }`}
-              onClick={() => setAssigneeFilter(p.id)}
-            >
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt=""
-                  loading="lazy"
-                  className="size-6 shrink-0 rounded-full object-cover"
-                  aria-hidden
-                />
-              ) : (
-                <span
-                  className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#E8E4E0] text-xs font-medium text-[#6B7280]"
-                  aria-hidden
-                >
-                  {p.name.trim().slice(0, 1).toUpperCase() || "?"}
-                </span>
+      <div className="mt-5 flex flex-wrap gap-7">
+        <div className="flex min-w-0 flex-col gap-4" style={{ flex: "1 1 300px" }}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[30px] font-extrabold leading-tight text-[#2E2A27] md:text-[34px]">
+                Packing
+              </h2>
+              {titleUnderline}
+              {!canEditContent && (
+                <p className="mt-1 text-sm text-[#7A6A5E]">Read-only — you can view but not edit</p>
               )}
-              <span>{p.name}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {canEditContent && (
-        <>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
-                onClick={() => setManageCategoriesOpen(true)}
-              >
-                <Tags className="size-4" strokeWidth={1.75} aria-hidden />
-                Manage Categories
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-[#E07A5F] hover:text-[#c46950] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
-                onClick={() => {
-                  setManageListStartAtDelete(false);
-                  setManageListOpen(true);
-                }}
-              >
-                <ListChecks className="size-4" strokeWidth={1.75} aria-hidden />
-                Manage packing list
-              </button>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-full border border-[#E07A5F] bg-white px-4 py-2 text-sm font-semibold text-[#E07A5F] hover:bg-[#FBF8F5]"
-                onClick={() => setFromUsualOpen(true)}
-              >
-                <Luggage className="size-4" strokeWidth={1.75} aria-hidden />
-                From usual stuff
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-full bg-[#E07A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#D96A4F]"
-                onClick={() => {
-                  setAddCategoryId(categories[0]?.id ?? "");
-                  setAddModalMode("add-item");
-                  setAddModalOpen(true);
-                }}
-              >
-                <Plus className="size-4" strokeWidth={2} aria-hidden />
-                Add Item
-              </button>
-              {items.length > 0 ? (
+            <div className="flex shrink-0 items-center gap-2 md:hidden">
+              {items.length > 0 && (
                 <button
                   type="button"
-                  aria-label="Delete all items"
-                  title="Delete all items"
-                  className="rounded-full p-2 text-[#E07A5F] hover:bg-[#FBF8F5] hover:text-[#D96A4F] focus:outline-none focus:ring-2 focus:ring-[#E07A5F] focus:ring-offset-2"
-                  onClick={() => {
-                    setManageListStartAtDelete(true);
-                    setManageListOpen(true);
-                  }}
+                  aria-label="Share list"
+                  className={`${PACKING_ICON_BUTTON_CLASS} ${PACKING_FOCUS}`}
+                  onClick={handleShare}
                 >
-                  <Trash2 className="size-5" strokeWidth={1.75} aria-hidden />
+                  <HandDrawnIcon name="share" size={22} />
                 </button>
-              ) : null}
+              )}
+              {canEditContent && (
+                <PackingListMenu
+                  onManageCategories={() => setManageCategoriesOpen(true)}
+                  onDeleteAll={openDeleteAll}
+                  canDeleteAll={items.length > 0}
+                />
+              )}
             </div>
           </div>
-        </>
-      )}
+
+          <PackingProgressCard packed={packedCount} total={totalCount} />
+
+          <div className="hidden md:block">
+            <PackingPeopleProgress people={peopleProgress} />
+          </div>
+
+          {items.length > 0 && (
+            <button
+              type="button"
+              className={`${PACKING_SECONDARY_BUTTON_CLASS} ${PACKING_FOCUS} hidden md:inline-flex`}
+              onClick={handleShare}
+            >
+              <HandDrawnIcon name="share" size={20} />
+              Share list
+            </button>
+          )}
+        </div>
+
+        <div className="min-w-0" style={{ flex: "999 1 560px" }}>
+          {canEditContent && (
+            <div className="mb-4">
+              <PackingToolbar
+                onAddItem={openAddItem}
+                onFromUsual={() => setFromUsualOpen(true)}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                onManageCategories={() => setManageCategoriesOpen(true)}
+                onDeleteAll={openDeleteAll}
+                canDeleteAll={items.length > 0}
+              />
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex rounded-full bg-[#F6EEE7] p-1" role="group" aria-label="Group items">
+              {(
+                [
+                  ["category", "By category"],
+                  ["participant", "By person"],
+                ] as const
+              ).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={viewMode === mode}
+                  className={`rounded-full px-4 py-2 text-sm font-bold ${PACKING_FOCUS} ${
+                    viewMode === mode
+                      ? "bg-white text-[#2E2A27] shadow-[0_1px_4px_rgba(120,70,40,0.12)]"
+                      : "text-[#7A6A5E] hover:text-[#2E2A27]"
+                  }`}
+                  onClick={() => setViewMode(mode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="hidden md:block">{showPackedCheckbox}</div>
+          </div>
+
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {(
+              [
+                { key: "all", label: "All", avatar: undefined as string | null | undefined },
+                { key: "everyone", label: "Everyone", avatar: undefined },
+                ...participants.map((p, i) => ({
+                  key: p.id,
+                  label: p.name,
+                  avatar: participantAvatarUrls[i] ?? null,
+                })),
+              ]
+            ).map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                aria-pressed={assigneeFilter === chip.key}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold ${PACKING_FOCUS} ${
+                  assigneeFilter === chip.key
+                    ? "bg-[#E07A5F] text-[#2B1610]"
+                    : "border border-[#EFE3D8] bg-white text-[#2E2A27] hover:bg-[#FDEDE6]"
+                }`}
+                onClick={() => setAssigneeFilter(chip.key)}
+              >
+                {chip.avatar !== undefined &&
+                  (chip.avatar ? (
+                    <img
+                      src={chip.avatar}
+                      alt=""
+                      loading="lazy"
+                      className="size-6 shrink-0 rounded-full object-cover"
+                      aria-hidden
+                    />
+                  ) : (
+                    <span
+                      className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#F6EEE7] text-xs font-bold text-[#7A6A5E]"
+                      aria-hidden
+                    >
+                      {chip.label.trim().slice(0, 1).toUpperCase() || "?"}
+                    </span>
+                  ))}
+                <span>{chip.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-3 md:hidden">{showPackedCheckbox}</div>
 
       <div className="mt-6 space-y-5">
         {viewMode === "category" && canEditContent && onReorderGroup && onMoveItem ? (
@@ -1376,6 +1437,8 @@ export function PackingList({
       {filteredItems.length === 0 && (
         <p className="mt-6 text-sm text-[#6B7280]">No packing items yet. Add your first one.</p>
       )}
+        </div>
+      </div>
 
       <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
         <DialogContent>
