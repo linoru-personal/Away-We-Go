@@ -50,6 +50,11 @@ import {
 import { addToMyUsualStuff, updateUsualItem } from "@/lib/usual-stuff/queries";
 import type { UsualRowInput } from "@/lib/usual-stuff/types";
 import { buildPackingShareText, sharePackingText } from "@/lib/packing/share-text";
+import {
+  hasMultipleAssignees,
+  splitByPerson,
+  type PersonBlock,
+} from "@/lib/packing/person-groups";
 
 export type PackingCategory = {
   id: string;
@@ -263,6 +268,9 @@ export function PackingList({
     });
   }, [items, assigneeFilter]);
 
+  /** Person sub-headers show in every category when the trip (all items, not the filtered ones) has two or more assignees. */
+  const showPersonGroups = useMemo(() => hasMultipleAssignees(items), [items]);
+
   const itemsByCategory = useMemo(() => {
     const map = new Map<string, PackingItem[]>();
     for (const item of filteredItems) {
@@ -271,8 +279,25 @@ export function PackingList({
       map.set(item.category_id, list);
     }
     const catOrder = [...categories].sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
-    return catOrder.filter((c) => map.has(c.id)).map((c) => ({ category: c, items: map.get(c.id)! }));
-  }, [filteredItems, categories]);
+    return catOrder
+      .filter((c) => map.has(c.id))
+      .map((c) => {
+        const catItems = map.get(c.id)!;
+        if (!showPersonGroups) return { category: c, items: catItems, blocks: [] as PersonBlock[] };
+        // Displayed order: person by person (Everyone first); the order inside a person is the saved order.
+        const blocks = splitByPerson(catItems, participants);
+        return { category: c, items: blocks.flatMap((b) => b.items), blocks };
+      });
+  }, [filteredItems, categories, participants, showPersonGroups]);
+
+  /** The item that opens each person block in By category view (that is where the person sub-header goes). */
+  const personBlockStarts = useMemo(() => {
+    const m = new Map<string, PersonBlock>();
+    for (const entry of itemsByCategory) {
+      for (const block of entry.blocks) m.set(block.items[0].id, block);
+    }
+    return m;
+  }, [itemsByCategory]);
 
   const itemsByParticipant = useMemo(() => {
     const everyone: PackingItem[] = [];
@@ -804,6 +829,45 @@ export function PackingList({
     );
   }
 
+  /** Person label inside a category (category view). Same look as the category label inside a person (person view). */
+  function renderPersonBlockSubHeader(block: PersonBlock, categoryId: string) {
+    if (collapsedGroups.has(categoryId)) return null;
+    return (
+      <li
+        key={`person-${categoryId}-${block.participantId ?? "everyone"}`}
+        className="list-none px-5 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-[#9B7B6B]"
+        dir={listRtl ? "rtl" : undefined}
+      >
+        {block.label}
+      </li>
+    );
+  }
+
+  /** The assignee of an item, as the drag rules compare it. */
+  function assigneeOf(item: PackingItem): string | null {
+    return item.assigned_to_participant_id ?? null;
+  }
+
+  /**
+   * Reorder inside one category (category view). With person sub-headers, a drop that puts an item into
+   * another person's block changes nothing; a drop inside the person's own block saves only that person's order.
+   */
+  function handleCategoryReorder(newOrderedItems: PackingItem[]) {
+    if (!onReorderGroup) return;
+    if (!showPersonGroups) return onReorderGroup(newOrderedItems);
+    const categoryId = newOrderedItems[0]?.category_id;
+    const shown = itemsByCategory.find(({ category }) => category.id === categoryId)?.items ?? [];
+    if (shown.length !== newOrderedItems.length) return;
+    // Crossing into another person's block moves an item to a position owned by someone else.
+    for (let i = 0; i < shown.length; i++) {
+      if (assigneeOf(shown[i]) !== assigneeOf(newOrderedItems[i])) return;
+    }
+    const moved = newOrderedItems.find((it, i) => it.id !== shown[i].id);
+    if (!moved) return;
+    const owner = assigneeOf(moved);
+    return onReorderGroup(newOrderedItems.filter((i) => assigneeOf(i) === owner));
+  }
+
   function renderAddItemButton(groupKey: string) {
     if (collapsedGroups.has(groupKey)) return null;
     return (
@@ -1183,13 +1247,23 @@ export function PackingList({
               const meta = getPackingGroupingMode("category");
               return { field: meta.field, groupKeyToFieldValue: (k: string) => meta.groupKeyToFieldValue(k) };
             })()}
-            onReorder={(_groupKey, newOrderedItems) => onReorderGroup(newOrderedItems)}
+            onReorder={(_groupKey, newOrderedItems) => handleCategoryReorder(newOrderedItems)}
             onMove={(item, fromGroupKey, toGroupKey, insertIndex) => {
               // insertIndex counts the rows shown (the assignee filter may hide some); the saved order covers the whole category.
               const shown = itemsByCategory.find(({ category }) => category.id === toGroupKey)?.items ?? [];
               const anchor = shown[insertIndex];
               const whole = items.filter((i) => i.category_id === toGroupKey && i.id !== item.id);
-              const wholeIndex = anchor ? whole.findIndex((i) => i.id === anchor.id) : whole.length;
+              let wholeIndex = anchor ? whole.findIndex((i) => i.id === anchor.id) : whole.length;
+              if (showPersonGroups && !(anchor && assigneeOf(anchor) === assigneeOf(item))) {
+                // With person sub-headers the item keeps its person: it goes after that person's last item
+                // in the target category (or at the end when they have none there yet), never into someone else's block.
+                const owner = assigneeOf(item);
+                let lastOfOwner = -1;
+                whole.forEach((i, idx) => {
+                  if (assigneeOf(i) === owner) lastOfOwner = idx;
+                });
+                wholeIndex = lastOfOwner === -1 ? whole.length : lastOfOwner + 1;
+              }
               return onMoveItem!("category", item, fromGroupKey, toGroupKey, wholeIndex === -1 ? whole.length : wholeIndex);
             }}
             renderGroupHeader={(groupKey) => {
@@ -1197,9 +1271,20 @@ export function PackingList({
               if (!entry) return null;
               return renderCategoryHeader(entry.category, entry.items);
             }}
-            renderItem={(item, sortable) =>
-              renderSortableRow(item, sortable, getAssigneeLabel(item, participants), item.category_id)
-            }
+            renderItem={(item, sortable) => {
+              const block = personBlockStarts.get(item.id);
+              return (
+                <>
+                  {block && renderPersonBlockSubHeader(block, item.category_id)}
+                  {renderSortableRow(
+                    item,
+                    sortable,
+                    showPersonGroups ? "" : getAssigneeLabel(item, participants),
+                    item.category_id
+                  )}
+                </>
+              );
+            }}
             listTag="ul"
             listClassName={ITEM_LIST_CLASS}
             groupClassName={GROUP_CARD_CLASS}
@@ -1213,22 +1298,39 @@ export function PackingList({
               {canEditContent && onReorderGroup ? (
                 <SortableGroupList<PackingItem>
                   items={catItems}
-                  onReorder={onReorderGroup}
+                  onReorder={handleCategoryReorder}
                   as="ul"
                   className={ITEM_LIST_CLASS}
                   disabled={!canEditContent}
                 >
-                  {(item, sortable) =>
-                    renderSortableRow(item, sortable, getAssigneeLabel(item, participants), item.category_id)
-                  }
+                  {(item, sortable) => {
+                    const block = personBlockStarts.get(item.id);
+                    return (
+                      <>
+                        {block && renderPersonBlockSubHeader(block, item.category_id)}
+                        {renderSortableRow(
+                          item,
+                          sortable,
+                          showPersonGroups ? "" : getAssigneeLabel(item, participants),
+                          item.category_id
+                        )}
+                      </>
+                    );
+                  }}
                 </SortableGroupList>
               ) : (
                 <ul className={ITEM_LIST_CLASS} role="list" hidden={collapsedGroups.has(category.id)}>
-                  {catItems.map((item) => (
-                    <li key={item.id} className="group list-none" dir={listRtl ? "rtl" : undefined}>
-                      {renderItemRow(item, getAssigneeLabel(item, participants))}
-                    </li>
-                  ))}
+                  {catItems.map((item) => {
+                    const block = personBlockStarts.get(item.id);
+                    return (
+                      <Fragment key={item.id}>
+                        {block && renderPersonBlockSubHeader(block, category.id)}
+                        <li className="group list-none" dir={listRtl ? "rtl" : undefined}>
+                          {renderItemRow(item, showPersonGroups ? "" : getAssigneeLabel(item, participants))}
+                        </li>
+                      </Fragment>
+                    );
+                  })}
                 </ul>
               )}
               {canEditContent && renderAddItemButton(category.id)}

@@ -230,9 +230,11 @@ export function PackingItemRow({
             >
               {item.title}
             </p>
-            <p className="mt-0.5 text-xs text-[#9B7B6B]" dir="ltr">
-              {metaLabel}
-            </p>
+            {metaLabel ? (
+              <p className="mt-0.5 text-xs text-[#9B7B6B]" dir="ltr">
+                {metaLabel}
+              </p>
+            ) : null}
           </div>
 
           {item.quantity > 1 && (
