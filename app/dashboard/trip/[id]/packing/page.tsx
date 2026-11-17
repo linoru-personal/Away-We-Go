@@ -234,7 +234,7 @@ export default function PackingPage() {
 
   if (!id) {
     return (
-      <main className="min-h-screen bg-[#FAFAF8]">
+      <main className="min-h-screen bg-[#FFF8F2]">
         <div className={DASHBOARD_TRIP_SUBPAGE_SHELL}>
           <p className="text-[#6B7280]">Missing trip id.</p>
         </div>
@@ -243,7 +243,7 @@ export default function PackingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFAF8]">
+    <main className="min-h-screen bg-[#FFF8F2]">
       <div className={DASHBOARD_TRIP_SUBPAGE_SHELL}>
         {tripLoading ? (
           <p className="text-[#6B7280]">Loading…</p>
