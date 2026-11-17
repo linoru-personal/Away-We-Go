@@ -33,10 +33,11 @@ import {
 } from "@/components/ui/sortable-group-list";
 import { GroupedSortableList } from "@/components/ui/grouped-sortable-list";
 import { DragHandle } from "@/components/ui/drag-handle";
+import { PackingItemRow } from "@/components/packing/packing-item-row";
 import {
-  PackingItemEditor,
-  PackingItemRow,
-} from "@/components/packing/packing-item-row";
+  PackingItemEditorDialog,
+  type PackingItemEditorValues,
+} from "@/components/packing/packing-item-editor-dialog";
 import { getPackingGroupingMode, PACKING_GROUP_KEY_EVERYONE } from "@/lib/list-grouping";
 import {
   readCollapsedGroups,
@@ -117,17 +118,10 @@ const GROUP_HEADER_CLASS = "flex items-center gap-2.5 px-5 pb-3 pt-4";
  * header itself, so a collapsed group — whose rows are all hidden — doesn't
  * leave a stray line hanging under it.
  */
-const ITEM_LIST_CLASS = "divide-y divide-[#F0EBE5]";
+const ITEM_LIST_CLASS = ""; // rows draw their own top hairline
 
 const ADD_ITEM_BUTTON_CLASS =
   "w-full border-t border-[#F0EBE5] px-5 py-3 text-start text-sm font-medium text-[#9B7B6B] transition-colors duration-150 hover:bg-[#FBF8F5] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#E07A5F]/30";
-
-function getAssigneeLabel(item: PackingItem, participants: PackingParticipant[]): string {
-  const participantId = item.assigned_to_participant_id;
-  if (!participantId) return "Everyone";
-  const p = participants.find((x) => x.id === participantId);
-  return p?.name ?? "Assigned";
-}
 
 function getCategoryName(categoryId: string, categories: PackingCategory[]): string {
   return categories.find((c) => c.id === categoryId)?.name ?? "";
@@ -135,18 +129,6 @@ function getCategoryName(categoryId: string, categories: PackingCategory[]): str
 
 function getCategoryIcon(categoryId: string, categories: PackingCategory[]): string | null {
   return categories.find((c) => c.id === categoryId)?.icon ?? null;
-}
-
-/** True if the string starts with a strong RTL character (e.g. Hebrew, Arabic). */
-function isRtlText(s: string): boolean {
-  if (!s || !s.trim()) return false;
-  const code = (s.trim()[0] ?? "").codePointAt(0) ?? 0;
-  return (
-    (code >= 0x0590 && code <= 0x05ff) ||
-    (code >= 0x0600 && code <= 0x06ff) ||
-    (code >= 0xfb1d && code <= 0xfdfd) ||
-    (code >= 0xfe70 && code <= 0xfeff)
-  );
 }
 
 export function PackingList({
@@ -197,13 +179,9 @@ export function PackingList({
   const [createCategoryError, setCreateCategoryError] = useState<string | null>(null);
   /** When set, opening the add modal will prefill category/assignee from this group key (via grouping meta). */
   const [addPrefillGroupKey, setAddPrefillGroupKey] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  /** Which list layout (`viewMode`) the user started inline edit from — avoids showing the editor on the wrong branch. */
-  const [editSessionView, setEditSessionView] = useState<"category" | "participant" | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editQuantity, setEditQuantity] = useState(1);
-  const [editCategoryId, setEditCategoryId] = useState("");
-  const [editAssignedTo, setEditAssignedTo] = useState<string | null>(null);
+  /** The item open in the editor dialog, and whether it opened on the delete confirmation. */
+  const [editorItemId, setEditorItemId] = useState<string | null>(null);
+  const [editorConfirmDelete, setEditorConfirmDelete] = useState(false);
   const editBaselineRef = useRef<{
     title: string;
     quantity: number;
@@ -213,7 +191,6 @@ export function PackingList({
   const [editSaving, setEditSaving] = useState(false);
   /** Last failed toggle/edit/delete, shown on that item's row only. */
   const [itemError, setItemError] = useState<{ id: string; message: string } | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [manageListOpen, setManageListOpen] = useState(false);
@@ -348,26 +325,7 @@ export function PackingList({
     return m;
   }, [itemsByParticipant]);
 
-  /** Sticky direction when RTL/LTR count is equal; avoid flipping on tie. */
-  const [lastDirection, setLastDirection] = useState<"rtl" | "ltr">("ltr");
-  /** Row direction follows the whole trip list, not assignee filter, so layout stays stable per participant chip. */
-  const listRtl = useMemo(() => {
-    if (items.length === 0) return false;
-    const rtlCount = items.filter((item) => isRtlText(item.title)).length;
-    const total = items.length;
-    const half = total / 2;
-    if (rtlCount > half) return true;
-    if (rtlCount < half) return false;
-    return lastDirection === "rtl";
-  }, [items, lastDirection]);
-  useEffect(() => {
-    if (items.length === 0) return;
-    const rtlCount = items.filter((item) => isRtlText(item.title)).length;
-    const total = items.length;
-    const half = total / 2;
-    if (rtlCount > half) setLastDirection("rtl");
-    else if (rtlCount < half) setLastDirection("ltr");
-  }, [items]);
+  const editorItem = editorItemId ? items.find((i) => i.id === editorItemId) ?? null : null;
 
   async function handleTogglePacked(item: PackingItem) {
     setItemError(null);
@@ -496,11 +454,6 @@ export function PackingList({
     setAddPrefillGroupKey(null);
   }, [addModalOpen, addPrefillGroupKey, viewMode, canEditContent, categories]);
 
-  useEffect(() => {
-    setEditingId(null);
-    setEditSessionView(null);
-  }, [viewMode]);
-
   function usualRowFor(item: PackingItem): UsualRowInput {
     const person = item.assigned_to_participant_id
       ? participants.find((x) => x.id === item.assigned_to_participant_id)?.name ?? null
@@ -592,22 +545,21 @@ export function PackingList({
     }
   }
 
-  function clearInlineEdit() {
+  function closeEditor() {
     setItemError(null);
     setUsualPrompt(null);
     setUsualError(null);
-    setEditingId(null);
-    setEditSessionView(null);
+    setEditorItemId(null);
+    setEditorConfirmDelete(false);
     editBaselineRef.current = null;
   }
 
-  function openEdit(item: PackingItem) {
-    setEditingId(item.id);
-    setEditSessionView(viewMode);
-    setEditTitle(item.title);
-    setEditQuantity(item.quantity);
-    setEditCategoryId(item.category_id);
-    setEditAssignedTo(item.assigned_to_participant_id);
+  function openEditor(item: PackingItem, confirmDelete = false) {
+    setItemError(null);
+    setUsualPrompt(null);
+    setUsualError(null);
+    setEditorItemId(item.id);
+    setEditorConfirmDelete(confirmDelete);
     editBaselineRef.current = {
       title: item.title,
       quantity: item.quantity,
@@ -625,28 +577,29 @@ export function PackingList({
     setAddModalOpen(true);
   }
 
-  async function handleSaveEdit() {
+  async function handleSaveEdit(values: PackingItemEditorValues) {
+    const editingId = editorItemId;
     if (!editingId) return;
     const baseline = editBaselineRef.current;
     if (!baseline) return;
 
-    const title = editTitle.trim();
+    const title = values.title.trim();
     if (!title) return;
 
-    const quantity = editQuantity >= 1 ? editQuantity : 1;
+    const quantity = values.quantity >= 1 ? values.quantity : 1;
     const patch: PackingItemPatch = {};
 
     if (title !== baseline.title) patch.title = title;
     if (quantity !== baseline.quantity) patch.quantity = quantity;
-    if (editCategoryId !== baseline.category_id) patch.category_id = editCategoryId;
+    if (values.categoryId !== baseline.category_id) patch.category_id = values.categoryId;
 
-    const nextAssigned = editAssignedTo ?? null;
+    const nextAssigned = values.assignedTo ?? null;
     if (nextAssigned !== baseline.assigned_to_participant_id) {
       patch.assigned_to_participant_id = nextAssigned;
     }
 
     if (Object.keys(patch).length === 0) {
-      clearInlineEdit();
+      closeEditor();
       return;
     }
 
@@ -674,7 +627,7 @@ export function PackingList({
         : {}),
     });
 
-    clearInlineEdit();
+    closeEditor();
   }
 
   async function handleDelete(itemId: string) {
@@ -683,16 +636,14 @@ export function PackingList({
     const { error } = await deletePackingItem(supabase, itemId);
     setDeletingId(null);
     if (error) {
-      // Item stays and the confirm UI stays open, so "Yes" retries.
+      // Item stays and the confirmation stays open, so "Delete" retries.
       setItemError({ id: itemId, message: "Couldn't delete this item. Please try again." });
       return;
     }
-    setDeleteConfirmId(null);
-    if (editingId === itemId) clearInlineEdit();
+    if (editorItemId === itemId) closeEditor();
     await onRefresh();
   }
 
-  /** LTR + stable order: list rows may use `dir="rtl"` for titles, which reverses flex and breaks "Delete?". */
   /** Avatar for a participant group; the trip cover stands in for "Everyone". */
   function getParticipantAvatarUrl(participantId: string | null): string | null {
     if (participantId === null) return tripCoverImageUrl ?? null;
@@ -822,7 +773,6 @@ export function PackingList({
       <li
         key={`sub-${category.id}`}
         className="list-none px-5 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-[#9B7B6B]"
-        dir={listRtl ? "rtl" : undefined}
       >
         {category.name}
       </li>
@@ -836,7 +786,6 @@ export function PackingList({
       <li
         key={`person-${categoryId}-${block.participantId ?? "everyone"}`}
         className="list-none px-5 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-[#9B7B6B]"
-        dir={listRtl ? "rtl" : undefined}
       >
         {block.label}
       </li>
@@ -883,91 +832,20 @@ export function PackingList({
    */
   function renderItemRow(
     item: PackingItem,
-    metaLabel: string,
     dragHandle?: React.ReactNode,
     isDragging?: boolean
   ) {
-    const isEditing = editingId === item.id && editSessionView === viewMode && canEditContent;
     return (
       <PackingItemRow
         item={item}
-        metaLabel={metaLabel}
-        rtl={listRtl}
+        personTag={null}
         canEdit={canEditContent}
-        error={itemError?.id === item.id ? itemError.message : null}
+        error={itemError?.id === item.id && editorItemId !== item.id ? itemError.message : null}
         onToggle={() => handleTogglePacked(item)}
-        onEdit={() => openEdit(item)}
-        onDeleteRequest={() => setDeleteConfirmId(item.id)}
-        confirmingDelete={deleteConfirmId === item.id}
-        deleteLoading={deletingId === item.id}
-        onDeleteConfirm={() => handleDelete(item.id)}
-        onDeleteCancel={() => setDeleteConfirmId(null)}
+        onOpenEditor={() => openEditor(item)}
+        onDeleteRequest={() => openEditor(item, true)}
         dragHandle={dragHandle}
         isDragging={isDragging}
-        editor={
-          isEditing ? (
-            <>
-            <PackingItemEditor
-              title={editTitle}
-              quantity={editQuantity}
-              categoryId={editCategoryId}
-              assignedTo={editAssignedTo}
-              categories={categories}
-              participants={participants}
-              saving={editSaving}
-              onTitleChange={setEditTitle}
-              onQuantityChange={setEditQuantity}
-              onCategoryChange={setEditCategoryId}
-              onAssignedToChange={setEditAssignedTo}
-              onSave={handleSaveEdit}
-              onCancel={() => clearInlineEdit()}
-            />
-            <div className="px-5 pb-3 text-sm" dir="ltr">
-              {usualPrompt?.itemId === item.id ? (
-                <div className="flex flex-wrap items-center gap-2 text-[#4A4A4A]">
-                  {usualPrompt.usualItemId ? (
-                    <>
-                      <span>Already in your usual stuff. Update quantity to {usualPrompt.quantity}?</span>
-                      <button
-                        type="button"
-                        className="font-medium text-[#E07A5F] hover:text-[#c46950] disabled:opacity-50"
-                        disabled={usualBusy}
-                        onClick={handleUpdateUsualQuantity}
-                      >
-                        Update
-                      </button>
-                      <button
-                        type="button"
-                        className="font-medium text-[#9B7B6B] hover:text-[#4A4A4A] disabled:opacity-50"
-                        disabled={usualBusy}
-                        onClick={() => setUsualPrompt(null)}
-                      >
-                        Keep
-                      </button>
-                    </>
-                  ) : (
-                    <span>Already in your usual stuff.</span>
-                  )}
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="font-medium text-[#E07A5F] hover:text-[#c46950] disabled:opacity-50"
-                  disabled={usualBusy}
-                  onClick={() => handleAddItemToUsual(item)}
-                >
-                  Add to my usual stuff
-                </button>
-              )}
-              {usualError?.key === item.id ? (
-                <p className="mt-1 text-red-600" role="alert">
-                  {usualError.message}
-                </p>
-              ) : null}
-            </div>
-            </>
-          ) : undefined
-        }
       />
     );
   }
@@ -982,7 +860,6 @@ export function PackingList({
   function renderSortableRow(
     item: PackingItem,
     { setNodeRef, style, attributes, listeners, isDragging }: SortableGroupListSortableProps,
-    metaLabel: string,
     groupKey: string
   ) {
     return (
@@ -990,11 +867,14 @@ export function PackingList({
         ref={setNodeRef}
         style={style}
         className={`group list-none ${collapsedGroups.has(groupKey) ? "hidden" : ""}`}
-        dir={listRtl ? "rtl" : undefined}
+        // Press-and-hold anywhere on the row starts a touch drag (the TouchSensor delay keeps a short tap a tap).
+        // Mouse and keyboard drags still start from the handle only.
+        onTouchStart={
+          canEditContent ? (listeners.onTouchStart as React.TouchEventHandler<HTMLLIElement> | undefined) : undefined
+        }
       >
         {renderItemRow(
           item,
-          metaLabel,
           canEditContent ? (
             <DragHandle
               listeners={listeners}
@@ -1054,6 +934,71 @@ export function PackingList({
         startAtDelete={manageListStartAtDelete}
         onRefresh={onRefresh}
         onSuccessMessage={setListManagementMessage}
+      />
+
+      <PackingItemEditorDialog
+        open={editorItem !== null && canEditContent}
+        onOpenChange={(next) => {
+          if (!next) closeEditor();
+        }}
+        item={editorItem}
+        categories={categories}
+        participants={participants}
+        saving={editSaving}
+        error={editorItem && itemError?.id === editorItem.id ? itemError.message : null}
+        onSave={handleSaveEdit}
+        onDelete={() => {
+          if (editorItem) void handleDelete(editorItem.id);
+        }}
+        deleting={editorItem !== null && deletingId === editorItem.id}
+        initialConfirmDelete={editorConfirmDelete}
+        usualSlot={
+          editorItem ? (
+            <div className="text-sm" dir="ltr">
+              {usualPrompt?.itemId === editorItem.id ? (
+                <div className="flex flex-wrap items-center gap-2 text-[#4A4A4A]">
+                  {usualPrompt.usualItemId ? (
+                    <>
+                      <span>Already in your usual stuff. Update quantity to {usualPrompt.quantity}?</span>
+                      <button
+                        type="button"
+                        className="font-medium text-[#E07A5F] hover:text-[#c46950] focus-visible:ring-2 focus-visible:ring-[#E07A5F]/40 focus-visible:outline-none disabled:opacity-50"
+                        disabled={usualBusy}
+                        onClick={handleUpdateUsualQuantity}
+                      >
+                        Update
+                      </button>
+                      <button
+                        type="button"
+                        className="font-medium text-[#9B7B6B] hover:text-[#4A4A4A] focus-visible:ring-2 focus-visible:ring-[#E07A5F]/40 focus-visible:outline-none disabled:opacity-50"
+                        disabled={usualBusy}
+                        onClick={() => setUsualPrompt(null)}
+                      >
+                        Keep
+                      </button>
+                    </>
+                  ) : (
+                    <span>Already in your usual stuff.</span>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="font-medium text-[#E07A5F] hover:text-[#c46950] focus-visible:ring-2 focus-visible:ring-[#E07A5F]/40 focus-visible:outline-none disabled:opacity-50"
+                  disabled={usualBusy}
+                  onClick={() => handleAddItemToUsual(editorItem)}
+                >
+                  Add to my usual stuff
+                </button>
+              )}
+              {usualError?.key === editorItem.id ? (
+                <p className="mt-1 text-red-600" role="alert">
+                  {usualError.message}
+                </p>
+              ) : null}
+            </div>
+          ) : null
+        }
       />
 
       <AddFromUsualStuffDialog
@@ -1279,7 +1224,6 @@ export function PackingList({
                   {renderSortableRow(
                     item,
                     sortable,
-                    showPersonGroups ? "" : getAssigneeLabel(item, participants),
                     item.category_id
                   )}
                 </>
@@ -1311,7 +1255,6 @@ export function PackingList({
                         {renderSortableRow(
                           item,
                           sortable,
-                          showPersonGroups ? "" : getAssigneeLabel(item, participants),
                           item.category_id
                         )}
                       </>
@@ -1325,8 +1268,8 @@ export function PackingList({
                     return (
                       <Fragment key={item.id}>
                         {block && renderPersonBlockSubHeader(block, category.id)}
-                        <li className="group list-none" dir={listRtl ? "rtl" : undefined}>
-                          {renderItemRow(item, showPersonGroups ? "" : getAssigneeLabel(item, participants))}
+                        <li className="group list-none">
+                          {renderItemRow(item)}
                         </li>
                       </Fragment>
                     );
@@ -1368,7 +1311,7 @@ export function PackingList({
               return (
                 <>
                   {startOf && !sortable.isOverlay && renderPersonCategorySubHeader(startOf, groupKey)}
-                  {renderSortableRow(item, sortable, getCategoryName(item.category_id, categories), groupKey)}
+                  {renderSortableRow(item, sortable, groupKey)}
                 </>
               );
             }}
@@ -1401,7 +1344,7 @@ export function PackingList({
                     return (
                       <>
                         {startOf && renderPersonCategorySubHeader(startOf, groupKey)}
-                        {renderSortableRow(item, sortable, getCategoryName(item.category_id, categories), groupKey)}
+                        {renderSortableRow(item, sortable, groupKey)}
                       </>
                     );
                   }}
@@ -1417,8 +1360,8 @@ export function PackingList({
                     return (
                       <Fragment key={item.id}>
                         {startOf && renderPersonCategorySubHeader(startOf, participantId ?? PACKING_GROUP_KEY_EVERYONE)}
-                        <li className="group list-none" dir={listRtl ? "rtl" : undefined}>
-                          {renderItemRow(item, getCategoryName(item.category_id, categories))}
+                        <li className="group list-none">
+                          {renderItemRow(item)}
                         </li>
                       </Fragment>
                     );

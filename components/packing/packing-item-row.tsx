@@ -1,307 +1,150 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { PackingCategory, PackingItem, PackingParticipant } from "./packing-list";
+import { HandDrawnIcon } from "@/components/ui/hand-drawn-icons";
+import type { PackingItem } from "./packing-list";
 
 /**
- * One row of the packing list, and the inline editor that replaces it.
+ * One row of the packing list.
  *
- * The list renders the same row from six places — category/participant view,
- * each in a cross-group drag, a within-group drag, and a read-only variant —
+ * The list renders the same row from several places (category/person view,
+ * each in a cross-group drag, a within-group drag, and a read-only variant),
  * so the markup lives here rather than being copied per branch.
  *
  * Rows are flush: the surrounding category card is the only card, and rows are
- * separated by hairlines rather than being cards of their own.
+ * separated by hairlines. Editing happens in PackingItemEditorDialog, not here.
  */
 
-function CheckIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="white"
-      strokeWidth="3"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="size-3"
-    >
-      <path d="M20 6L9 17l-5-5" />
-    </svg>
-  );
-}
-
-function PencilIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4">
-      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4">
-      <path d="M3 6h18" />
-      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-      <line x1="10" x2="10" y1="11" y2="17" />
-      <line x1="14" x2="14" y1="11" y2="17" />
-    </svg>
-  );
-}
-
-/** Shared by the editor's inputs and selects. */
-const EDITOR_FIELD_CLASS =
-  "rounded-xl border border-[#E4DACF] bg-white px-3 py-1.5 text-sm text-[#4A4A4A] focus:border-[#E07A5F] focus:outline-none focus:ring-2 focus:ring-[#E07A5F]/25";
-
-export interface PackingItemEditorProps {
-  title: string;
-  quantity: number;
-  categoryId: string;
-  assignedTo: string | null;
-  categories: PackingCategory[];
-  participants: PackingParticipant[];
-  saving: boolean;
-  onTitleChange: (value: string) => void;
-  onQuantityChange: (value: number) => void;
-  onCategoryChange: (value: string) => void;
-  onAssignedToChange: (value: string | null) => void;
-  onSave: () => void;
-  onCancel: () => void;
-}
-
-export function PackingItemEditor({
-  title,
-  quantity,
-  categoryId,
-  assignedTo,
-  categories,
-  participants,
-  saving,
-  onTitleChange,
-  onQuantityChange,
-  onCategoryChange,
-  onAssignedToChange,
-  onSave,
-  onCancel,
-}: PackingItemEditorProps) {
-  return (
-    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-      <input
-        type="text"
-        value={title}
-        onChange={(e) => onTitleChange(e.target.value)}
-        dir="auto"
-        style={{ unicodeBidi: "plaintext" }}
-        className={`min-w-[120px] flex-1 ${EDITOR_FIELD_CLASS}`}
-      />
-      <input
-        type="number"
-        min={1}
-        value={quantity}
-        onChange={(e) => onQuantityChange(parseInt(e.target.value, 10) || 1)}
-        className={`w-16 ${EDITOR_FIELD_CLASS}`}
-      />
-      <select
-        value={categoryId}
-        onChange={(e) => onCategoryChange(e.target.value)}
-        className={EDITOR_FIELD_CLASS}
-      >
-        {categories.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
-      <select
-        value={assignedTo ?? "everyone"}
-        onChange={(e) => onAssignedToChange(e.target.value === "everyone" ? null : e.target.value)}
-        className={EDITOR_FIELD_CLASS}
-      >
-        <option value="everyone">Everyone</option>
-        {participants.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
-      <button
-        type="button"
-        className="rounded-full bg-[#E07A5F] px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-[#D96A4F] disabled:opacity-50"
-        onClick={onSave}
-        disabled={saving}
-      >
-        Save
-      </button>
-      <button
-        type="button"
-        className="rounded-full border border-[#E4DACF] px-3.5 py-1.5 text-sm font-medium text-[#4A4A4A] transition hover:bg-[#F5F3F0]"
-        onClick={onCancel}
-      >
-        Cancel
-      </button>
-    </div>
-  );
-}
+const FOCUS_RING = "focus-visible:ring-2 focus-visible:ring-[#E07A5F]/40 focus-visible:outline-none";
 
 export interface PackingItemRowProps {
   item: PackingItem;
-  /** Secondary line: the assignee in category view, the category in participant view. */
-  metaLabel: string;
-  /** Whole-list text direction, decided by the parent from the item titles. */
-  rtl: boolean;
+  /** Who the item belongs to; always null for now (no tag in either view). */
+  personTag: string | null;
   canEdit: boolean;
   /** Error from the last failed action on this item, shown under the row. */
   error?: string | null;
   onToggle: () => void;
-  onEdit: () => void;
+  onOpenEditor: () => void;
   onDeleteRequest: () => void;
-  /** Set while this row is the one awaiting delete confirmation. */
-  confirmingDelete: boolean;
-  deleteLoading: boolean;
-  onDeleteConfirm: () => void;
-  onDeleteCancel: () => void;
-  /** Replaces the title, meta and actions while this row is being edited. */
-  editor?: ReactNode;
-  /** Drag handle; when present the row tightens its leading padding to make room. */
+  /** Packed row on its way out when packed items are hidden. */
+  fading?: boolean;
+  /** Drag handle (shown on fine pointers only). */
   dragHandle?: ReactNode;
   isDragging?: boolean;
 }
 
 export function PackingItemRow({
   item,
-  metaLabel,
-  rtl,
+  personTag,
   canEdit,
   error,
   onToggle,
-  onEdit,
+  onOpenEditor,
   onDeleteRequest,
-  confirmingDelete,
-  deleteLoading,
-  onDeleteConfirm,
-  onDeleteCancel,
-  editor,
+  fading = false,
   dragHandle,
   isDragging = false,
 }: PackingItemRowProps) {
-  const checkboxClass = `flex size-[22px] shrink-0 items-center justify-center rounded-full border-2 transition ${
-    item.is_packed ? "border-[#E07A5F] bg-[#E07A5F]" : "border-[#D4C5BA] bg-white"
+  const packed = item.is_packed;
+  const boxClass = `flex size-[26px] items-center justify-center rounded-[8px] border-2 transition-colors md:size-6 ${
+    packed ? "border-[#E07A5F] bg-[#E07A5F] text-white" : "border-[#D9C3B3] bg-white"
   }`;
+  const box = <span className={boxClass}>{packed && <HandDrawnIcon name="check" size={16} />}</span>;
+  const nameClass = `block min-w-0 break-words text-left text-base font-medium leading-snug md:text-[15px] ${
+    packed ? "text-[#7A6A5E] line-through" : "text-[#2E2A27]"
+  }`;
+  const nameStyle = { unicodeBidi: "plaintext" } as const;
 
   return (
-    <div className="bg-white">
     <div
-      className={`flex min-w-0 items-center gap-3 bg-white py-3 pe-4 transition-shadow duration-150 ${
-        dragHandle ? "ps-1" : "ps-5"
-      } ${isDragging ? "relative z-10 rounded-[16px] shadow-[0_8px_24px_rgba(0,0,0,0.12)]" : ""}`}
+      className={`group/row border-t border-[#F6EEE7] transition-opacity duration-500 ${
+        packed ? "bg-[#FFFBF7]" : "bg-white"
+      } ${fading ? "opacity-0" : ""} ${
+        isDragging ? "relative z-10 rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)]" : ""
+      }`}
     >
-      {dragHandle}
+      <div className="flex min-h-[52px] min-w-0 items-center gap-1 pe-3 ps-1 md:min-h-[50px]">
+        {dragHandle}
 
-      {canEdit ? (
-        <button
-          type="button"
-          className={`${checkboxClass} active:scale-95`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggle();
-          }}
-          aria-pressed={item.is_packed}
-          aria-label={item.is_packed ? `Mark ${item.title} as not packed` : `Mark ${item.title} as packed`}
-        >
-          {item.is_packed && <CheckIcon />}
-        </button>
-      ) : (
-        <span className={checkboxClass} aria-hidden>
-          {item.is_packed && <CheckIcon />}
-        </span>
-      )}
+        {canEdit ? (
+          <button
+            type="button"
+            className={`flex size-11 shrink-0 items-center justify-center rounded-xl active:scale-95 md:size-10 ${FOCUS_RING}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle();
+            }}
+            aria-pressed={packed}
+            aria-label={packed ? `Mark ${item.title} as not packed` : `Mark ${item.title} as packed`}
+          >
+            {box}
+          </button>
+        ) : (
+          <span className="flex size-11 shrink-0 items-center justify-center md:size-10" aria-hidden>
+            {box}
+          </span>
+        )}
 
-      {editor ?? (
-        <>
-          <div className={`min-w-0 flex-1 ${rtl ? "text-right" : ""}`}>
-            <p
-              className={`text-[15px] font-medium leading-snug ${
-                item.is_packed ? "text-[#B5A79C] line-through" : "text-[#4A4A4A]"
-              }`}
-              dir={rtl ? "rtl" : "ltr"}
-              style={{ unicodeBidi: "plaintext" }}
+        <div className="min-w-0 flex-1 ps-1">
+          {canEdit ? (
+            <button
+              type="button"
+              className={`block w-full rounded-lg py-3 text-left md:py-2.5 ${FOCUS_RING}`}
+              onClick={onOpenEditor}
+              aria-label={`Edit ${item.title}`}
             >
+              <span dir="auto" style={nameStyle} className={nameClass}>
+                {item.title}
+              </span>
+            </button>
+          ) : (
+            <p dir="auto" style={nameStyle} className={`${nameClass} py-3 md:py-2.5`}>
               {item.title}
             </p>
-            {metaLabel ? (
-              <p className="mt-0.5 text-xs text-[#9B7B6B]" dir="ltr">
-                {metaLabel}
-              </p>
-            ) : null}
+          )}
+          {personTag ? <p className="-mt-2 pb-2 text-xs text-[#7A6A5E]">{personTag}</p> : null}
+        </div>
+
+        {item.quantity > 1 && (
+          <span
+            className="shrink-0 rounded-full bg-[#FBF1E9] px-2 py-0.5 text-xs font-bold tabular-nums text-[#A9432C]"
+            dir="ltr"
+            aria-label={`Quantity ${item.quantity}`}
+          >
+            ×{item.quantity}
+          </span>
+        )}
+
+        {canEdit && (
+          <div
+            className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100 [@media(pointer:coarse)]:hidden"
+            dir="ltr"
+          >
+            <button
+              type="button"
+              className={`flex size-[34px] items-center justify-center rounded-full text-[#6B5B50] transition-colors hover:bg-[#FDEDE6] ${FOCUS_RING}`}
+              onClick={onOpenEditor}
+              aria-label={`Edit ${item.title}`}
+            >
+              <HandDrawnIcon name="edit" size={18} />
+            </button>
+            <button
+              type="button"
+              className={`flex size-[34px] items-center justify-center rounded-full text-[#6B5B50] transition-colors hover:bg-[#FDEDE6] hover:text-[#B42318] ${FOCUS_RING}`}
+              onClick={onDeleteRequest}
+              aria-label={`Delete ${item.title}`}
+            >
+              <HandDrawnIcon name="delete" size={18} />
+            </button>
           </div>
-
-          {item.quantity > 1 && (
-            <span
-              className="shrink-0 text-xs font-medium tabular-nums text-[#9B7B6B]"
-              dir="ltr"
-              aria-label={`Quantity ${item.quantity}`}
-            >
-              × {item.quantity}
-            </span>
-          )}
-
-          {canEdit && (
-            <div
-              className="flex shrink-0 flex-row items-center gap-0.5"
-              dir="ltr"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {confirmingDelete ? (
-                <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                  <span className="text-xs font-medium text-[#6B7280]">Delete?</span>
-                  <button
-                    type="button"
-                    className="rounded-full px-2 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
-                    onClick={onDeleteConfirm}
-                    disabled={deleteLoading}
-                  >
-                    Yes
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full px-2 py-1 text-xs font-medium text-[#4A4A4A] transition hover:bg-[#F5F3F0]"
-                    onClick={onDeleteCancel}
-                  >
-                    No
-                  </button>
-                </span>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="rounded-full p-2 text-[#B5A79C] transition hover:bg-[#F5F3F0] hover:text-[#4A4A4A]"
-                    onClick={onEdit}
-                    aria-label={`Edit ${item.title}`}
-                  >
-                    <PencilIcon />
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-full p-2 text-[#B5A79C] transition hover:bg-[#F5F3F0] hover:text-[#E07A5F]"
-                    onClick={onDeleteRequest}
-                    aria-label={`Delete ${item.title}`}
-                  >
-                    <TrashIcon />
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-    {error ? (
-      <p className="pb-3 pe-4 ps-5 text-sm text-red-600" role="alert">
-        {error}
-      </p>
-    ) : null}
+        )}
+      </div>
+      {error ? (
+        <p className="pb-3 pe-4 ps-5 text-sm text-[#B42318]" role="alert">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

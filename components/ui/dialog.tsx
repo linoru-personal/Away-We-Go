@@ -42,12 +42,17 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 
 export interface DialogContentProps {
   children?: ReactNode;
+  /**
+   * "sheet" is a bottom sheet below the md breakpoint and the usual centered
+   * dialog from md up. Other pages keep the default.
+   */
+  variant?: "default" | "sheet";
 }
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 
-export function DialogContent({ children }: DialogContentProps) {
+export function DialogContent({ children, variant = "default" }: DialogContentProps) {
   const { open, onOpenChange } = useDialogContext();
   const contentRef = useRef<HTMLDivElement>(null);
   const innerContentRef = useRef<HTMLDivElement>(null);
@@ -89,7 +94,11 @@ export function DialogContent({ children }: DialogContentProps) {
       tabIndex={-1}
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className={
+        variant === "sheet"
+          ? "fixed inset-0 z-[1000] flex items-end justify-center bg-black/40 backdrop-blur-sm md:items-center md:p-4"
+          : "fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      }
       // Dismiss only when a press both STARTS and ENDS on the backdrop.
       //
       // Do not reduce this to a single `onClick` check on `e.target`: per the UI
@@ -110,7 +119,11 @@ export function DialogContent({ children }: DialogContentProps) {
     >
       <div
         ref={innerContentRef}
-        className="relative flex max-h-[85vh] w-full max-w-[420px] flex-col overflow-hidden rounded-[28px] border border-[#ebe5df] bg-white p-6 pr-12 shadow-[0_10px_30px_rgba(0,0,0,0.06)]"
+        className={
+          variant === "sheet"
+            ? "relative flex max-h-[92vh] w-full flex-col overflow-y-auto rounded-t-3xl border border-[#ebe5df] bg-white p-5 pb-6 shadow-[0_10px_30px_rgba(0,0,0,0.06)] md:max-h-[85vh] md:max-w-[440px] md:rounded-[28px] md:p-6"
+            : "relative flex max-h-[85vh] w-full max-w-[420px] flex-col overflow-hidden rounded-[28px] border border-[#ebe5df] bg-white p-6 pr-12 shadow-[0_10px_30px_rgba(0,0,0,0.06)]"
+        }
       >
         <button
           type="button"
