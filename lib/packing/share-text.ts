@@ -3,6 +3,7 @@ import type {
   PackingItem,
   PackingParticipant,
 } from "@/components/packing/packing-list";
+import { hasMultipleAssignees, splitByPerson } from "@/lib/packing/person-groups";
 
 /** Same values as the `viewMode` / `assigneeFilter` state in packing-list.tsx. */
 export type ShareScope = {
@@ -83,12 +84,21 @@ export function buildPackingShareText(args: {
 
   if (viewMode === "category") {
     const showPerson = assigneeFilter === "all";
+    const nested = hasMultipleAssignees(items);
     for (const c of orderedCategories) {
       const list = sorted.filter((i) => i.category_id === c.id);
       if (list.length === 0) continue;
-      blocks.push(
-        [`*${c.name}*`, ...list.map((i) => itemLine(i, showPerson ? nameOf(i) : null))].join("\n")
-      );
+      if (nested) {
+        const lines = [`*${c.name}*`];
+        for (const block of splitByPerson(list, participants)) {
+          lines.push(`_${block.label}_`, ...block.items.map((i) => itemLine(i, null)));
+        }
+        blocks.push(lines.join("\n"));
+      } else {
+        blocks.push(
+          [`*${c.name}*`, ...list.map((i) => itemLine(i, showPerson ? nameOf(i) : null))].join("\n")
+        );
+      }
     }
   } else {
     const people: { label: string; participantId: string | null }[] = [
