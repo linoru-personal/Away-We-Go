@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronLeft } from "lucide-react";
+import { HandDrawnIcon } from "@/components/ui/hand-drawn-icons";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   Dialog,
@@ -116,7 +116,7 @@ export function ManagePackingListDialog({
             onClick={goToMenu}
             disabled={busy}
           >
-            <ChevronLeft className="size-4" aria-hidden />
+            <HandDrawnIcon name="chevron_left" size={16} />
             Back
           </button>
         ) : null}

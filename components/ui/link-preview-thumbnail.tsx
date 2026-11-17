@@ -1,6 +1,6 @@
 "use client";
 
-import { Link as LinkIcon } from "lucide-react";
+import { HandDrawnIcon } from "@/components/ui/hand-drawn-icons";
 import { useEffect, useState } from "react";
 
 /** Treat Open Graph / preview images smaller than this as favicon noise or broken. */
@@ -44,10 +44,10 @@ export function LinkPreviewThumbnail({
         } ${apiLoading ? "animate-pulse" : ""}`}
         aria-hidden
       >
-        <LinkIcon
+        <HandDrawnIcon
+          name="link"
+          size={24}
           className="h-[40%] w-[40%] max-h-8 min-h-3.5 text-gray-400"
-          strokeWidth={1.75}
-          aria-hidden
         />
       </div>
       {tryImage ? (

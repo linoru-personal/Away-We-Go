@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles } from "lucide-react";
+import { HandDrawnIcon } from "@/components/ui/hand-drawn-icons";
 
 /**
  * Trip Assistant — AI place suggestions backed by `POST /api/agent`.
@@ -97,7 +97,7 @@ export function TripAssistant({ tripId, destination }: TripAssistantProps) {
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Sparkles className="size-4 text-[#8a8a8a]" aria-hidden />
+          <HandDrawnIcon name="sparkles" size={16} className="text-[#8a8a8a]" />
           <h2
             id="trip-assistant-title"
             className="text-sm font-medium text-[#4A4A4A]"

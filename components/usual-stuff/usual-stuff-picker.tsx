@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Star } from "lucide-react";
+import { HandDrawnIcon } from "@/components/ui/hand-drawn-icons";
 import type { PackingParticipant } from "@/components/packing/packing-list";
 import { CategoryIcon } from "@/components/ui/category-icons";
 import {
@@ -509,9 +509,11 @@ export function UsualStuffPicker({
                         ) : null}
                       </span>
                       {item.preselected ? (
-                        <Star
-                          className="size-3.5 shrink-0 fill-[#E0A23F] text-[#E0A23F]"
-                          aria-label="Always"
+                        <HandDrawnIcon
+                          name="star"
+                          size={14}
+                          className="shrink-0 fill-[#E0A23F] text-[#E0A23F]"
+                          title="Always"
                         />
                       ) : null}
                       {reason ? (

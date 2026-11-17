@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Star } from "lucide-react";
+import { HandDrawnIcon } from "@/components/ui/hand-drawn-icons";
 import { supabase } from "@/app/lib/supabaseClient";
 import { DASHBOARD_LIST_PAGE_SHELL } from "@/components/trip/dashboard-card-styles";
 import { CategoryIcon, PACKING_DEFAULT_ICON } from "@/components/ui/category-icons";
@@ -447,11 +447,12 @@ export function UsualStuffPage() {
           aria-label={item.is_always ? "Always pack: on" : "Always pack: off"}
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full hover:bg-[#F5F3F0]"
         >
-          <Star
-            className={`size-5 ${
+          <HandDrawnIcon
+            name="star"
+            size={20}
+            className={`${
               item.is_always ? "fill-[#E0A800] text-[#E0A800]" : "text-[#C9BDB3]"
             }`}
-            strokeWidth={1.75}
           />
         </button>
         <button

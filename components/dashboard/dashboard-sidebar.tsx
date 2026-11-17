@@ -4,18 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  LayoutGrid,
-  Map,
-  Luggage,
-  Wallet,
-  FileText,
-  ImageIcon,
-  CheckSquare,
-  Home,
-  ChevronDown,
-  ChevronUp,
-} from "lucide-react";
+import { HandDrawnIcon } from "@/components/ui/hand-drawn-icons";
 import { AppLogo } from "@/components/brand/app-logo";
 import type { DashboardTrip } from "./dashboard-trips-context";
 
@@ -44,42 +33,42 @@ type NavChild = {
 };
 
 function tripChildLinks(tripId: string): NavChild[] {
-  const iconClass = "size-4 shrink-0 text-[#6b7c8f]";
+  const iconClass = "shrink-0 text-[#6b7c8f]";
   return [
     {
       href: `/dashboard/trip/${tripId}`,
       label: "Trip Overview",
-      icon: <LayoutGrid className={iconClass} strokeWidth={1.75} />,
+      icon: <HandDrawnIcon name="overview" size={16} className={iconClass} />,
     },
     {
       href: `/dashboard/trip/${tripId}/places`,
       label: "Places",
-      icon: <Map className={iconClass} strokeWidth={1.75} />,
+      icon: <HandDrawnIcon name="map" size={16} className={iconClass} />,
     },
     {
       href: `/dashboard/trip/${tripId}/packing`,
       label: "Packing",
-      icon: <Luggage className={iconClass} strokeWidth={1.75} />,
+      icon: <HandDrawnIcon name="luggage" size={16} className={iconClass} />,
     },
     {
       href: `/dashboard/trip/${tripId}/budget`,
       label: "Budget",
-      icon: <Wallet className={iconClass} strokeWidth={1.75} />,
+      icon: <HandDrawnIcon name="wallet" size={16} className={iconClass} />,
     },
     {
       href: `/dashboard/trip/${tripId}/notes`,
       label: "Notes",
-      icon: <FileText className={iconClass} strokeWidth={1.75} />,
+      icon: <HandDrawnIcon name="notes" size={16} className={iconClass} />,
     },
     {
       href: `/dashboard/trip/${tripId}/photos`,
       label: "Photos",
-      icon: <ImageIcon className={iconClass} strokeWidth={1.75} />,
+      icon: <HandDrawnIcon name="photos" size={16} className={iconClass} />,
     },
     {
       href: `/dashboard/trip/${tripId}/tasks`,
       label: "Tasks",
-      icon: <CheckSquare className={iconClass} strokeWidth={1.75} />,
+      icon: <HandDrawnIcon name="checklist" size={16} className={iconClass} />,
     },
   ];
 }
@@ -189,9 +178,9 @@ export function DashboardSidebar({
                   </p>
                 </div>
                 {expanded ? (
-                  <ChevronUp className="size-4 shrink-0 text-[#8a8a8a]" />
+                  <HandDrawnIcon name="chevron_up" size={16} className="shrink-0 text-[#8a8a8a]" />
                 ) : (
-                  <ChevronDown className="size-4 shrink-0 text-[#8a8a8a]" />
+                  <HandDrawnIcon name="chevron_down" size={16} className="shrink-0 text-[#8a8a8a]" />
                 )}
               </button>
               {expanded && (
@@ -256,9 +245,10 @@ export function DashboardSidebar({
               : "text-[#5c4a42] hover:bg-[#faf6f3]"
           }`}
         >
-          <Home
-            className={`size-5 shrink-0 ${isHome ? "text-[#d97b5e]" : "text-[#8a7568]"}`}
-            strokeWidth={1.75}
+          <HandDrawnIcon
+            name="house"
+            size={20}
+            className={`shrink-0 ${isHome ? "text-[#d97b5e]" : "text-[#8a7568]"}`}
           />
           Home
         </Link>

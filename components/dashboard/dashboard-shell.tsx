@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
-import { Menu, X } from "lucide-react";
+import { HandDrawnIcon } from "@/components/ui/hand-drawn-icons";
 import { AppLogo } from "@/components/brand/app-logo";
 import { DashboardTripsProvider } from "./dashboard-trips-context";
 import { DashboardSidebar } from "./dashboard-sidebar";
@@ -56,7 +56,7 @@ function DashboardShellInner({ children }: { children: ReactNode }) {
               onClick={() => setMobileOpen(false)}
               aria-label="Close navigation"
             >
-              <X className="size-5" />
+              <HandDrawnIcon name="close" size={20} />
             </button>
           </div>
           <DashboardSidebar
@@ -78,7 +78,7 @@ function DashboardShellInner({ children }: { children: ReactNode }) {
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation"
           >
-            <Menu className="size-6" />
+            <HandDrawnIcon name="menu" size={24} />
           </button>
           <div className="min-w-0 flex-1 bg-transparent">
             <AppLogo variant="header" />
