@@ -293,6 +293,7 @@ export function GroupedSortableList<T extends SortableItem>({
               listeners: {},
               style: {},
               isDragging: true,
+              isOverlay: true,
             })
           : null}
       </DragOverlay>

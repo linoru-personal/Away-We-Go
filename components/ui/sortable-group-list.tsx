@@ -32,6 +32,8 @@ export type SortableGroupListSortableProps = {
   listeners: Record<string, unknown>;
   style: React.CSSProperties;
   isDragging: boolean;
+  /** True only for the floating copy shown in the drag overlay (not for the row left in the list). */
+  isOverlay?: boolean;
 };
 
 export interface SortableGroupListProps<T extends SortableItem> {

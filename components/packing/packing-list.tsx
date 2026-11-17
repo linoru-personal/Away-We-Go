@@ -1275,7 +1275,7 @@ export function PackingList({
               const block = personBlockStarts.get(item.id);
               return (
                 <>
-                  {block && renderPersonBlockSubHeader(block, item.category_id)}
+                  {block && !sortable.isOverlay && renderPersonBlockSubHeader(block, item.category_id)}
                   {renderSortableRow(
                     item,
                     sortable,
@@ -1367,7 +1367,7 @@ export function PackingList({
               const startOf = personCategoryStarts.get(item.id);
               return (
                 <>
-                  {startOf && renderPersonCategorySubHeader(startOf, groupKey)}
+                  {startOf && !sortable.isOverlay && renderPersonCategorySubHeader(startOf, groupKey)}
                   {renderSortableRow(item, sortable, getCategoryName(item.category_id, categories), groupKey)}
                 </>
               );
