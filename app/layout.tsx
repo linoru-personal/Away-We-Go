@@ -1,14 +1,62 @@
 import type { Metadata } from "next";
-import { Rubik } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { HandDrawnFilterDefs } from "@/components/ui/hand-drawn-icons";
 
-const rubik = Rubik({
-  subsets: ["latin", "hebrew"],
-  weight: ["400", "500", "600", "700", "800"],
-  variable: "--font-rubik",
+/**
+ * Rubik is self-hosted (variable font, weights 300-900) instead of loaded with next/font/google.
+ * The Google loader in Next 14.2.5 fetches the font CSS at build time and crashes on Vercel
+ * ("Cannot read properties of null (reading '1')"), so the build must not depend on that network call.
+ * One file per script, each limited by unicode-range, so the browser only downloads what a page uses.
+ * Files come from fonts.gstatic.com/s/rubik/v31 (SIL Open Font License).
+ */
+const rubikLatin = localFont({
+  src: "./fonts/rubik-latin.woff2",
+  weight: "300 900",
+  style: "normal",
   display: "swap",
+  variable: "--font-rubik-latin",
+  declarations: [
+    {
+      prop: "unicode-range",
+      value:
+        "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+    },
+  ],
 });
+
+const rubikLatinExt = localFont({
+  src: "./fonts/rubik-latin-ext.woff2",
+  weight: "300 900",
+  style: "normal",
+  display: "swap",
+  preload: false,
+  variable: "--font-rubik-latin-ext",
+  declarations: [
+    {
+      prop: "unicode-range",
+      value:
+        "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF",
+    },
+  ],
+});
+
+const rubikHebrew = localFont({
+  src: "./fonts/rubik-hebrew.woff2",
+  weight: "300 900",
+  style: "normal",
+  display: "swap",
+  preload: false,
+  variable: "--font-rubik-hebrew",
+  declarations: [
+    {
+      prop: "unicode-range",
+      value: "U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F",
+    },
+  ],
+});
+
+const rubikVariables = `${rubikLatin.variable} ${rubikLatinExt.variable} ${rubikHebrew.variable}`;
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -21,7 +69,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={rubik.variable}>
+    <html lang="en" className={rubikVariables}>
       <body className="font-sans antialiased">
         <HandDrawnFilterDefs />
         {children}
