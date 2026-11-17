@@ -1246,7 +1246,6 @@ export function PackingList({
                 </button>
               ))}
             </div>
-            <div className="hidden md:block">{showPackedCheckbox}</div>
           </div>
 
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
@@ -1293,8 +1292,6 @@ export function PackingList({
               </button>
             ))}
           </div>
-
-          <div className="mt-3 md:hidden">{showPackedCheckbox}</div>
 
       <div className="mt-6">
         {viewMode === "category" && canEditContent && onReorderGroup && onMoveItem ? (
@@ -1524,6 +1521,9 @@ export function PackingList({
       {items.length > 0 && filteredItems.length === 0 && (
         <p className="mt-6 text-sm text-[#6B5B50]">No items match.</p>
       )}
+
+      {/* Below all the cards, on phone and desktop. Only when it can change something: some item is packed, or it is on. */}
+      {(packedCount > 0 || showPacked) && <div className="mt-4">{showPackedCheckbox}</div>}
         </div>
       </div>
 

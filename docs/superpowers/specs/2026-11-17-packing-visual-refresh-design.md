@@ -48,8 +48,8 @@ This is the first page of a wider refresh. The trips list and other lists will f
 4. **Direction.** Direction A ("Warm Pop"), refined as A2.
 5. **Fewer colors.** One coral accent. Categories use hand-drawn icons instead of colors.
 6. **Checkboxes.** Square with rounded corners, not round. Checked = coral fill with a hand-drawn white tick.
-7. **Show packed.** One list-wide "Show packed items (N)" checkbox instead of a show/hide toggle per category. When off, packed items are hidden; a category whose items are all packed shows "All packed". When on, packed items appear in place, faded and crossed out.
-8. **Adding.** "Add item" is the main coral button. "From usual stuff" sits beside it. Every category header has a "+" that adds straight into that category. On the phone both buttons sit side by side directly below the progress card, above the By category / By person switch. On desktop they are the first two buttons in the toolbar above the list.
+7. **Show packed.** One list-wide "Show packed items (N)" checkbox instead of a show/hide toggle per category. When off, packed items are hidden; a category whose items are all packed shows "All packed". When on, packed items appear in place, faded and crossed out. The checkbox sits at the bottom of the list, below all the cards, on the phone and on desktop, and shows only when at least one item is packed or it is on (see decision 21).
+8. **Adding.** "Add item" is the main coral button. "From usual stuff" sits beside it. Every category header has a "+" that adds straight into that category. On the phone both buttons sit side by side directly below the progress card, above the By category / By person switch. On desktop the toolbar above the list has the search box on the left and "Add item", "From my usual stuff" and the "⋯" menu on the right (see decision 21).
 9. **List actions.** A "⋯" menu holds "Manage categories" and "Delete all items…" (red, with today's confirm step). On the phone it sits next to Share at the top right; on desktop it sits at the end of the toolbar.
 10. **Hebrew rows.** Every row keeps the same layout, checkbox on the left. Hebrew names read right to left but are left-aligned, so every name starts at the same edge. This replaces today's whole-list right-to-left flip.
 11. **Edit and delete.** On the phone, tapping an item's name opens its editor (name, quantity, category, person, "Add to my usual stuff", and a red Delete at the bottom). On desktop, a hand-drawn pencil and trash appear when you hover over a row (or focus it with the keyboard).
@@ -62,6 +62,7 @@ This is the first page of a wider refresh. The trips list and other lists will f
 18. **Collapsing a category** stays: tapping the category's icon or name collapses or expands it, remembered per trip as today. The "+" button still adds an item and never collapses.
 19. **Ticking while packed items are hidden.** A ticked item stays visible for 4 seconds, crossed out, then fades away. Tapping it again within those 4 seconds un-ticks it and it stays. The counts and progress update at once when it's ticked.
 20. **Interface icons everywhere.** All Lucide icons in the app are replaced by hand-drawn ones now, not only on packing. That includes the 11 extra interface icons drawn on 2026-11-17 for the sidebar and other pages (chevron down/up/left, menu, checklist, notes, photos, overview, link, map, wallet). They were approved by the user on 2026-11-17 (canvas board "Hand-drawn icons v2", last group). After this change, `lucide-react` is no longer imported anywhere and can be removed from `package.json`.
+21. **Toolbar and Show packed, after the first build (2026-11-17).** Desktop feedback after the first build: buttons crowded the toolbar, so add buttons moved right and Show packed moved to the bottom (phone and desktop).
 
 ## The page, as approved
 
@@ -71,11 +72,11 @@ Order of the phone page, top to bottom:
 2. Progress card: coral card with a ring showing the % packed, "N left to pack", and "X of Y packed".
 3. "Add item" (coral, wide) and "From usual stuff" (white with a border), side by side.
 4. By category / By person switch.
-5. "Show packed items (N)" checkbox.
-6. Category cards: white, rounded, soft shadow. Header = icon tile (cream tile, hand-drawn icon), name, "done/total", a thin coral progress bar, and a "+" button. Then the item rows.
-7. Item row: square checkbox, name, "×N" pill when quantity is more than 1, and who it belongs to.
+5. Category cards: white, rounded, soft shadow. Header = icon tile (cream tile, hand-drawn icon), name, "done/total", a thin coral progress bar, and a "+" button. Then the item rows.
+6. Item row: square checkbox, name, "×N" pill when quantity is more than 1, and who it belongs to.
+7. "Show packed items (N)" checkbox, last, below all the cards.
 
-Desktop (and any wide window): a left column with the back link, title, progress card, "Who's packing" card (each person's packed/total with a small bar), and Share. On the right: a toolbar (Add item, From my usual stuff, search box, "⋯"), then the By category / By person switch and the "Show packed items" checkbox, then the category cards in a grid of at least two columns. On a narrow window the left column moves above the cards.
+Desktop (and any wide window): a left column with the back link, title, progress card, "Who's packing" card (each person's packed/total with a small bar), and Share. On the right: a toolbar (search box on the left; Add item, From my usual stuff and "⋯" on the right), then the By category / By person switch, then the category cards in a grid of at least two columns, and the "Show packed items" checkbox below the cards. On a narrow window the left column moves above the cards.
 
 Colors, sizes and spacing follow the mockup files. Text colors were chosen to pass 4.5:1 contrast; keep them.
 
