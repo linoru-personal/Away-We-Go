@@ -66,6 +66,13 @@ export interface GroupedSortableListProps<T extends SortableItem> {
   listClassName?: string;
   /** Optional class for the group container (card). */
   groupClassName?: string;
+  /** Class for the element holding all groups. Default "space-y-6". */
+  containerClassName?: string;
+  /**
+   * What an empty group shows inside its list. Default: a "Drop here or add item" line.
+   * Return null to show nothing (the group itself is still a drop target).
+   */
+  renderEmptyGroup?: (groupKey: string) => React.ReactNode;
 }
 
 function SortableRow<T extends SortableItem>({
@@ -118,6 +125,7 @@ function GroupColumn<T extends SortableItem>({
   listTag: ListTag,
   listClassName,
   groupClassName,
+  renderEmptyGroup,
 }: {
   group: GroupedSortableGroup<T>;
   renderGroupHeader: (groupKey: string) => React.ReactNode;
@@ -127,6 +135,7 @@ function GroupColumn<T extends SortableItem>({
   listTag: "ul" | "div";
   listClassName?: string;
   groupClassName?: string;
+  renderEmptyGroup?: (groupKey: string) => React.ReactNode;
 }) {
   const droppableId = GROUP_DROPPABLE_PREFIX + group.groupKey;
   const { setNodeRef, isOver } = useDroppable({ id: droppableId });
@@ -142,7 +151,9 @@ function GroupColumn<T extends SortableItem>({
       <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
         <ListTag className={listClassName} role={ListTag === "ul" ? "list" : undefined}>
           {group.items.length === 0 ? (
-            ListTag === "ul" ? (
+            renderEmptyGroup ? (
+              renderEmptyGroup(group.groupKey)
+            ) : ListTag === "ul" ? (
               <li className="py-3 text-center text-sm text-[#9B7B6B]/80" aria-hidden>
                 Drop here or add item
               </li>
@@ -181,6 +192,8 @@ export function GroupedSortableList<T extends SortableItem>({
   listTag = "ul",
   listClassName,
   groupClassName,
+  containerClassName = "space-y-6",
+  renderEmptyGroup,
 }: GroupedSortableListProps<T>) {
   const dndId = useId();
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -270,7 +283,7 @@ export function GroupedSortableList<T extends SortableItem>({
       onDragCancel={() => setActiveId(null)}
       onDragEnd={handleDragEnd}
     >
-      <div className="space-y-6">
+      <div className={containerClassName}>
       {groups.map((group) => (
         <GroupColumn
           key={group.groupKey}
@@ -282,6 +295,7 @@ export function GroupedSortableList<T extends SortableItem>({
           listTag={listTag}
           listClassName={listClassName}
           groupClassName={groupClassName}
+          renderEmptyGroup={renderEmptyGroup}
         />
       ))}
       </div>

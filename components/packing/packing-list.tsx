@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef, Fragment } from "react";
-import { BookmarkPlus } from "lucide-react";
 import { supabase } from "@/app/lib/supabaseClient";
 import {
   Dialog,
@@ -36,8 +35,16 @@ import {
 } from "@/components/packing/packing-people-progress";
 import {
   PACKING_ICON_BUTTON_CLASS,
+  PACKING_ICON_TILE_CLASS,
   PACKING_SECONDARY_BUTTON_CLASS,
 } from "@/components/packing/packing-styles";
+import {
+  PACKING_GROUP_CARD_CLASS,
+  PackingAllPacked,
+  PackingGroupCard,
+  PackingGroupCardHeader,
+  type PackingGroupCardHeaderProps,
+} from "@/components/packing/packing-group-card";
 import {
   PackingItemEditorDialog,
   type PackingItemEditorValues,
@@ -60,6 +67,7 @@ import {
   splitByPerson,
   type PersonBlock,
 } from "@/lib/packing/person-groups";
+import { visibleItems } from "@/lib/packing/visible-items";
 
 const PACKING_FOCUS =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/40 disabled:opacity-50";
@@ -112,23 +120,22 @@ export interface PackingListProps {
 }
 
 /**
- * One card per group. Rows sit flush inside it, separated by hairlines, so the
- * list reads as a single surface instead of a stack of cards within a card.
+ * Rows draw their own top hairline, and the group header has none, so there is
+ * exactly one line between the header and the first row, and a collapsed
+ * group (rows hidden) leaves no stray line under its header.
  */
-const GROUP_CARD_CLASS =
-  "overflow-hidden rounded-[24px] bg-white shadow-[0_2px_16px_rgba(0,0,0,0.06)]";
+const ITEM_LIST_CLASS = "";
 
-const GROUP_HEADER_CLASS = "flex items-center gap-2.5 px-5 pb-3 pt-4";
+/** Group cards: one column on the phone, a grid of at least 320px columns on wider screens. */
+const GROUP_GRID_CLASS =
+  "grid grid-cols-1 items-start gap-4 md:grid-cols-[repeat(auto-fill,minmax(320px,1fr))] md:gap-5";
 
-/**
- * Hairlines between rows only. The rule closing off the header lives on the
- * header itself, so a collapsed group — whose rows are all hidden — doesn't
- * leave a stray line hanging under it.
- */
-const ITEM_LIST_CLASS = ""; // rows draw their own top hairline
+/** How long a just-ticked item stays on screen while packed items are hidden. */
+const LINGER_MS = 4000;
 
-const ADD_ITEM_BUTTON_CLASS =
-  "w-full border-t border-[#F0EBE5] px-5 py-3 text-start text-sm font-medium text-[#9B7B6B] transition-colors duration-150 hover:bg-[#FBF8F5] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#E07A5F]/30";
+/** Sub-header inside a card: a person inside a category, or a category inside a person. */
+const SUB_HEADER_CLASS =
+  "list-none px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-[#8A4A35]";
 
 function getCategoryName(categoryId: string, categories: PackingCategory[]): string {
   return categories.find((c) => c.id === categoryId)?.name ?? "";
@@ -186,12 +193,58 @@ export function PackingList({
   }, []);
   function setShowPacked(next: boolean) {
     setShowPackedState(next);
+    showPackedRef.current = next;
+    // Packed items are all on screen now, so nothing needs to linger.
+    if (next) clearAllLingering();
     try {
       window.localStorage.setItem("packing-show-packed", String(next));
     } catch {
       // Ignore: the choice just won't be remembered.
     }
   }
+  /** Read by handleTogglePacked after its await, when the render-time value may be stale. */
+  const showPackedRef = useRef(showPacked);
+  useEffect(() => {
+    showPackedRef.current = showPacked;
+  }, [showPacked]);
+  /**
+   * Items just ticked while packed items are hidden: they stay on screen (crossed out, then
+   * fading) for LINGER_MS before they disappear. One timer per item.
+   */
+  const [lingering, setLingering] = useState<Set<string>>(() => new Set());
+  const lingerTimersRef = useRef<Map<string, number>>(new Map());
+  function stopLingering(itemId: string) {
+    const timer = lingerTimersRef.current.get(itemId);
+    if (timer !== undefined) window.clearTimeout(timer);
+    lingerTimersRef.current.delete(itemId);
+    setLingering((prev) => {
+      if (!prev.has(itemId)) return prev;
+      const next = new Set(prev);
+      next.delete(itemId);
+      return next;
+    });
+  }
+  function startLingering(itemId: string) {
+    const existing = lingerTimersRef.current.get(itemId);
+    if (existing !== undefined) window.clearTimeout(existing);
+    lingerTimersRef.current.set(
+      itemId,
+      window.setTimeout(() => stopLingering(itemId), LINGER_MS)
+    );
+    setLingering((prev) => (prev.has(itemId) ? prev : new Set(prev).add(itemId)));
+  }
+  function clearAllLingering() {
+    for (const timer of lingerTimersRef.current.values()) window.clearTimeout(timer);
+    lingerTimersRef.current.clear();
+    setLingering((prev) => (prev.size === 0 ? prev : new Set()));
+  }
+  useEffect(() => {
+    const timers = lingerTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) window.clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addModalMode, setAddModalMode] = useState<"add-item" | "create-category">("add-item");
   const [addTitle, setAddTitle] = useState("");
@@ -275,6 +328,12 @@ export function PackingList({
   /** Person sub-headers show in every category when the trip (all items, not the filtered ones) has two or more assignees. */
   const showPersonGroups = useMemo(() => hasMultipleAssignees(items), [items]);
 
+  /**
+   * One entry per category that has items after the assignee and search filters.
+   * `items` are the rows on screen (packed ones dropped unless shown or lingering): the
+   * drag-and-drop and the person sub-headers work on these, so indices match the screen.
+   * `packed`/`total` count every filtered item of the category, shown or not.
+   */
   const itemsByCategory = useMemo(() => {
     const map = new Map<string, PackingItem[]>();
     for (const item of filteredItems) {
@@ -286,13 +345,15 @@ export function PackingList({
     return catOrder
       .filter((c) => map.has(c.id))
       .map((c) => {
-        const catItems = map.get(c.id)!;
-        if (!showPersonGroups) return { category: c, items: catItems, blocks: [] as PersonBlock[] };
+        const allItems = map.get(c.id)!;
+        const counts = { packed: allItems.filter((i) => i.is_packed).length, total: allItems.length };
+        const catItems = visibleItems(allItems, showPacked, lingering);
+        if (!showPersonGroups) return { category: c, items: catItems, blocks: [] as PersonBlock[], ...counts };
         // Displayed order: person by person (Everyone first); the order inside a person is the saved order.
         const blocks = splitByPerson(catItems, participants);
-        return { category: c, items: blocks.flatMap((b) => b.items), blocks };
+        return { category: c, items: blocks.flatMap((b) => b.items), blocks, ...counts };
       });
-  }, [filteredItems, categories, participants, showPersonGroups]);
+  }, [filteredItems, categories, participants, showPersonGroups, showPacked, lingering]);
 
   /** The item that opens each person block in By category view (that is where the person sub-header goes). */
   const personBlockStarts = useMemo(() => {
@@ -329,19 +390,27 @@ export function PackingList({
         .map((c) => ({ category: c, items: [...map.get(c.id)!].sort((a, b) => a.sort_order - b.sort_order) }));
       return { categories: groups, items: groups.flatMap((g) => g.items) };
     };
+    /** A person's group: counts over all their filtered items, rows (and sub-headers) over the visible ones. */
+    const group = (list: PackingItem[]) => ({
+      packed: list.filter((i) => i.is_packed).length,
+      total: list.length,
+      ...byCategory(visibleItems(list, showPacked, lingering)),
+    });
     const result: {
       label: string;
       participantId: string | null;
       categories: { category: PackingCategory; items: PackingItem[] }[];
-      /** All of the person's items, category by category: the flat list the drag-and-drop works on. */
+      /** The person's visible items, category by category: the flat list the drag-and-drop works on. */
       items: PackingItem[];
-    }[] = [{ label: "Everyone", participantId: null, ...byCategory(everyone) }];
+      packed: number;
+      total: number;
+    }[] = [{ label: "Everyone", participantId: null, ...group(everyone) }];
     for (const p of participants) {
       const list = byParticipant.get(p.id) ?? [];
-      if (list.length > 0) result.push({ label: p.name, participantId: p.id, ...byCategory(list) });
+      if (list.length > 0) result.push({ label: p.name, participantId: p.id, ...group(list) });
     }
     return result;
-  }, [filteredItems, participants, categories]);
+  }, [filteredItems, participants, categories, showPacked, lingering]);
 
   /** For each person group, the item that opens each category block (that is where the sub-header goes). */
   const personCategoryStarts = useMemo(() => {
@@ -357,6 +426,12 @@ export function PackingList({
   async function handleTogglePacked(item: PackingItem) {
     setItemError(null);
     const next = !item.is_packed;
+    // Un-ticking within the linger: stop its timer now, so it can't vanish while the update is in flight.
+    const wasLingering = !next && lingerTimersRef.current.has(item.id);
+    if (wasLingering) {
+      window.clearTimeout(lingerTimersRef.current.get(item.id));
+      lingerTimersRef.current.delete(item.id);
+    }
 
     const { error } = await updatePackingItem(
       supabase,
@@ -367,9 +442,19 @@ export function PackingList({
 
     if (error) {
       setItemError({ id: item.id, message: "Couldn't update this item. Tap to try again." });
+      // Un-ticking a lingering item failed: it is still packed, so give it its 4 seconds again.
+      if (!next && wasLingering && !showPackedRef.current) startLingering(item.id);
       return;
     }
+    // Order matters if React ever renders these updates apart: a packed item must already be
+    // lingering when it turns packed, and an un-packed one must be unpacked before it stops
+    // lingering, or its row would unmount for a frame and lose its fade.
+    if (next && !showPackedRef.current) {
+      // Packed items are hidden: keep this one on screen, crossed out, for a moment before it goes.
+      startLingering(item.id);
+    }
     onItemsPatched?.(item.id, { is_packed: next });
+    if (!next) stopLingering(item.id);
   }
 
   async function handleShare() {
@@ -678,119 +763,81 @@ export function PackingList({
     return idx >= 0 ? participantAvatarUrls[idx] ?? null : null;
   }
 
-  /** "4/7" for a group, counted over the items actually shown (so it respects the filter). */
-  function renderGroupCount(groupItems: PackingItem[]) {
-    const packed = groupItems.filter((i) => i.is_packed).length;
-    return (
-      <span className="shrink-0 text-sm font-medium tabular-nums text-[#9B7B6B]" dir="ltr">
-        {packed}/{groupItems.length}
-      </span>
-    );
-  }
-
-  /**
-   * The group header doubles as the collapse control. The count stays visible
-   * while collapsed — that is what makes a folded group still worth reading.
-   */
-  function renderGroupHeader(
-    groupKey: string,
-    leading: React.ReactNode,
-    label: string,
-    groupItems: PackingItem[],
-    action?: React.ReactNode
-  ) {
-    const collapsed = collapsedGroups.has(groupKey);
-    return (
-      <div className={`flex items-center ${collapsed ? "" : "border-b border-[#F0EBE5]"}`}>
-      <button
-        type="button"
-        className={`${GROUP_HEADER_CLASS} min-w-0 flex-1 ${action ? "pe-2" : ""}`}
-        onClick={() => toggleGroupCollapsed(groupKey)}
-        aria-expanded={!collapsed}
-      >
-        {leading}
-        <h3 className="min-w-0 flex-1 truncate text-start text-base font-semibold text-[#4A4A4A]">
-          {label}
-        </h3>
-        {renderGroupCount(groupItems)}
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`size-4 shrink-0 text-[#B5A79C] transition-transform duration-200 ${
-            collapsed ? "" : "rotate-180"
-          }`}
-          aria-hidden
+  /** Header props for a category card. The counts cover every filtered item, shown or not. */
+  function categoryHeaderProps(
+    category: PackingCategory,
+    counts: { packed: number; total: number }
+  ): PackingGroupCardHeaderProps {
+    return {
+      leading: (
+        <span className={`${PACKING_ICON_TILE_CLASS} text-[#3B312B]`} aria-hidden>
+          <CategoryIcon iconKey={getIconKey(category.icon, PACKING_DEFAULT_ICON)} size={26} />
+        </span>
+      ),
+      label: category.name,
+      packed: counts.packed,
+      total: counts.total,
+      collapsed: collapsedGroups.has(category.id),
+      onToggleCollapsed: () => toggleGroupCollapsed(category.id),
+      onAdd: canEditContent ? () => openAddFromGroup(category.id) : undefined,
+      extraAction: canEditContent ? (
+        <button
+          type="button"
+          className={`flex size-11 shrink-0 items-center justify-center rounded-[14px] text-[#6B5B50] transition-colors hover:bg-[#FDEDE6] md:size-10 md:rounded-xl ${PACKING_FOCUS}`}
+          aria-label="Add category to my usual stuff"
+          title="Add category to my usual stuff"
+          disabled={usualBusy}
+          onClick={() => handleAddCategoryToUsual(category)}
         >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </button>
-      {action ? <div className="shrink-0 pe-4">{action}</div> : null}
-      </div>
-    );
+          <HandDrawnIcon name="usual_stuff" size={20} />
+        </button>
+      ) : undefined,
+      notice:
+        canEditContent && usualError?.key === category.id ? (
+          <p className="px-4 pb-2 text-xs text-[#B42318]" role="alert">
+            {usualError.message}
+          </p>
+        ) : undefined,
+    };
   }
 
-  function renderCategoryHeader(category: PackingCategory, groupItems: PackingItem[]) {
-    return renderGroupHeader(
-      category.id,
-      <span className="shrink-0 text-[#4A4A4A]">
-        <CategoryIcon iconKey={getIconKey(category.icon, PACKING_DEFAULT_ICON)} size={20} />
-      </span>,
-      category.name,
-      groupItems,
-      canEditContent ? (
-        <div className="flex items-center gap-2">
-          {usualError?.key === category.id ? (
-            <span className="text-xs text-red-600" role="alert">
-              {usualError.message}
-            </span>
-          ) : null}
-          <button
-            type="button"
-            className="rounded-md p-1 text-[#9B7B6B] hover:text-[#E07A5F] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E07A5F]/30 disabled:opacity-50"
-            aria-label="Add category to my usual stuff"
-            title="Add category to my usual stuff"
-            disabled={usualBusy}
-            onClick={() => handleAddCategoryToUsual(category)}
-          >
-            <BookmarkPlus className="size-4" aria-hidden />
-          </button>
-        </div>
-      ) : undefined
-    );
-  }
-
-  function renderParticipantHeader(
+  /** Header props for a person card (By person view): photo or initial instead of the icon tile. */
+  function participantHeaderProps(
     groupKey: string,
     label: string,
-    avatarUrl: string | null,
-    groupItems: PackingItem[]
-  ) {
-    return renderGroupHeader(
-      groupKey,
-      avatarUrl ? (
+    participantId: string | null,
+    counts: { packed: number; total: number }
+  ): PackingGroupCardHeaderProps {
+    const avatarUrl = getParticipantAvatarUrl(participantId);
+    return {
+      leading: avatarUrl ? (
         <img
           src={avatarUrl}
           alt=""
           loading="lazy"
-          className="size-8 shrink-0 rounded-full object-cover"
+          className="size-[42px] shrink-0 rounded-full object-cover md:size-11"
           aria-hidden
         />
       ) : (
         <span
-          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#E8E4E0] text-sm font-medium text-[#6B7280]"
+          className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-[#FDEDE6] text-base font-bold text-[#A9432C] md:size-11"
           aria-hidden
         >
           {label.trim().slice(0, 1).toUpperCase() || "?"}
         </span>
       ),
       label,
-      groupItems
-    );
+      packed: counts.packed,
+      total: counts.total,
+      collapsed: collapsedGroups.has(groupKey),
+      onToggleCollapsed: () => toggleGroupCollapsed(groupKey),
+      onAdd: canEditContent ? () => openAddFromGroup(groupKey) : undefined,
+    };
+  }
+
+  /** "All packed": the group has items, none are shown (packed ones hidden), and it is not folded. */
+  function isAllPacked(groupKey: string, group: { items: PackingItem[]; total: number }): boolean {
+    return group.total > 0 && group.items.length === 0 && !collapsedGroups.has(groupKey);
   }
 
   /** Small category label inside a person group (person view). */
@@ -799,7 +846,9 @@ export function PackingList({
     return (
       <li
         key={`sub-${category.id}`}
-        className="list-none px-5 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-[#9B7B6B]"
+        dir="auto"
+        style={{ unicodeBidi: "plaintext" }}
+        className={`${SUB_HEADER_CLASS} text-left`}
       >
         {category.name}
       </li>
@@ -812,7 +861,9 @@ export function PackingList({
     return (
       <li
         key={`person-${categoryId}-${block.participantId ?? "everyone"}`}
-        className="list-none px-5 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-[#9B7B6B]"
+        dir="auto"
+        style={{ unicodeBidi: "plaintext" }}
+        className={`${SUB_HEADER_CLASS} text-left`}
       >
         {block.label}
       </li>
@@ -844,15 +895,6 @@ export function PackingList({
     return onReorderGroup(newOrderedItems.filter((i) => assigneeOf(i) === owner));
   }
 
-  function renderAddItemButton(groupKey: string) {
-    if (collapsedGroups.has(groupKey)) return null;
-    return (
-      <button type="button" className={ADD_ITEM_BUTTON_CLASS} onClick={() => openAddFromGroup(groupKey)}>
-        + Add item
-      </button>
-    );
-  }
-
   /**
    * A single list row. Both view modes and all three drag states route through
    * here, so the row markup has one home.
@@ -871,6 +913,7 @@ export function PackingList({
         onToggle={() => handleTogglePacked(item)}
         onOpenEditor={() => openEditor(item)}
         onDeleteRequest={() => openEditor(item, true)}
+        fading={lingering.has(item.id)}
         dragHandle={dragHandle}
         isDragging={isDragging}
       />
@@ -893,7 +936,10 @@ export function PackingList({
       <li
         ref={setNodeRef}
         style={style}
-        className={`group list-none ${collapsedGroups.has(groupKey) ? "hidden" : ""}`}
+        // select-none and no touch callout: a press-and-hold drag must not select the name or open the iOS menu.
+        className={`group list-none ${canEditContent ? "select-none [-webkit-touch-callout:none]" : ""} ${
+          collapsedGroups.has(groupKey) ? "hidden" : ""
+        }`}
         // Press-and-hold anywhere on the row starts a touch drag (the TouchSensor delay keeps a short tap a tap).
         // Mouse and keyboard drags still start from the handle only.
         onTouchStart={
@@ -1247,7 +1293,7 @@ export function PackingList({
 
           <div className="mt-3 md:hidden">{showPackedCheckbox}</div>
 
-      <div className="mt-6 space-y-5">
+      <div className="mt-6">
         {viewMode === "category" && canEditContent && onReorderGroup && onMoveItem ? (
           <GroupedSortableList<PackingItem>
             groups={itemsByCategory.map(({ category, items }) => ({ groupKey: category.id, items }))}
@@ -1257,7 +1303,8 @@ export function PackingList({
             })()}
             onReorder={(_groupKey, newOrderedItems) => handleCategoryReorder(newOrderedItems)}
             onMove={(item, fromGroupKey, toGroupKey, insertIndex) => {
-              // insertIndex counts the rows shown (the assignee filter may hide some); the saved order covers the whole category.
+              // insertIndex counts the rows shown (the assignee/search filters and hidden packed items
+              // may leave some out); the saved order covers the whole category.
               const shown = itemsByCategory.find(({ category }) => category.id === toGroupKey)?.items ?? [];
               const anchor = shown[insertIndex];
               const whole = items.filter((i) => i.category_id === toGroupKey && i.id !== item.id);
@@ -1277,7 +1324,7 @@ export function PackingList({
             renderGroupHeader={(groupKey) => {
               const entry = itemsByCategory.find(({ category }) => category.id === groupKey);
               if (!entry) return null;
-              return renderCategoryHeader(entry.category, entry.items);
+              return <PackingGroupCardHeader {...categoryHeaderProps(entry.category, entry)} />;
             }}
             renderItem={(item, sortable) => {
               const block = personBlockStarts.get(item.id);
@@ -1294,54 +1341,68 @@ export function PackingList({
             }}
             listTag="ul"
             listClassName={ITEM_LIST_CLASS}
-            groupClassName={GROUP_CARD_CLASS}
+            groupClassName={PACKING_GROUP_CARD_CLASS}
+            containerClassName={GROUP_GRID_CLASS}
+            // Every category here has items; an empty list means they are all packed and hidden.
+            renderEmptyGroup={() => null}
             disabled={!canEditContent}
-            renderGroupFooter={canEditContent ? (groupKey) => renderAddItemButton(groupKey) : undefined}
+            renderGroupFooter={(groupKey) => {
+              const entry = itemsByCategory.find(({ category }) => category.id === groupKey);
+              return entry && isAllPacked(groupKey, entry) ? <PackingAllPacked /> : null;
+            }}
           />
-        ) : viewMode === "category" &&
-          itemsByCategory.map(({ category, items: catItems }) => (
-            <div key={category.id} className={GROUP_CARD_CLASS}>
-              {renderCategoryHeader(category, catItems)}
-              {canEditContent && onReorderGroup ? (
-                <SortableGroupList<PackingItem>
-                  items={catItems}
-                  onReorder={handleCategoryReorder}
-                  as="ul"
-                  className={ITEM_LIST_CLASS}
-                  disabled={!canEditContent}
+        ) : viewMode === "category" && (
+          <div className={GROUP_GRID_CLASS}>
+            {itemsByCategory.map((entry) => {
+              const { category, items: catItems } = entry;
+              return (
+                <PackingGroupCard
+                  key={category.id}
+                  {...categoryHeaderProps(category, entry)}
+                  allPacked={isAllPacked(category.id, entry)}
                 >
-                  {(item, sortable) => {
-                    const block = personBlockStarts.get(item.id);
-                    return (
-                      <>
-                        {block && renderPersonBlockSubHeader(block, item.category_id)}
-                        {renderSortableRow(
-                          item,
-                          sortable,
-                          item.category_id
-                        )}
-                      </>
-                    );
-                  }}
-                </SortableGroupList>
-              ) : (
-                <ul className={ITEM_LIST_CLASS} role="list" hidden={collapsedGroups.has(category.id)}>
-                  {catItems.map((item) => {
-                    const block = personBlockStarts.get(item.id);
-                    return (
-                      <Fragment key={item.id}>
-                        {block && renderPersonBlockSubHeader(block, category.id)}
-                        <li className="group list-none">
-                          {renderItemRow(item)}
-                        </li>
-                      </Fragment>
-                    );
-                  })}
-                </ul>
-              )}
-              {canEditContent && renderAddItemButton(category.id)}
-            </div>
-          ))}
+                  {canEditContent && onReorderGroup ? (
+                    <SortableGroupList<PackingItem>
+                      items={catItems}
+                      onReorder={handleCategoryReorder}
+                      as="ul"
+                      className={ITEM_LIST_CLASS}
+                      disabled={!canEditContent}
+                    >
+                      {(item, sortable) => {
+                        const block = personBlockStarts.get(item.id);
+                        return (
+                          <>
+                            {block && renderPersonBlockSubHeader(block, item.category_id)}
+                            {renderSortableRow(
+                              item,
+                              sortable,
+                              item.category_id
+                            )}
+                          </>
+                        );
+                      }}
+                    </SortableGroupList>
+                  ) : (
+                    <ul className={ITEM_LIST_CLASS} role="list" hidden={collapsedGroups.has(category.id)}>
+                      {catItems.map((item) => {
+                        const block = personBlockStarts.get(item.id);
+                        return (
+                          <Fragment key={item.id}>
+                            {block && renderPersonBlockSubHeader(block, category.id)}
+                            <li className="group list-none">
+                              {renderItemRow(item)}
+                            </li>
+                          </Fragment>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </PackingGroupCard>
+              );
+            })}
+          </div>
+        )}
 
         {viewMode === "participant" && canEditContent && onReorderGroup && onMoveItem ? (
           <GroupedSortableList<PackingItem>
@@ -1361,11 +1422,10 @@ export function PackingList({
                 (p) => (p.participantId ?? PACKING_GROUP_KEY_EVERYONE) === groupKey
               );
               if (!part) return null;
-              return renderParticipantHeader(
-                groupKey,
-                part.label,
-                getParticipantAvatarUrl(part.participantId),
-                part.items
+              return (
+                <PackingGroupCardHeader
+                  {...participantHeaderProps(groupKey, part.label, part.participantId, part)}
+                />
               );
             }}
             renderItem={(item, sortable) => {
@@ -1380,60 +1440,78 @@ export function PackingList({
             }}
             listTag="ul"
             listClassName={ITEM_LIST_CLASS}
-            groupClassName={GROUP_CARD_CLASS}
+            groupClassName={PACKING_GROUP_CARD_CLASS}
+            containerClassName={GROUP_GRID_CLASS}
+            renderEmptyGroup={(groupKey) => {
+              // "Everyone" is always listed so items can be dropped on it; with nothing assigned it says so.
+              // A person whose items are all packed and hidden shows "All packed" (footer) instead.
+              const part = itemsByParticipant.find(
+                (p) => (p.participantId ?? PACKING_GROUP_KEY_EVERYONE) === groupKey
+              );
+              if ((part && part.total > 0) || collapsedGroups.has(groupKey)) return null;
+              return (
+                <li className="py-3 text-center text-sm text-[#7A6A5E]" aria-hidden>
+                  Drop here or add item
+                </li>
+              );
+            }}
             disabled={!canEditContent}
-            renderGroupFooter={canEditContent ? (groupKey) => renderAddItemButton(groupKey) : undefined}
+            renderGroupFooter={(groupKey) => {
+              const part = itemsByParticipant.find(
+                (p) => (p.participantId ?? PACKING_GROUP_KEY_EVERYONE) === groupKey
+              );
+              return part && isAllPacked(groupKey, part) ? <PackingAllPacked /> : null;
+            }}
           />
-        ) : viewMode === "participant" &&
-          itemsByParticipant.map(({ label, participantId, items: partItems }) => (
-            <div key={participantId ?? "__everyone__"} className={GROUP_CARD_CLASS}>
-              {renderParticipantHeader(
-                participantId ?? PACKING_GROUP_KEY_EVERYONE,
-                label,
-                getParticipantAvatarUrl(participantId),
-                partItems
-              )}
-              {canEditContent && onReorderGroup ? (
-                <SortableGroupList<PackingItem>
-                  items={partItems}
-                  onReorder={() => {}}
-                  as="ul"
-                  className={ITEM_LIST_CLASS}
-                  disabled={!canEditContent}
+        ) : viewMode === "participant" && (
+          <div className={GROUP_GRID_CLASS}>
+            {itemsByParticipant.map((part) => {
+              const { label, participantId, items: partItems } = part;
+              const groupKey = participantId ?? PACKING_GROUP_KEY_EVERYONE;
+              return (
+                <PackingGroupCard
+                  key={groupKey}
+                  {...participantHeaderProps(groupKey, label, participantId, part)}
+                  allPacked={isAllPacked(groupKey, part)}
                 >
-                  {(item, sortable) => {
-                    const groupKey = item.assigned_to_participant_id ?? PACKING_GROUP_KEY_EVERYONE;
-                    const startOf = personCategoryStarts.get(item.id);
-                    return (
-                      <>
-                        {startOf && renderPersonCategorySubHeader(startOf, groupKey)}
-                        {renderSortableRow(item, sortable, groupKey)}
-                      </>
-                    );
-                  }}
-                </SortableGroupList>
-              ) : (
-                <ul
-                  className={ITEM_LIST_CLASS}
-                  role="list"
-                  hidden={collapsedGroups.has(participantId ?? PACKING_GROUP_KEY_EVERYONE)}
-                >
-                  {partItems.map((item) => {
-                    const startOf = personCategoryStarts.get(item.id);
-                    return (
-                      <Fragment key={item.id}>
-                        {startOf && renderPersonCategorySubHeader(startOf, participantId ?? PACKING_GROUP_KEY_EVERYONE)}
-                        <li className="group list-none">
-                          {renderItemRow(item)}
-                        </li>
-                      </Fragment>
-                    );
-                  })}
-                </ul>
-              )}
-              {canEditContent && renderAddItemButton(participantId ?? PACKING_GROUP_KEY_EVERYONE)}
-            </div>
-          ))}
+                  {canEditContent && onReorderGroup ? (
+                    <SortableGroupList<PackingItem>
+                      items={partItems}
+                      onReorder={() => {}}
+                      as="ul"
+                      className={ITEM_LIST_CLASS}
+                      disabled={!canEditContent}
+                    >
+                      {(item, sortable) => {
+                        const startOf = personCategoryStarts.get(item.id);
+                        return (
+                          <>
+                            {startOf && renderPersonCategorySubHeader(startOf, groupKey)}
+                            {renderSortableRow(item, sortable, groupKey)}
+                          </>
+                        );
+                      }}
+                    </SortableGroupList>
+                  ) : (
+                    <ul className={ITEM_LIST_CLASS} role="list" hidden={collapsedGroups.has(groupKey)}>
+                      {partItems.map((item) => {
+                        const startOf = personCategoryStarts.get(item.id);
+                        return (
+                          <Fragment key={item.id}>
+                            {startOf && renderPersonCategorySubHeader(startOf, groupKey)}
+                            <li className="group list-none">
+                              {renderItemRow(item)}
+                            </li>
+                          </Fragment>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </PackingGroupCard>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {items.length > 0 && filteredItems.length === 0 && (

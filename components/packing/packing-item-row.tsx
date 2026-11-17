@@ -47,7 +47,7 @@ export function PackingItemRow({
   isDragging = false,
 }: PackingItemRowProps) {
   const packed = item.is_packed;
-  const boxClass = `flex size-[26px] items-center justify-center rounded-[8px] border-2 transition-colors md:size-6 ${
+  const boxClass = `flex size-[26px] items-center justify-center rounded-[8px] border-2 md:rounded-[7px] transition-colors md:size-6 ${
     packed ? "border-[#E07A5F] bg-[#E07A5F] text-white" : "border-[#D9C3B3] bg-white"
   }`;
   const box = <span className={boxClass}>{packed && <HandDrawnIcon name="check" size={16} />}</span>;
@@ -58,9 +58,11 @@ export function PackingItemRow({
 
   return (
     <div
-      className={`group/row border-t border-[#F6EEE7] transition-opacity duration-500 ${
+      // fading: stays fully visible (crossed out) for 3.7 s, then fades out over the last 0.3 s of the
+      // 4 s linger. The delay sits on the fading state only, so un-ticking restores it at once.
+      className={`group/row border-t border-[#F6EEE7] transition-opacity ${
         packed ? "bg-[#FFFBF7]" : "bg-white"
-      } ${fading ? "opacity-0" : ""} ${
+      } ${fading ? "opacity-0 delay-[3700ms] duration-300" : "duration-500"} ${
         isDragging ? "relative z-10 rounded-2xl shadow-[0_8px_24px_rgba(0,0,0,0.12)]" : ""
       }`}
     >
